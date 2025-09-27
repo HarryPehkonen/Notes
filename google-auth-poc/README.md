@@ -4,13 +4,13 @@ A minimal implementation of Google OAuth 2.0 authentication using Deno and Oak, 
 
 ## Features
 
-- ✅ Complete OAuth 2.0 flow
-- ✅ No external OAuth libraries (pure fetch API)
-- ✅ User profile retrieval
-- ✅ Session management
-- ✅ Clean, modern UI
-- ✅ Token refresh support
-- ✅ Fully typed with JSDoc
+- ✓ Complete OAuth 2.0 flow
+- ✓ No external OAuth libraries (pure fetch API)
+- ✓ User profile retrieval
+- ✓ Session management
+- ✓ Clean, modern UI
+- ✓ Token refresh support
+- ✓ Fully typed with JSDoc
 
 ## Prerequisites
 
@@ -209,13 +209,13 @@ CREATE TABLE auth_providers (
 
 ## Next Steps
 
-1. ✅ Basic OAuth flow working
-2. ⬜ Add GitHub OAuth
-3. ⬜ Add Dropbox OAuth
-4. ⬜ Integrate with PostgreSQL
-5. ⬜ Implement account linking
-6. ⬜ Add CSRF protection
-7. ⬜ Deploy with HTTPS
+1. ✓ Basic OAuth flow working
+2.   Add GitHub OAuth
+3.   Add Dropbox OAuth
+4.   Integrate with PostgreSQL
+5.   Implement account linking
+6.   Add CSRF protection
+7.   Deploy with HTTPS
 
 ## Resources
 

@@ -479,18 +479,18 @@ class NotesApp extends LitElement {
     }
 
     async handleTagsSelected(tags) {
-        console.log('🔧 DIRECT CALLBACK - handleTagsSelected called with:', tags);
+        console.log('  DIRECT CALLBACK - handleTagsSelected called with:', tags);
         this.selectedTags = tags || [];
 
         // Save any unsaved changes before switching views
         if (this.currentView === 'editor' && this.editorRef && this.editorRef.hasUnsavedChanges) {
-            console.log('🔧 Auto-saving editor before filtering');
+            console.log('  Auto-saving editor before filtering');
             await this.editorRef.autoSave();
         }
 
         // Switch to notes view and filter
         this.currentView = 'notes';
-        console.log('🔧 Switched view to notes, calling filterNotes');
+        console.log('  Switched view to notes, calling filterNotes');
         await this.filterNotes();
     }
 

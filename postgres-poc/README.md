@@ -4,14 +4,14 @@ A complete database layer implementation for the Notes application using Postgre
 
 ## Features Demonstrated
 
-- ✅ **Complete Schema** - Users, notes, tags, versions, auth providers
-- ✅ **Full-Text Search** - PostgreSQL native search with ranking
-- ✅ **Version History** - Automatic note versioning on updates
-- ✅ **Connection Pooling** - Efficient database connections
-- ✅ **Transactions** - ACID compliance with rollback support
-- ✅ **Tag System** - Many-to-many relationships
-- ✅ **No ORM** - Clean SQL with type safety via JSDoc
-- ✅ **Performance** - Proper indexing and query optimization
+- ✓ **Complete Schema** - Users, notes, tags, versions, auth providers
+- ✓ **Full-Text Search** - PostgreSQL native search with ranking
+- ✓ **Version History** - Automatic note versioning on updates
+- ✓ **Connection Pooling** - Efficient database connections
+- ✓ **Transactions** - ACID compliance with rollback support
+- ✓ **Tag System** - Many-to-many relationships
+- ✓ **No ORM** - Clean SQL with type safety via JSDoc
+- ✓ **Performance** - Proper indexing and query optimization
 
 ## Prerequisites
 
@@ -76,19 +76,19 @@ deno run --allow-net --allow-read --allow-env test.js
 
 Expected output:
 ```
-🚀 PostgreSQL Integration Tests
+→ PostgreSQL Integration Tests
 
-📋 Test 1: Initialize Database Schema...
-✅ Initialize Database Schema - PASSED
+  Test 1: Initialize Database Schema...
+✓ Initialize Database Schema - PASSED
 
-📋 Test 2: Create Users...
-✅ Create Users - PASSED
+  Test 2: Create Users...
+✓ Create Users - PASSED
 
 [... 15 tests total ...]
 
-📊 Test Summary
-✅ Passed: 15/15
-🎉 All tests passed!
+  Test Summary
+✓ Passed: 15/15
+  All tests passed!
 ```
 
 ## Database Schema
@@ -425,12 +425,12 @@ FROM pg_tables WHERE schemaname = 'public';
 
 ## Next Steps
 
-1. ✅ **Database layer proven**
-2. ⬜ **Integrate with OAuth system**
-3. ⬜ **Connect to Dropbox backup**
-4. ⬜ **Build REST API with Oak**
-5. ⬜ **Create frontend with Lit**
-6. ⬜ **Deploy with systemd + Caddy**
+1. ✓ **Database layer proven**
+2.   **Integrate with OAuth system**
+3.   **Connect to Dropbox backup**
+4.   **Build REST API with Oak**
+5.   **Create frontend with Lit**
+6.   **Deploy with systemd + Caddy**
 
 ## Troubleshooting
 

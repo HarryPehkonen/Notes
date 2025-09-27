@@ -2,7 +2,7 @@
 
 This guide provides step-by-step instructions for running all three proof-of-concepts that form the foundation of the Notes application using the minimal web stack (Deno + Oak + PostgreSQL + Lit Web Components).
 
-## 📋 Overview
+##   Overview
 
 We have built three independent proof-of-concepts:
 
@@ -12,7 +12,7 @@ We have built three independent proof-of-concepts:
 
 Each POC can be run independently to verify functionality before integration.
 
-## 🔧 Prerequisites
+##   Prerequisites
 
 ### System Requirements
 - **Deno** 1.40+ installed
@@ -48,7 +48,7 @@ sudo systemctl enable postgresql
 sudo systemctl start postgresql
 ```
 
-## 📁 Project Structure
+##   Project Structure
 
 ```
 Notes/
@@ -76,7 +76,7 @@ Notes/
 
 ---
 
-## 🗂️ 1. Dropbox POC
+##   1. Dropbox POC
 
 **Purpose:** Test file upload, download, and listing with Dropbox API
 
@@ -111,35 +111,35 @@ deno run --allow-net --allow-read --allow-env test.js
 
 ### Expected Output
 ```
-🚀 Dropbox Integration Tests
+→ Dropbox Integration Tests
 
-📋 Test 1: Upload File...
-✅ Upload File - PASSED
+  Test 1: Upload File...
+✓ Upload File - PASSED
 
-📋 Test 2: List Files...
-✅ List Files - PASSED
+  Test 2: List Files...
+✓ List Files - PASSED
 
-📋 Test 3: Download File...
-✅ Download File - PASSED
+  Test 3: Download File...
+✓ Download File - PASSED
 
-📋 Test 4: Backup Structure...
-✅ Backup Structure - PASSED
+  Test 4: Backup Structure...
+✓ Backup Structure - PASSED
 
-📊 Test Summary
-✅ Passed: 4/4
-🎉 All tests passed! Dropbox integration is working perfectly.
+  Test Summary
+✓ Passed: 4/4
+  All tests passed! Dropbox integration is working perfectly.
 ```
 
 ### Features Demonstrated
-- ✅ File upload to Dropbox
-- ✅ File listing and metadata
-- ✅ File download and content verification
-- ✅ Structured backup organization
-- ✅ Error handling and retry logic
+- ✓ File upload to Dropbox
+- ✓ File listing and metadata
+- ✓ File download and content verification
+- ✓ Structured backup organization
+- ✓ Error handling and retry logic
 
 ---
 
-## 🔐 2. Google OAuth POC
+##   2. Google OAuth POC
 
 **Purpose:** Test OAuth 2.0 authentication flow with Google
 
@@ -182,23 +182,23 @@ deno run --allow-net --allow-read --allow-env server.js
 5. **Test logout** functionality
 
 ### Expected Behavior
-- ✅ Redirect to Google OAuth consent screen
-- ✅ Successful authentication and user profile retrieval
-- ✅ Session management with secure cookies
-- ✅ Protected dashboard route
-- ✅ Clean logout process
+- ✓ Redirect to Google OAuth consent screen
+- ✓ Successful authentication and user profile retrieval
+- ✓ Session management with secure cookies
+- ✓ Protected dashboard route
+- ✓ Clean logout process
 
 ### Features Demonstrated
-- ✅ OAuth 2.0 authorization code flow
-- ✅ Token exchange and validation
-- ✅ User profile retrieval
-- ✅ Session management
-- ✅ Route protection
-- ✅ No external libraries (pure OAuth implementation)
+- ✓ OAuth 2.0 authorization code flow
+- ✓ Token exchange and validation
+- ✓ User profile retrieval
+- ✓ Session management
+- ✓ Route protection
+- ✓ No external libraries (pure OAuth implementation)
 
 ---
 
-## 🐘 3. PostgreSQL POC
+##   3. PostgreSQL POC
 
 **Purpose:** Test database operations, search, and schema management
 
@@ -243,21 +243,21 @@ deno run --allow-net --allow-read --allow-env test.js
 
 ### Expected Output
 ```
-🚀 PostgreSQL Integration Tests
+→ PostgreSQL Integration Tests
 
-📋 Test 1: Initialize Database Schema...
-✅ Initialize Database Schema - PASSED
+  Test 1: Initialize Database Schema...
+✓ Initialize Database Schema - PASSED
 
-📋 Test 2: Create Users...
-✅ Create Users - PASSED
+  Test 2: Create Users...
+✓ Create Users - PASSED
 
 [... 15 tests total ...]
 
-📊 Test Summary
-✅ Passed: 15/15
-🎉 All tests passed! PostgreSQL integration is working perfectly.
+  Test Summary
+✓ Passed: 15/15
+  All tests passed! PostgreSQL integration is working perfectly.
 
-🏗️ What this proves:
+  What this proves:
 • Database schema creation and management
 • User management and authentication support
 • Full CRUD operations for notes
@@ -269,20 +269,20 @@ deno run --allow-net --allow-read --allow-env test.js
 ```
 
 ### Features Demonstrated
-- ✅ Schema initialization with SQL parsing
-- ✅ User CRUD operations
-- ✅ Note CRUD with markdown support
-- ✅ Tag system with many-to-many relationships
-- ✅ Full-text search with PostgreSQL native search
-- ✅ Version history with automatic triggers
-- ✅ Connection pooling (3 concurrent connections)
-- ✅ Transaction support with rollback
-- ✅ Performance testing (10 notes in ~80ms)
-- ✅ Complex search queries with ranking
+- ✓ Schema initialization with SQL parsing
+- ✓ User CRUD operations
+- ✓ Note CRUD with markdown support
+- ✓ Tag system with many-to-many relationships
+- ✓ Full-text search with PostgreSQL native search
+- ✓ Version history with automatic triggers
+- ✓ Connection pooling (3 concurrent connections)
+- ✓ Transaction support with rollback
+- ✓ Performance testing (10 notes in ~80ms)
+- ✓ Complex search queries with ranking
 
 ---
 
-## 🔗 Integration Architecture
+##   Integration Architecture
 
 ### How the POCs Work Together
 
@@ -311,7 +311,7 @@ deno run --allow-net --allow-read --allow-env test.js
 
 ---
 
-## 🐛 Troubleshooting
+## ▶ Troubleshooting
 
 ### Common Issues
 
@@ -363,7 +363,7 @@ deno run --allow-net --allow-read --allow-env test.js
 - Add `--allow-write` if creating files
 - Use specific permissions for production
 
-## 📈 Next Steps
+##   Next Steps
 
 Once all POCs are working:
 
@@ -383,11 +383,11 @@ Once all POCs are working:
    - Configure production database settings
    - Set up monitoring and logging
 
-## 🎯 Success Criteria
+## ★ Success Criteria
 
 All POCs should pass their respective test suites:
-- **Dropbox:** ✅ 4/4 tests passed
-- **Google OAuth:** ✅ Manual flow verification
-- **PostgreSQL:** ✅ 15/15 tests passed
+- **Dropbox:** ✓ 4/4 tests passed
+- **Google OAuth:** ✓ Manual flow verification
+- **PostgreSQL:** ✓ 15/15 tests passed
 
 When all three are working, you have a solid foundation for the complete Notes application!

@@ -246,7 +246,7 @@ export class TagManager extends LitElement {
     }
 
     toggleTag(tag) {
-        console.log('🔧 SIMPLE - toggleTag called with tag:', tag);
+        console.log('  SIMPLE - toggleTag called with tag:', tag);
         const index = this.selectedTags.findIndex(t => t.id === tag.id);
         let newSelection;
 
@@ -256,15 +256,15 @@ export class TagManager extends LitElement {
             newSelection = this.selectedTags.filter(t => t.id !== tag.id);
         }
 
-        console.log('🔧 SIMPLE - New tag selection:', newSelection);
+        console.log('  SIMPLE - New tag selection:', newSelection);
         this.selectedTags = newSelection;
 
         // Use direct callback instead of events
         if (this.onTagsSelected) {
-            console.log('🔧 SIMPLE - Calling onTagsSelected callback');
+            console.log('  SIMPLE - Calling onTagsSelected callback');
             this.onTagsSelected(newSelection);
         } else {
-            console.log('🔧 SIMPLE - No onTagsSelected callback found');
+            console.log('  SIMPLE - No onTagsSelected callback found');
         }
     }
 

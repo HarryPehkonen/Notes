@@ -27,7 +27,7 @@ const testUsers = [
 const testNotes = [
     {
         title: 'Welcome to Notes App',
-        content: `# Welcome to Notes App 🎉
+        content: `# Welcome to Notes App  
 
 This is your first note! You can write in **Markdown** and it will be searchable.
 
@@ -42,7 +42,7 @@ Let's get started!`,
     },
     {
         title: 'Project Ideas',
-        content: `# Project Ideas 💡
+        content: `# Project Ideas ◆
 
 ## Web Applications
 - [ ] Note-taking app (this one!)
@@ -89,7 +89,7 @@ Let's get started!`,
  * Run all tests
  */
 async function runTests() {
-    console.log(`${colors.blue}${colors.bold}🚀 PostgreSQL Integration Tests${colors.reset}\n`);
+    console.log(`${colors.blue}${colors.bold}→ PostgreSQL Integration Tests${colors.reset}\n`);
 
     const db = new DatabaseClient({
         user: Deno.env.get("DB_USER") || "notes_user",
@@ -105,12 +105,12 @@ async function runTests() {
     const test = async (name, testFn) => {
         testCount++;
         try {
-            console.log(`${colors.yellow}📋 Test ${testCount}: ${name}...${colors.reset}`);
+            console.log(`${colors.yellow}  Test ${testCount}: ${name}...${colors.reset}`);
             await testFn();
             passedTests++;
-            console.log(`${colors.green}✅ ${name} - PASSED${colors.reset}\n`);
+            console.log(`${colors.green}✓ ${name} - PASSED${colors.reset}\n`);
         } catch (error) {
-            console.error(`${colors.red}❌ ${name} - FAILED${colors.reset}`);
+            console.error(`${colors.red}✗ ${name} - FAILED${colors.reset}`);
             console.error(`   Error: ${error.message}\n`);
         }
     };
@@ -330,13 +330,13 @@ async function runTests() {
         });
 
         // Summary
-        console.log(`${colors.blue}${colors.bold}📊 Test Summary${colors.reset}`);
-        console.log(`${colors.green}✅ Passed: ${passedTests}/${testCount}${colors.reset}`);
+        console.log(`${colors.blue}${colors.bold}  Test Summary${colors.reset}`);
+        console.log(`${colors.green}✓ Passed: ${passedTests}/${testCount}${colors.reset}`);
 
         if (passedTests === testCount) {
-            console.log(`${colors.green}${colors.bold}🎉 All tests passed! PostgreSQL integration is working perfectly.${colors.reset}`);
+            console.log(`${colors.green}${colors.bold}  All tests passed! PostgreSQL integration is working perfectly.${colors.reset}`);
 
-            console.log(`\n${colors.cyan}🏗️ What this proves:${colors.reset}`);
+            console.log(`\n${colors.cyan}  What this proves:${colors.reset}`);
             console.log(`${colors.cyan}• Database schema creation and management${colors.reset}`);
             console.log(`${colors.cyan}• User management and authentication support${colors.reset}`);
             console.log(`${colors.cyan}• Full CRUD operations for notes${colors.reset}`);
@@ -346,11 +346,11 @@ async function runTests() {
             console.log(`${colors.cyan}• Connection pooling and transactions${colors.reset}`);
             console.log(`${colors.cyan}• High performance with proper indexing${colors.reset}`);
         } else {
-            console.log(`${colors.red}❌ ${testCount - passedTests} tests failed${colors.reset}`);
+            console.log(`${colors.red}✗ ${testCount - passedTests} tests failed${colors.reset}`);
         }
 
     } catch (error) {
-        console.error(`${colors.red}💥 Test suite failed: ${error.message}${colors.reset}`);
+        console.error(`${colors.red}  Test suite failed: ${error.message}${colors.reset}`);
     } finally {
         await db.close();
     }

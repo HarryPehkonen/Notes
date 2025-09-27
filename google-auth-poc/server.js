@@ -173,11 +173,11 @@ app.use(router.allowedMethods());
 
 // Start server
 const port = parseInt(Deno.env.get("PORT") || "8000");
-console.log(`🚀 OAuth server starting on http://localhost:${port}`);
-console.log(`📝 Make sure you have set the following environment variables:`);
+console.log(`→ OAuth server starting on http://localhost:${port}`);
+console.log(`※ Make sure you have set the following environment variables:`);
 console.log(`   - GOOGLE_CLIENT_ID`);
 console.log(`   - GOOGLE_CLIENT_SECRET`);
 console.log(`   - GOOGLE_REDIRECT_URI (default: http://localhost:8000/auth/callback)`);
-console.log(`\n🔑 Login at: http://localhost:${port}`);
+console.log(`\n  Login at: http://localhost:${port}`);
 
 await app.listen({ port });

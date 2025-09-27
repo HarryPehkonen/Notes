@@ -4,13 +4,13 @@ This is a minimal proof-of-concept demonstrating Dropbox integration with Deno f
 
 ## Features Demonstrated
 
-- ✅ Upload files to Dropbox
-- ✅ Download files from Dropbox
-- ✅ List folder contents
-- ✅ Create folders
-- ✅ Delete files
-- ✅ JSON data backup/restore
-- ✅ Content integrity verification
+- ✓ Upload files to Dropbox
+- ✓ Download files from Dropbox
+- ✓ List folder contents
+- ✓ Create folders
+- ✓ Delete files
+- ✓ JSON data backup/restore
+- ✓ Content integrity verification
 
 ## Setup
 
@@ -70,22 +70,22 @@ deno run --allow-net --allow-env --allow-read test.js
 ## Expected Output
 
 ```
-🚀 Starting Dropbox Integration Tests
+→ Starting Dropbox Integration Tests
 
-📋 Test 1: Verifying access token...
-✅ Token valid! Account: Your Name
+  Test 1: Verifying access token...
+✓ Token valid! Account: Your Name
    Email: your.email@example.com
 
-📋 Test 2: Creating test folder...
-✅ Created folder: /backup-test
+  Test 2: Creating test folder...
+✓ Created folder: /backup-test
 
-📋 Test 3: Uploading test file...
-✅ Uploaded file: /backup-test/test-1234567890.txt
+  Test 3: Uploading test file...
+✓ Uploaded file: /backup-test/test-1234567890.txt
    Size: 156 bytes
 
 [... more test results ...]
 
-✨ All tests passed successfully!
+★ All tests passed successfully!
 The Dropbox integration is working perfectly.
 ```
 
@@ -147,11 +147,11 @@ for (const note of notes) {
 
 ## Next Steps
 
-1. ✅ Basic API integration proven
-2. ⬜ Implement OAuth flow for production
-3. ⬜ Add to main Notes application
-4. ⬜ Create backup scheduler
-5. ⬜ Build restore UI
+1. ✓ Basic API integration proven
+2.   Implement OAuth flow for production
+3.   Add to main Notes application
+4.   Create backup scheduler
+5.   Build restore UI
 
 ## Troubleshooting
 
