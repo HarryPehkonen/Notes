@@ -1,0 +1,16 @@
+{
+    "name": "Notes App",
+    "short_name": "Notes",
+    "description": "Secure, searchable, synchronized notes with automatic Dropbox backup",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#667eea",
+    "icons": [
+        {
+            "src": "/static/favicon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml"
+        }
+    ]
+}

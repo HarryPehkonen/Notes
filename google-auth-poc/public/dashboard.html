@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Google OAuth POC</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .user-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .avatar {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: 4px solid #667eea;
+        }
+
+        .user-info {
+            flex: 1;
+        }
+
+        .user-info h2 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            color: #666;
+        }
+
+        .info-label {
+            font-weight: 600;
+            margin-right: 10px;
+            min-width: 80px;
+        }
+
+        .info-value {
+            flex: 1;
+        }
+
+        .verified {
+            display: inline-flex;
+            align-items: center;
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .actions {
+            margin-top: 30px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #333;
+            border: 2px solid #ddd;
+        }
+
+        .btn-secondary:hover {
+            background: #f8f9fa;
+            border-color: #999;
+        }
+
+        .raw-data {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            margin-top: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .raw-data h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .code-block {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .success-badge {
+            display: inline-flex;
+            align-items: center;
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 20px;
+            padding: 50px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎉 Authentication Successful!</h1>
+            <div class="success-badge">✓ OAuth flow completed successfully</div>
+        </div>
+
+        <div class="user-card" id="userCard">
+            <div class="loading">Loading user data...</div>
+        </div>
+
+        <div class="raw-data">
+            <h3>📊 Raw OAuth Response</h3>
+            <div class="code-block" id="rawData">Loading...</div>
+        </div>
+    </div>
+
+    <!-- USER_DATA -->
+
+    <script>
+        // Display user data
+        if (window.userData) {
+            const userCard = document.getElementById('userCard');
+            userCard.innerHTML = `
+                <img src="${userData.picture}" alt="${userData.name}" class="avatar">
+                <div class="user-info">
+                    <h2>${userData.name}</h2>
+                    <div class="info-item">
+                        <span class="info-label">Email:</span>
+                        <span class="info-value">
+                            ${userData.email}
+                            ${userData.verified_email ? '<span class="verified">✓ Verified</span>' : ''}
+                        </span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Google ID:</span>
+                        <span class="info-value">${userData.id}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Locale:</span>
+                        <span class="info-value">${userData.locale || 'Not specified'}</span>
+                    </div>
+                    <div class="actions">
+                        <a href="/auth/logout" class="btn btn-secondary">Sign Out</a>
+                        <button class="btn btn-primary" onclick="testApi()">Test API</button>
+                    </div>
+                </div>
+            `;
+
+            // Display raw data
+            document.getElementById('rawData').textContent = JSON.stringify(userData, null, 2);
+        } else {
+            // Fallback: fetch from API
+            fetch('/api/user')
+                .then(res => res.json())
+                .then(data => {
+                    window.userData = data;
+                    location.reload();
+                })
+                .catch(err => {
+                    document.getElementById('userCard').innerHTML = `
+                        <div style="color: red;">Error loading user data: ${err.message}</div>
+                    `;
+                });
+        }
+
+        async function testApi() {
+            try {
+                const response = await fetch('/api/user');
+                const data = await response.json();
+                alert('API Test Success!\n\nUser: ' + data.name + '\nEmail: ' + data.email);
+            } catch (error) {
+                alert('API Test Failed: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

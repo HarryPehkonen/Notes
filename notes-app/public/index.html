@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notes App</title>
+    <meta name="description" content="Secure, searchable, synchronized notes with automatic Dropbox backup">
+
+    <!-- PWA manifest -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#667eea">
+
+    <!-- Icons -->
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+
+    <!-- Import Lit from CDN -->
+    <script type="importmap">
+    {
+        "imports": {
+            "lit": "https://cdn.skypack.dev/lit@3.1.0",
+            "lit/": "https://cdn.skypack.dev/lit@3.1.0/"
+        }
+    }
+    </script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="/static/styles/app.css">
+</head>
+<body>
+    <div id="app">
+        <notes-app></notes-app>
+    </div>
+
+    <!-- Service worker registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/static/sw.js')
+                .then(registration => console.log('SW registered:', registration))
+                .catch(error => console.log('SW registration failed:', error));
+        }
+    </script>
+
+    <!-- Main app -->
+    <script type="module" src="/static/app.js"></script>
+</body>
+</html>
