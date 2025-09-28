@@ -294,12 +294,15 @@ export class DatabaseClient {
 
         if (tags && tags.length > 0) {
             query += ` AND n.id IN (
-                SELECT DISTINCT nt.note_id
+                SELECT nt.note_id
                 FROM note_tags nt
                 WHERE nt.tag_id = ANY($${paramIndex})
+                GROUP BY nt.note_id
+                HAVING COUNT(DISTINCT nt.tag_id) = $${paramIndex + 1}
             )`;
             params.push(tags);
-            paramIndex++;
+            params.push(tags.length);
+            paramIndex += 2;
         }
 
         query += ` ORDER BY n.is_pinned DESC, n.updated_at DESC`;
@@ -455,7 +458,7 @@ export class DatabaseClient {
         const schema = await Deno.readTextFile(schemaPath);
         const statements = this.parsePostgreSQLStatements(schema);
 
-        console.log(`\n=� Executing ${statements.length} SQL statements in order...\n`);
+        console.log(`\nExecuting ${statements.length} SQL statements in order...\n`);
 
         for (const statement of statements) {
             if (statement.trim()) {

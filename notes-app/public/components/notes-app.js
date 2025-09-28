@@ -329,6 +329,15 @@ class NotesApp extends LitElement {
         }
     }
 
+    async loadTags() {
+        try {
+            const result = await window.NotesApp.getTags();
+            this.tags = result.data || [];
+        } catch (error) {
+            console.error('Failed to load tags:', error);
+        }
+    }
+
     async waitForNotesApp() {
         while (!window.NotesApp || !window.NotesApp.getNotes) {
             await new Promise(resolve => setTimeout(resolve, 100));
@@ -370,13 +379,16 @@ class NotesApp extends LitElement {
             this.viewMode = 'edit';
         });
 
-        this.addEventListener('note-updated', (event) => {
+        this.addEventListener('note-updated', async (event) => {
             const index = this.notes.findIndex(n => n.id === event.detail.note.id);
             if (index !== -1) {
                 this.notes[index] = event.detail.note;
                 this.notes = [...this.notes]; // Trigger reactivity
             }
             this.currentNote = event.detail.note;
+
+            // Refresh tags to update usage counts
+            await this.loadTags();
         });
 
         this.addEventListener('note-deleted', (event) => {
@@ -508,6 +520,7 @@ class NotesApp extends LitElement {
             console.log('  Filter result:', result);
             this.notes = result.data || [];
             console.log('  Updated notes:', this.notes);
+            this.requestUpdate(); // Force re-render
         } catch (error) {
             console.error('Failed to filter notes:', error);
             this.showToast('Failed to filter notes', 'error');

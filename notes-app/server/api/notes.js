@@ -10,8 +10,16 @@ export function createNotesRouter() {
 
     // GET /api/notes - Get all notes for the authenticated user
     router.get("/", async (ctx) => {
+	console.log("router get /");
+	console.log(ctx.request.url);
         const { user, db } = ctx.state;
-        const { limit = 20, offset = 0, tags, search, pinned } = ctx.request.url.searchParams;
+
+        // Properly extract parameters from URLSearchParams
+        const limit = ctx.request.url.searchParams.get('limit') || 20;
+        const offset = ctx.request.url.searchParams.get('offset') || 0;
+        const tags = ctx.request.url.searchParams.get('tags');
+        const search = ctx.request.url.searchParams.get('search');
+        const pinned = ctx.request.url.searchParams.get('pinned');
 
         try {
             const options = {
@@ -20,14 +28,15 @@ export function createNotesRouter() {
             };
 
             if (tags) {
-                options.tags = tags.split(',').map(tag => tag.trim());
+                options.tags = tags.split(',').map(tag => parseInt(tag.trim()));
+                console.log('API: Parsed tag IDs:', options.tags);
             }
 
             if (search) {
                 options.search = search;
             }
 
-            if (pinned !== undefined) {
+            if (pinned !== null) {
                 options.pinned = pinned === 'true';
             }
 
