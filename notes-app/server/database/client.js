@@ -336,26 +336,55 @@ export class DatabaseClient {
      */
     async searchNotes(userId, query, limit = 20) {
         const result = await this.query(
-            `SELECT
-                n.id,
-                n.title,
-                n.content,
-                ts_rank(n.search_vector, plainto_tsquery('english', $2)) as rank,
-                n.created_at,
-                n.updated_at,
+            `WITH fts_results AS (
+                -- Full-text search results (higher rank)
+                SELECT
+                    n.id,
+                    n.title,
+                    n.content,
+                    ts_rank(n.search_vector, plainto_tsquery('english', $2)) as rank,
+                    n.created_at,
+                    n.updated_at
+                FROM notes n
+                WHERE n.user_id = $1
+                    AND n.search_vector @@ plainto_tsquery('english', $2)
+                    AND NOT n.is_archived
+            ),
+            partial_results AS (
+                -- Partial text search results (lower rank)
+                SELECT
+                    n.id,
+                    n.title,
+                    n.content,
+                    0.1 as rank,
+                    n.created_at,
+                    n.updated_at
+                FROM notes n
+                WHERE n.user_id = $1
+                    AND (
+                        n.title ILIKE $4 OR n.content ILIKE $4 OR
+                        n.search_vector @@ to_tsquery('english', $2 || ':*')  -- Stem matching with prefix
+                    )
+                    AND NOT n.is_archived
+                    AND n.id NOT IN (SELECT id FROM fts_results)
+            ),
+            all_results AS (
+                SELECT * FROM fts_results
+                UNION ALL
+                SELECT * FROM partial_results
+            )
+            SELECT
+                ar.*,
                 ARRAY(
                     SELECT json_build_object('id', t.id, 'name', t.name, 'color', t.color)
                     FROM tags t
                     JOIN note_tags nt ON t.id = nt.tag_id
-                    WHERE nt.note_id = n.id
+                    WHERE nt.note_id = ar.id
                 ) as tags
-            FROM notes n
-            WHERE n.user_id = $1
-                AND n.search_vector @@ plainto_tsquery('english', $2)
-                AND NOT n.is_archived
-            ORDER BY rank DESC, n.updated_at DESC
+            FROM all_results ar
+            ORDER BY ar.rank DESC, ar.updated_at DESC
             LIMIT $3`,
-            [userId, query, limit]
+            [userId, query, limit, `%${query}%`]
         );
         return result.rows;
     }
@@ -584,7 +613,7 @@ export class DatabaseClient {
             }
         }
 
-        console.log(`\n=� Statement counts: DROP=${drops.length}, EXT=${extensions.length}, TABLE=${tables.length}, INDEX=${indexes.length}, TRIGGER=${triggers.length}, FUNC=${functions.length}, OTHER=${other.length}\n`);
+        console.log(`\n Statement counts: DROP=${drops.length}, EXT=${extensions.length}, TABLE=${tables.length}, INDEX=${indexes.length}, TRIGGER=${triggers.length}, FUNC=${functions.length}, OTHER=${other.length}\n`);
 
         // Return in proper execution order
         return [

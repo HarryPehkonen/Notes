@@ -267,7 +267,8 @@ export function createTagsRouter() {
     router.get("/:id/notes", async (ctx) => {
         const { user, db } = ctx.state;
         const tagId = parseInt(ctx.params.id);
-        const { limit = 20, offset = 0 } = ctx.request.url.searchParams;
+        const limit = ctx.request.url.searchParams.get('limit') || 20;
+        const offset = ctx.request.url.searchParams.get('offset') || 0;
 
         if (!tagId) {
             ctx.response.status = 400;

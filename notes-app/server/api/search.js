@@ -11,7 +11,9 @@ export function createSearchRouter() {
     // GET /api/search - Perform full-text search on notes
     router.get("/", async (ctx) => {
         const { user, db } = ctx.state;
-        const { q, limit = 20, offset = 0 } = ctx.request.url.searchParams;
+        const q = ctx.request.url.searchParams.get('q');
+        const limit = ctx.request.url.searchParams.get('limit') || 20;
+        const offset = ctx.request.url.searchParams.get('offset') || 0;
 
         if (!q || q.trim().length === 0) {
             ctx.response.status = 400;
@@ -38,7 +40,32 @@ export function createSearchRouter() {
             const searchLimit = Math.min(parseInt(limit), 100); // Cap at 100 results
             const searchOffset = parseInt(offset);
 
-            const results = await db.searchNotes(user.id, query, searchLimit);
+            let results;
+
+            // Check if this is a tag search (starts with #)
+            if (query.startsWith('#')) {
+                const tagName = query.substring(1).toLowerCase(); // Remove the # prefix
+
+                // First, get the tag ID for this tag name
+                const tagResult = await db.query(
+                    `SELECT id FROM tags WHERE user_id = $1 AND name = $2`,
+                    [user.id, tagName]
+                );
+
+                if (tagResult.rows.length > 0) {
+                    const tagId = tagResult.rows[0].id;
+                    results = await db.getNotes(user.id, {
+                        tags: [tagId],
+                        limit: searchLimit,
+                        offset: searchOffset
+                    });
+                } else {
+                    // Tag doesn't exist, return empty results
+                    results = [];
+                }
+            } else {
+                results = await db.searchNotes(user.id, query, searchLimit);
+            }
 
             // Calculate if there are more results
             const hasMore = results.length === searchLimit;
@@ -69,7 +96,8 @@ export function createSearchRouter() {
     // GET /api/search/suggestions - Get search suggestions based on existing content
     router.get("/suggestions", async (ctx) => {
         const { user, db } = ctx.state;
-        const { q = "", limit = 10 } = ctx.request.url.searchParams;
+        const q = ctx.request.url.searchParams.get('q') || "";
+        const limit = ctx.request.url.searchParams.get('limit') || 10;
 
         try {
             const suggestions = [];
@@ -97,7 +125,7 @@ export function createSearchRouter() {
 
             // Get recent search terms from note titles and content
             const recentResults = await db.query(`
-                SELECT DISTINCT title
+                SELECT DISTINCT title, updated_at
                 FROM notes
                 WHERE user_id = $1
                   AND NOT is_archived
@@ -143,7 +171,7 @@ export function createSearchRouter() {
     // GET /api/search/recent - Get recent search activity and popular terms
     router.get("/recent", async (ctx) => {
         const { user, db } = ctx.state;
-        const { limit = 10 } = ctx.request.url.searchParams;
+        const limit = ctx.request.url.searchParams.get('limit') || 10;
 
         try {
             // Get recently modified notes

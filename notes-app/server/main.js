@@ -267,11 +267,28 @@ router.get("/static/:path*", async (ctx) => {
         };
 
         ctx.response.type = contentTypes[ext] || 'application/octet-stream';
+
+        // Set caching headers for static assets
+        // Cache for 1 hour in development, 1 day in production
+        const maxAge = Deno.env.get('ENVIRONMENT') === 'production' ? 86400 : 3600;
+        ctx.response.headers.set('Cache-Control', `public, max-age=${maxAge}`);
+        ctx.response.headers.set('ETag', `"${file.length}-${Date.now()}"`);
+
+        // Set longer cache for assets that rarely change
+        if (ext === 'svg' || ext === 'png' || ext === 'jpg' || filePath.includes('favicon')) {
+            ctx.response.headers.set('Cache-Control', `public, max-age=${maxAge * 24}`); // 24x longer cache
+        }
+
         ctx.response.body = file;
     } catch (error) {
         ctx.response.status = 404;
         ctx.response.body = "File not found";
     }
+});
+
+// Handle favicon.ico requests by redirecting to SVG favicon
+router.get("/favicon.ico", (ctx) => {
+    ctx.response.redirect("/static/favicon.svg");
 });
 
 // Apply routes
