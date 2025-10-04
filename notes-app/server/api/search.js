@@ -27,11 +27,11 @@ export function createSearchRouter() {
         const query = q.trim();
 
         // Minimum query length to prevent too broad searches
-        if (query.length < 2) {
+        if (query.length < 1) {
             ctx.response.status = 400;
             ctx.response.body = {
                 success: false,
-                error: "Search query must be at least 2 characters long"
+                error: "Search query must be at least 1 character long"
             };
             return;
         }

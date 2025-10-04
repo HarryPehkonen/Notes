@@ -335,6 +335,13 @@ export class DatabaseClient {
      * @returns {Promise<Note[]>}
      */
     async searchNotes(userId, query, limit = 20) {
+        // Sanitize query for PostgreSQL full-text search
+        // Remove special characters that break tsquery and normalize spaces
+        const sanitizedQuery = query
+            .replace(/[#@&|!():<>]/g, ' ')  // Replace special chars with spaces
+            .replace(/\s+/g, ' ')           // Collapse multiple spaces to single space
+            .trim();                        // Remove leading/trailing spaces
+
         const result = await this.query(
             `WITH fts_results AS (
                 -- Full-text search results (higher rank)
@@ -363,7 +370,7 @@ export class DatabaseClient {
                 WHERE n.user_id = $1
                     AND (
                         n.title ILIKE $4 OR n.content ILIKE $4 OR
-                        n.search_vector @@ to_tsquery('english', $2 || ':*')  -- Stem matching with prefix
+                        ($5 != '' AND n.search_vector @@ to_tsquery('english', $5 || ':*'))  -- Stem matching with prefix
                     )
                     AND NOT n.is_archived
                     AND n.id NOT IN (SELECT id FROM fts_results)
@@ -384,7 +391,7 @@ export class DatabaseClient {
             FROM all_results ar
             ORDER BY ar.rank DESC, ar.updated_at DESC
             LIMIT $3`,
-            [userId, query, limit, `%${query}%`]
+            [userId, sanitizedQuery, limit, `%${query}%`, sanitizedQuery]
         );
         return result.rows;
     }

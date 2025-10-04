@@ -40,6 +40,7 @@ class NotesApp extends LitElement {
         }
 
         .sidebar-header {
+            position: relative;
             padding: 1rem;
             border-bottom: 1px solid var(--gray-200);
             background: var(--primary);
@@ -92,6 +93,46 @@ class NotesApp extends LitElement {
             flex: 1;
             overflow: hidden;
             position: relative;
+        }
+
+        .active-filters {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--gray-50);
+            border-radius: 0.5rem;
+        }
+
+        .filter-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--gray-600);
+        }
+
+        .filter-tag {
+            padding: 0.25rem 0.5rem;
+            background: var(--white);
+            border: 1px solid var(--gray-300);
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+        }
+
+        .clear-filters-btn {
+            padding: 0.25rem 0.75rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .clear-filters-btn:hover {
+            background: var(--primary-dark);
         }
 
         .new-note-btn {
@@ -209,6 +250,43 @@ class NotesApp extends LitElement {
             z-index: 10;
         }
 
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 19;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .sidebar-overlay.visible {
+            display: block;
+            opacity: 1;
+        }
+
+        .sidebar-close {
+            display: none;
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.25rem;
+            line-height: 1;
+            transition: transform 0.2s ease;
+        }
+
+        .sidebar-close:hover {
+            transform: scale(1.1);
+        }
+
         /* Mobile styles */
         @media (max-width: 768px) {
             .sidebar {
@@ -226,6 +304,21 @@ class NotesApp extends LitElement {
 
             .mobile-header {
                 display: flex;
+            }
+
+            .sidebar-close {
+                display: block;
+            }
+
+            .sidebar-overlay {
+                display: block;
+                opacity: 0;
+                pointer-events: none;
+            }
+
+            .sidebar-overlay.visible {
+                opacity: 1;
+                pointer-events: auto;
             }
 
             .top-bar {
@@ -533,6 +626,41 @@ class NotesApp extends LitElement {
         this.sidebarOpen = !this.sidebarOpen;
     }
 
+    closeSidebar() {
+        this.sidebarOpen = false;
+    }
+
+    handleOverlayClick(e) {
+        if (e.target.classList.contains('sidebar-overlay')) {
+            this.closeSidebar();
+        }
+    }
+
+    clearAllFilters() {
+        this.searchQuery = '';
+        this.selectedTags = [];
+        this.viewMode = 'list';
+
+        // Clear search bar
+        const searchBar = this.shadowRoot.querySelector('search-bar');
+        if (searchBar) {
+            searchBar.query = '';
+        }
+
+        // Clear tag manager selection
+        const tagManager = this.shadowRoot.querySelector('tag-manager');
+        if (tagManager) {
+            tagManager.selectedTags = [];
+        }
+
+        // Reload all notes
+        this.loadInitialData();
+    }
+
+    hasActiveFilters() {
+        return (this.searchQuery && this.searchQuery.trim()) || (this.selectedTags && this.selectedTags.length > 0);
+    }
+
     async showAllNotes() {
         // If we're currently editing a note, save any pending changes first
         if (this.viewMode === 'edit' && this.currentNote) {
@@ -590,9 +718,14 @@ class NotesApp extends LitElement {
                     <h1 class="app-title">Notes</h1>
                 </div>
 
+                <div class="sidebar-overlay ${this.sidebarOpen ? 'visible' : ''}" @click=${this.handleOverlayClick}></div>
+
                 <aside class="sidebar ${this.sidebarOpen ? 'open' : ''}">
                     <div class="sidebar-header">
                         <h1 class="app-title">※ Notes</h1>
+                        <button class="sidebar-close" @click=${this.closeSidebar} aria-label="Close sidebar">
+                            ✕
+                        </button>
                     </div>
 
                     <div class="sidebar-content">
@@ -628,6 +761,18 @@ class NotesApp extends LitElement {
                             .query=${this.searchQuery}
                             @search-query=${(e) => this.searchQuery = e.detail.query}
                         ></search-bar>
+
+                        ${this.hasActiveFilters() ? html`
+                            <div class="active-filters">
+                                <span class="filter-info">
+                                    ${this.searchQuery ? html`<span class="filter-tag">Search: "${this.searchQuery}"</span>` : ''}
+                                    ${this.selectedTags.length > 0 ? html`<span class="filter-tag">${this.selectedTags.length} tag${this.selectedTags.length > 1 ? 's' : ''}</span>` : ''}
+                                </span>
+                                <button class="clear-filters-btn" @click=${this.clearAllFilters} title="Clear all filters">
+                                    Clear all
+                                </button>
+                            </div>
+                        ` : ''}
 
                         <div class="user-menu">
                             ${this.user ? html`

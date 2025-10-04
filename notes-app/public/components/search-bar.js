@@ -230,8 +230,8 @@ export class SearchBar extends LitElement {
         if (value.trim()) {
             this.loading = true;
             this.debounceTimer = setTimeout(() => {
-                // Only search if query is at least 2 characters
-                if (value.trim().length >= 2) {
+                // Only search if query is at least 1 character
+                if (value.trim().length >= 1) {
                     this.performSearch(value);
                     this.loadSuggestions(value);
                 } else {
@@ -239,7 +239,7 @@ export class SearchBar extends LitElement {
                     this.suggestions = [];
                     this.showSuggestions = false;
                 }
-            }, 300);
+            }, 150);
         } else {
             // Clear search
             this.suggestions = [];

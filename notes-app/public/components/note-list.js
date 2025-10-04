@@ -452,6 +452,7 @@ export class NoteList extends LitElement {
                     <div class="notes-title">
                         ${filteredNotes.length} ${filteredNotes.length === 1 ? 'Note' : 'Notes'}
                         ${this.searchQuery ? html` matching "${this.searchQuery}"` : ''}
+                        ${this.selectedTags && this.selectedTags.length > 0 ? html` with ${this.selectedTags.length} tag${this.selectedTags.length > 1 ? 's' : ''}` : ''}
                     </div>
 
                     <div class="view-toggle">
