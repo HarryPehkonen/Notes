@@ -243,5 +243,13 @@
     "https://deno.land/x/sqlite@v3.4.0/src/error.ts": "abf9df169951faf8c21a68d99ef9efd257c788c19784f27dd147507fbdfe5fe7",
     "https://deno.land/x/sqlite@v3.4.0/src/query.ts": "df4d3d6b23d52b36243dd47c07ed6ed7cd23f7834a0f6a2f2c6dbffba63d4c28",
     "https://deno.land/x/sqlite@v3.4.0/src/wasm.ts": "e79d0baa6e42423257fb3c7cc98091c54399254867e0f34a09b5bdef37bd9487"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@playwright/test@^1.55.1",
+        "npm:@types/node@^24.6.2"
+      ]
+    }
   }
 }
