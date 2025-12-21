@@ -31,7 +31,6 @@ A complete, production-ready notes application built with the minimal web stack 
 
 ### Project Structure
 ```
-notes-app/
 ├── server/
 │   ├── main.js              # Main Oak server
 │   ├── auth/
@@ -59,6 +58,8 @@ notes-app/
 │   ├── styles/
 │   │   └── app.css          # Mobile-first CSS
 │   └── app.js               # Main application logic
+├── tests/                   # Playwright E2E tests
+├── poc/                     # Proof-of-concept projects
 ├── deno.json                # Deno configuration
 ├── .env.example             # Environment template
 └── README.md                # This file
@@ -76,8 +77,8 @@ notes-app/
 
 1. **Clone the repository:**
    ```bash
-   git clone <repository-url>
-   cd notes-app
+   git clone https://github.com/HarryPehkonen/Notes.git
+   cd Notes
    ```
 
 2. **Set up PostgreSQL:**
@@ -405,7 +406,7 @@ GET    /api/backup/status     # Backup status
 3. **Application Deployment:**
    ```bash
    # Clone application
-   git clone <repository-url> /opt/notes-app
+   git clone https://github.com/HarryPehkonen/Notes.git /opt/notes-app
    cd /opt/notes-app
 
    # Configure environment
@@ -597,10 +598,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 For questions, issues, or contributions:
 
--   Email: [your-email@domain.com]
-- ▶ Issues: [GitHub Issues](https://github.com/your-repo/issues)
--   Documentation: [Wiki](https://github.com/your-repo/wiki)
--   Discussions: [GitHub Discussions](https://github.com/your-repo/discussions)
+- ▶ Issues: [GitHub Issues](https://github.com/HarryPehkonen/Notes/issues)
+-   Documentation: [Wiki](https://github.com/HarryPehkonen/Notes/wiki)
+-   Discussions: [GitHub Discussions](https://github.com/HarryPehkonen/Notes/discussions)
 
 ---
 
