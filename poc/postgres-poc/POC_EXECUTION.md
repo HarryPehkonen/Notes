@@ -2,7 +2,7 @@
 
 This guide provides step-by-step instructions for running all three proof-of-concepts that form the foundation of the Notes application using the minimal web stack (Deno + Oak + PostgreSQL + Lit Web Components).
 
-##   Overview
+## Overview
 
 We have built three independent proof-of-concepts:
 
@@ -12,15 +12,17 @@ We have built three independent proof-of-concepts:
 
 Each POC can be run independently to verify functionality before integration.
 
-##   Prerequisites
+## Prerequisites
 
 ### System Requirements
+
 - **Deno** 1.40+ installed
 - **PostgreSQL** 12+ installed and running
 - **Internet connection** for API calls
 - **Modern web browser** for OAuth testing
 
 ### Install Deno (if not already installed)
+
 ```bash
 # Linux/macOS
 curl -fsSL https://deno.land/install.sh | sh
@@ -33,6 +35,7 @@ deno --version
 ```
 
 ### Install PostgreSQL (if not already installed)
+
 ```bash
 # Ubuntu/Debian
 sudo apt update
@@ -48,7 +51,7 @@ sudo systemctl enable postgresql
 sudo systemctl start postgresql
 ```
 
-##   Project Structure
+## Project Structure
 
 ```
 Notes/
@@ -76,7 +79,7 @@ Notes/
 
 ---
 
-##   1. Dropbox POC
+## 1. Dropbox POC
 
 **Purpose:** Test file upload, download, and listing with Dropbox API
 
@@ -110,6 +113,7 @@ deno run --allow-net --allow-read --allow-env test.js
 ```
 
 ### Expected Output
+
 ```
 → Dropbox Integration Tests
 
@@ -131,6 +135,7 @@ deno run --allow-net --allow-read --allow-env test.js
 ```
 
 ### Features Demonstrated
+
 - ✓ File upload to Dropbox
 - ✓ File listing and metadata
 - ✓ File download and content verification
@@ -139,7 +144,7 @@ deno run --allow-net --allow-read --allow-env test.js
 
 ---
 
-##   2. Google OAuth POC
+## 2. Google OAuth POC
 
 **Purpose:** Test OAuth 2.0 authentication flow with Google
 
@@ -182,6 +187,7 @@ deno run --allow-net --allow-read --allow-env server.js
 5. **Test logout** functionality
 
 ### Expected Behavior
+
 - ✓ Redirect to Google OAuth consent screen
 - ✓ Successful authentication and user profile retrieval
 - ✓ Session management with secure cookies
@@ -189,6 +195,7 @@ deno run --allow-net --allow-read --allow-env server.js
 - ✓ Clean logout process
 
 ### Features Demonstrated
+
 - ✓ OAuth 2.0 authorization code flow
 - ✓ Token exchange and validation
 - ✓ User profile retrieval
@@ -198,7 +205,7 @@ deno run --allow-net --allow-read --allow-env server.js
 
 ---
 
-##   3. PostgreSQL POC
+## 3. PostgreSQL POC
 
 **Purpose:** Test database operations, search, and schema management
 
@@ -242,6 +249,7 @@ deno run --allow-net --allow-read --allow-env test.js
 ```
 
 ### Expected Output
+
 ```
 → PostgreSQL Integration Tests
 
@@ -269,6 +277,7 @@ deno run --allow-net --allow-read --allow-env test.js
 ```
 
 ### Features Demonstrated
+
 - ✓ Schema initialization with SQL parsing
 - ✓ User CRUD operations
 - ✓ Note CRUD with markdown support
@@ -282,7 +291,7 @@ deno run --allow-net --allow-read --allow-env test.js
 
 ---
 
-##   Integration Architecture
+## Integration Architecture
 
 ### How the POCs Work Together
 
@@ -297,6 +306,7 @@ deno run --allow-net --allow-read --allow-env test.js
 ```
 
 ### Data Flow
+
 1. **Authentication:** User authenticates via Google OAuth
 2. **Session:** Server creates secure session with user profile
 3. **Database:** User notes stored in PostgreSQL with search indexing
@@ -304,6 +314,7 @@ deno run --allow-net --allow-read --allow-env test.js
 5. **Restore:** Notes can be restored from Dropbox backups
 
 ### Integration Points
+
 - **OAuth → Database:** User profile stored in `users` table
 - **Database → Dropbox:** Notes exported as JSON for backup
 - **Dropbox → Database:** Backup files restored to database
@@ -316,54 +327,68 @@ deno run --allow-net --allow-read --allow-env test.js
 ### Common Issues
 
 #### Dropbox POC
+
 **Error: "Invalid access token"**
+
 - Verify token in .env file
 - Check token permissions include required scopes
 - Regenerate token if expired
 
 **Error: "Network request failed"**
+
 - Check internet connection
 - Verify Dropbox API endpoint accessibility
 
 #### Google OAuth POC
+
 **Error: "Invalid client credentials"**
+
 - Verify CLIENT_ID and CLIENT_SECRET in .env
 - Check redirect URI matches Google Cloud Console exactly
 - Ensure project has OAuth consent screen configured
 
 **Error: "Redirect URI mismatch"**
+
 - Verify GOOGLE_REDIRECT_URI in .env matches console
 - Check server is running on correct port (8000)
 
 #### PostgreSQL POC
+
 **Error: "Connection refused"**
+
 - Ensure PostgreSQL is running: `sudo systemctl status postgresql`
 - Check connection parameters in .env
 - Verify user permissions: `psql -U notes_user -d notes_app -c "SELECT version();"`
 
 **Error: "Schema initialization failed"**
+
 - Check PostgreSQL extensions are available
 - Verify user has CREATE permissions
 - Review schema.sql for syntax errors
 
 **Error: "Function does not exist"**
+
 - Ensure schema initialization completed successfully
 - Check PostgreSQL version supports required features
 - Verify plpgsql language is available
 
 ### Performance Issues
+
 **Slow search queries:**
+
 - Verify GIN index on search_vector: `\d+ notes`
 - Check ANALYZE has been run: `ANALYZE notes;`
 - Monitor query plans: `EXPLAIN ANALYZE SELECT ...`
 
 ### Environment Issues
+
 **Deno permission errors:**
+
 - Ensure all required flags: `--allow-net --allow-read --allow-env`
 - Add `--allow-write` if creating files
 - Use specific permissions for production
 
-##   Next Steps
+## Next Steps
 
 Once all POCs are working:
 
@@ -386,6 +411,7 @@ Once all POCs are working:
 ## ★ Success Criteria
 
 All POCs should pass their respective test suites:
+
 - **Dropbox:** ✓ 4/4 tests passed
 - **Google OAuth:** ✓ Manual flow verification
 - **PostgreSQL:** ✓ 15/15 tests passed

@@ -13,6 +13,7 @@ A reusable, no-build, minimal-dependency web application stack using modern web 
 ## Core Technology Stack
 
 ### Frontend
+
 - **Lit Web Components** (5KB) - Google's modern web components framework
 - **Plain JavaScript** - No transpilation required
 - **JSDoc Annotations** - Type documentation and checking
@@ -20,12 +21,14 @@ A reusable, no-build, minimal-dependency web application stack using modern web 
 - **Native CSS** - CSS Grid, Flexbox, Custom Properties (no frameworks)
 
 ### Backend
+
 - **Deno Runtime** - Secure, modern JavaScript runtime
 - **Oak Framework** - Lightweight middleware framework
 - **Plain JavaScript** - With JSDoc type annotations
 - **URL Imports** - Direct dependency management
 
 ### Deployment
+
 - **Linux VPS** - Ubuntu/Debian recommended
 - **Caddy Server** - Automatic HTTPS, reverse proxy
 - **systemd** - Service management
@@ -62,26 +65,28 @@ project-name/
 ## Frontend Template
 
 ### Main HTML (index.html)
+
 ```html
 <!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>App Name</title>
     <link rel="manifest" href="/manifest.json">
     <link rel="stylesheet" href="/styles.css">
     <script type="module" src="/app.js"></script>
-</head>
-<body>
+  </head>
+  <body>
     <app-root></app-root>
-</body>
+  </body>
 </html>
 ```
 
 ### Main App (app.js)
+
 ```javascript
-import { LitElement, html, css } from 'https://cdn.jsdelivr.net/npm/lit@2/index.js';
+import { css, html, LitElement } from "https://cdn.jsdelivr.net/npm/lit@2/index.js";
 
 /**
  * @typedef {Object} AppState
@@ -90,80 +95,87 @@ import { LitElement, html, css } from 'https://cdn.jsdelivr.net/npm/lit@2/index.
  */
 
 class AppRoot extends LitElement {
-    static properties = {
-        /** @type {AppState} */
-        state: { type: Object }
-    };
+  static properties = {
+    /** @type {AppState} */
+    state: { type: Object },
+  };
 
-    constructor() {
-        super();
-        this.state = { authenticated: false, user: null };
-    }
+  constructor() {
+    super();
+    this.state = { authenticated: false, user: null };
+  }
 
-    render() {
-        return html`
-            <main>
-                ${this.state.authenticated
-                    ? html`<app-dashboard></app-dashboard>`
-                    : html`<app-login></app-login>`
-                }
-            </main>
-        `;
-    }
+  render() {
+    return html`
+      <main>
+        ${this.state.authenticated
+          ? html`
+            <app-dashboard></app-dashboard>
+          `
+          : html`
+            <app-login></app-login>
+          `}
+      </main>
+    `;
+  }
 }
 
-customElements.define('app-root', AppRoot);
+customElements.define("app-root", AppRoot);
 ```
 
 ### Component Template (components/example.js)
+
 ```javascript
-import { LitElement, html, css } from 'https://cdn.jsdelivr.net/npm/lit@2/index.js';
+import { css, html, LitElement } from "https://cdn.jsdelivr.net/npm/lit@2/index.js";
 
 /**
  * Example component demonstrating structure
  * @extends {LitElement}
  */
 export class ExampleComponent extends LitElement {
-    static styles = css`
-        :host {
-            display: block;
-            padding: 1rem;
-        }
+  static styles = css`
+    :host {
+      display: block;
+      padding: 1rem;
+    }
+  `;
+
+  static properties = {
+    /** @type {string} */
+    title: { type: String },
+    /** @type {number} */
+    count: { type: Number },
+  };
+
+  /**
+   * @param {Event} e
+   */
+  handleClick(e) {
+    this.count++;
+    this.dispatchEvent(
+      new CustomEvent("count-changed", {
+        detail: { count: this.count },
+      }),
+    );
+  }
+
+  render() {
+    return html`
+      <h2>${this.title}</h2>
+      <button @click="${this.handleClick}">
+        Count: ${this.count}
+      </button>
     `;
-
-    static properties = {
-        /** @type {string} */
-        title: { type: String },
-        /** @type {number} */
-        count: { type: Number }
-    };
-
-    /**
-     * @param {Event} e
-     */
-    handleClick(e) {
-        this.count++;
-        this.dispatchEvent(new CustomEvent('count-changed', {
-            detail: { count: this.count }
-        }));
-    }
-
-    render() {
-        return html`
-            <h2>${this.title}</h2>
-            <button @click=${this.handleClick}>
-                Count: ${this.count}
-            </button>
-        `;
-    }
+  }
 }
 
-customElements.define('example-component', ExampleComponent);
+customElements.define("example-component", ExampleComponent);
 ```
 
 ## Backend Template
 
 ### Server Setup (server.js)
+
 ```javascript
 import { Application, Router } from "https://deno.land/x/oak/mod.ts";
 
@@ -179,23 +191,23 @@ const PORT = Deno.env.get("PORT") || "8000";
 
 // Middleware
 app.use(async (ctx, next) => {
-    try {
-        await next();
-    } catch (err) {
-        ctx.response.status = err.status || 500;
-        ctx.response.body = { error: err.message };
-    }
+  try {
+    await next();
+  } catch (err) {
+    ctx.response.status = err.status || 500;
+    ctx.response.body = { error: err.message };
+  }
 });
 
 // Routes
 router
-    .get("/api/health", (ctx) => {
-        ctx.response.body = { status: "ok" };
-    })
-    .get("/api/data", async (ctx) => {
-        // Your API logic here
-        ctx.response.body = { data: [] };
-    });
+  .get("/api/health", (ctx) => {
+    ctx.response.body = { status: "ok" };
+  })
+  .get("/api/data", async (ctx) => {
+    // Your API logic here
+    ctx.response.body = { data: [] };
+  });
 
 app.use(router.routes());
 app.use(router.allowedMethods());
@@ -229,6 +241,7 @@ export {};
 ## Server Configuration
 
 ### Caddy Configuration (/etc/caddy/Caddyfile)
+
 ```
 yourdomain.com {
     # API routes to backend
@@ -262,6 +275,7 @@ yourdomain.com {
 ```
 
 ### systemd Service (/etc/systemd/system/app-backend.service)
+
 ```ini
 [Unit]
 Description=App Backend Service
@@ -289,6 +303,7 @@ WantedBy=multi-user.target
 ### Option 1: PostgreSQL (Full-Featured)
 
 #### Installation
+
 ```bash
 sudo apt install postgresql postgresql-contrib
 sudo -u postgres createuser --interactive
@@ -296,6 +311,7 @@ sudo -u postgres createdb your_app_db
 ```
 
 #### Connection (backend/db.js)
+
 ```javascript
 import { Client } from "https://deno.land/x/postgres/mod.ts";
 
@@ -310,11 +326,11 @@ import { Client } from "https://deno.land/x/postgres/mod.ts";
 
 /** @type {DatabaseConfig} */
 const dbConfig = {
-    user: Deno.env.get("DB_USER") || "app_user",
-    database: Deno.env.get("DB_NAME") || "app_db",
-    hostname: Deno.env.get("DB_HOST") || "localhost",
-    port: parseInt(Deno.env.get("DB_PORT") || "5432"),
-    password: Deno.env.get("DB_PASS") || "",
+  user: Deno.env.get("DB_USER") || "app_user",
+  database: Deno.env.get("DB_NAME") || "app_db",
+  hostname: Deno.env.get("DB_HOST") || "localhost",
+  port: parseInt(Deno.env.get("DB_PORT") || "5432"),
+  password: Deno.env.get("DB_PASS") || "",
 };
 
 const client = new Client(dbConfig);
@@ -324,6 +340,7 @@ export default client;
 ```
 
 #### Schema Setup
+
 ```sql
 -- migrations/001_initial.sql
 CREATE TABLE IF NOT EXISTS users (
@@ -368,13 +385,14 @@ const result = await kv.get(["users", userId]);
 // List values
 const entries = kv.list({ prefix: ["users"] });
 for await (const entry of entries) {
-    console.log(entry.key, entry.value);
+  console.log(entry.key, entry.value);
 }
 ```
 
 ## Development Workflow
 
 ### Local Development (scripts/dev.sh)
+
 ```bash
 #!/bin/bash
 
@@ -394,6 +412,7 @@ echo "Frontend: http://localhost:3000"
 ```
 
 ### Deployment (scripts/deploy.sh)
+
 ```bash
 #!/bin/bash
 
@@ -438,16 +457,16 @@ DROPBOX_TOKEN=your_token
 
 ```javascript
 // Simple OAuth flow example
-router.get('/auth/google', (ctx) => {
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
-    ctx.response.redirect(authUrl);
+router.get("/auth/google", (ctx) => {
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+  ctx.response.redirect(authUrl);
 });
 
-router.get('/auth/callback', async (ctx) => {
-    const { code } = ctx.request.url.searchParams;
-    // Exchange code for token
-    // Create or update user
-    // Set session
+router.get("/auth/callback", async (ctx) => {
+  const { code } = ctx.request.url.searchParams;
+  // Exchange code for token
+  // Create or update user
+  // Set session
 });
 ```
 
@@ -456,29 +475,31 @@ router.get('/auth/callback', async (ctx) => {
 ```javascript
 // Simple event-based state management
 class StateManager extends EventTarget {
-    constructor() {
-        super();
-        this.state = {};
-    }
+  constructor() {
+    super();
+    this.state = {};
+  }
 
-    /**
-     * @param {string} key
-     * @param {any} value
-     */
-    set(key, value) {
-        this.state[key] = value;
-        this.dispatchEvent(new CustomEvent('change', {
-            detail: { key, value }
-        }));
-    }
+  /**
+   * @param {string} key
+   * @param {any} value
+   */
+  set(key, value) {
+    this.state[key] = value;
+    this.dispatchEvent(
+      new CustomEvent("change", {
+        detail: { key, value },
+      }),
+    );
+  }
 
-    /**
-     * @param {string} key
-     * @returns {any}
-     */
-    get(key) {
-        return this.state[key];
-    }
+  /**
+   * @param {string} key
+   * @returns {any}
+   */
+  get(key) {
+    return this.state[key];
+  }
 }
 
 export const appState = new StateManager();
@@ -488,48 +509,50 @@ export const appState = new StateManager();
 
 ```json
 {
-    "name": "App Name",
-    "short_name": "App",
-    "start_url": "/",
-    "display": "standalone",
-    "theme_color": "#000000",
-    "background_color": "#ffffff",
-    "icons": [
-        {
-            "src": "/icon-192.png",
-            "sizes": "192x192",
-            "type": "image/png"
-        },
-        {
-            "src": "/icon-512.png",
-            "sizes": "512x512",
-            "type": "image/png"
-        }
-    ]
+  "name": "App Name",
+  "short_name": "App",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
 }
 ```
 
 ## Minimal Dependencies Guide
 
 ### Essential Only
+
 - **Frontend**: Lit (5KB)
 - **Backend**: Oak + Database driver
 - **Nothing else unless absolutely necessary**
 
 ### When You Might Add Dependencies
 
-| Need | Consider | Avoid |
-|------|----------|-------|
-| Date handling | Native Date API first | moment.js |
-| HTTP requests | Native fetch | axios |
-| State management | Custom events | Redux |
-| Routing | Native History API | React Router |
-| Forms | Native FormData | Formik |
-| Styling | Native CSS | Bootstrap |
-| Icons | SVG icons | Icon fonts |
-| Markdown | markdown-it (50KB) | Heavy editors |
+| Need             | Consider              | Avoid         |
+| ---------------- | --------------------- | ------------- |
+| Date handling    | Native Date API first | moment.js     |
+| HTTP requests    | Native fetch          | axios         |
+| State management | Custom events         | Redux         |
+| Routing          | Native History API    | React Router  |
+| Forms            | Native FormData       | Formik        |
+| Styling          | Native CSS            | Bootstrap     |
+| Icons            | SVG icons             | Icon fonts    |
+| Markdown         | markdown-it (50KB)    | Heavy editors |
 
 ### Performance Budget
+
 - Frontend total: < 50KB gzipped
 - Initial load: < 2 seconds on 3G
 - No bundle > 200KB uncompressed
@@ -539,13 +562,14 @@ export const appState = new StateManager();
 ```javascript
 // Simple Deno test example
 Deno.test("API health check", async () => {
-    const response = await fetch("http://localhost:8000/api/health");
-    const data = await response.json();
-    assertEquals(data.status, "ok");
+  const response = await fetch("http://localhost:8000/api/health");
+  const data = await response.json();
+  assertEquals(data.status, "ok");
 });
 ```
 
 Run tests:
+
 ```bash
 deno test --allow-net
 ```
@@ -564,17 +588,19 @@ deno test --allow-net
 ## Monitoring
 
 Simple health endpoint:
+
 ```javascript
-router.get('/health', (ctx) => {
-    ctx.response.body = {
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        uptime: performance.now()
-    };
+router.get("/health", (ctx) => {
+  ctx.response.body = {
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    uptime: performance.now(),
+  };
 });
 ```
 
 Monitor with systemd:
+
 ```bash
 systemctl status app-backend
 journalctl -u app-backend -f
@@ -593,6 +619,7 @@ journalctl -u app-backend -f
 ## When This Stack Works Best
 
 ✓ **Perfect for:**
+
 - Internal tools
 - Small to medium web apps
 - PWAs
@@ -601,6 +628,7 @@ journalctl -u app-backend -f
 - Prototypes that may become products
 
 ✗ **Not ideal for:**
+
 - Large teams (need build process for consistency)
 - Complex SPAs (might need framework)
 - Heavy real-time apps (consider dedicated solutions)

@@ -16,31 +16,34 @@ Object.defineProperty(globalThis, "navigator", {
 
 // Mock globalThis event listeners (for online/offline events)
 const globalListeners = new Map<string, Array<() => void>>();
-(globalThis as unknown as { addEventListener: typeof addEventListener }).addEventListener = function (
-  type: string,
-  handler: () => void,
-) {
-  if (!globalListeners.has(type)) {
-    globalListeners.set(type, []);
-  }
-  globalListeners.get(type)!.push(handler);
-};
-(globalThis as unknown as { removeEventListener: typeof removeEventListener }).removeEventListener = function (
-  type: string,
-  handler: () => void,
-) {
-  if (globalListeners.has(type)) {
-    const handlers = globalListeners.get(type)!;
-    const index = handlers.indexOf(handler);
-    if (index > -1) {
-      handlers.splice(index, 1);
+(globalThis as unknown as { addEventListener: typeof addEventListener }).addEventListener =
+  function (
+    type: string,
+    handler: () => void,
+  ) {
+    if (!globalListeners.has(type)) {
+      globalListeners.set(type, []);
     }
-  }
-};
+    globalListeners.get(type)!.push(handler);
+  };
+(globalThis as unknown as { removeEventListener: typeof removeEventListener }).removeEventListener =
+  function (
+    type: string,
+    handler: () => void,
+  ) {
+    if (globalListeners.has(type)) {
+      const handlers = globalListeners.get(type)!;
+      const index = handlers.indexOf(handler);
+      if (index > -1) {
+        handlers.splice(index, 1);
+      }
+    }
+  };
 
 // Mock CustomEvent if not available
 if (typeof CustomEvent === "undefined") {
-  (globalThis as unknown as { CustomEvent: typeof CustomEvent }).CustomEvent = class CustomEvent extends Event {
+  (globalThis as unknown as { CustomEvent: typeof CustomEvent }).CustomEvent = class CustomEvent
+    extends Event {
     detail: unknown;
     constructor(type: string, options: CustomEventInit = {}) {
       super(type, options);

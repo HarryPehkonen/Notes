@@ -8,20 +8,20 @@
  * @param {Function} next - Next middleware function
  */
 export async function requireAuth(ctx, next) {
-    const user = await ctx.state.session.get("user");
+  const user = await ctx.state.session.get("user");
 
-    if (!user) {
-        ctx.response.status = 401;
-        ctx.response.body = {
-            error: "Authentication required",
-            redirectTo: "/auth/login"
-        };
-        return;
-    }
+  if (!user) {
+    ctx.response.status = 401;
+    ctx.response.body = {
+      error: "Authentication required",
+      redirectTo: "/auth/login",
+    };
+    return;
+  }
 
-    // Add user to context for use in API handlers
-    ctx.state.user = user;
-    await next();
+  // Add user to context for use in API handlers
+  ctx.state.user = user;
+  await next();
 }
 
 /**
@@ -30,13 +30,13 @@ export async function requireAuth(ctx, next) {
  * @param {Function} next - Next middleware function
  */
 export async function optionalAuth(ctx, next) {
-    const user = await ctx.state.session.get("user");
+  const user = await ctx.state.session.get("user");
 
-    if (user) {
-        ctx.state.user = user;
-    }
+  if (user) {
+    ctx.state.user = user;
+  }
 
-    await next();
+  await next();
 }
 
 /**
@@ -45,12 +45,12 @@ export async function optionalAuth(ctx, next) {
  * @param {Function} next - Next middleware function
  */
 export async function redirectIfAuthenticated(ctx, next) {
-    const user = await ctx.state.session.get("user");
+  const user = await ctx.state.session.get("user");
 
-    if (user) {
-        ctx.response.redirect("/");
-        return;
-    }
+  if (user) {
+    ctx.response.redirect("/");
+    return;
+  }
 
-    await next();
+  await next();
 }

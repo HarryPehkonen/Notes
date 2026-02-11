@@ -30,6 +30,7 @@ Touch-optimized controls for mobile interaction.
 ## Technology Stack
 
 Frontend:
+
 - **Lit Web Components** (5KB) - Google's modern web components framework
 - **Plain JavaScript** - No TypeScript compilation needed
 - **JSDoc Annotations** - Type safety through documentation
@@ -37,12 +38,14 @@ Frontend:
 - **CDN Imports** - No npm/node_modules required
 
 Backend:
+
 - **Deno Runtime** - Secure, modern JavaScript/TypeScript runtime
 - **Oak Framework** - Modern middleware framework for Deno
 - **PostgreSQL** - Database with native full-text search
 - **Plain JavaScript** - With JSDoc for type documentation
 
 Deployment:
+
 - **Self-Hosted Linux VPS** - Complete control and data sovereignty
 - **Caddy Server** - Automatic HTTPS and reverse proxy
 - **systemd** - Service management
@@ -51,18 +54,21 @@ Deployment:
 ## Architecture Details
 
 No Build Process:
+
 - Frontend JavaScript served directly to browser
 - Deno executes backend code without compilation
 - No webpack, babel, or bundlers required
 - Development code = Production code
 
 Component Model:
+
 - Web Components via Lit
 - Native browser support
 - No virtual DOM overhead
 - Works with any framework or vanilla JS
 
 Type Safety:
+
 - JSDoc annotations throughout
 - Deno's built-in type checking for JavaScript
 - IDE autocomplete and IntelliSense support
@@ -71,12 +77,14 @@ Type Safety:
 ## Development Approach
 
 Minimal Dependencies:
+
 - Core: Lit (frontend) + Oak (backend) + PostgreSQL driver
 - OAuth: Deno OAuth2 client
 - Markdown: Markdown-it or similar lightweight parser
 - Dropbox: Official SDK or REST API directly
 
 File Structure:
+
 ```
 /var/www/notes/
 ├── frontend/
@@ -94,10 +102,10 @@ File Structure:
 │   └── types.js         # JSDoc type definitions
 └── scripts/
     └── deploy.sh        # Deployment script
-
 ```
 
 Deployment Flow:
+
 1. Git push to repository
 2. SSH to VPS and git pull
 3. Restart Deno service via systemd
@@ -107,6 +115,7 @@ Deployment Flow:
 ## Server Configuration
 
 Caddy Configuration (/etc/caddy/Caddyfile):
+
 ```
 notes.yourdomain.com {
     # API requests to Deno backend
@@ -124,6 +133,7 @@ notes.yourdomain.com {
 ```
 
 systemd Service (/etc/systemd/system/notes-backend.service):
+
 ```
 [Unit]
 Description=Notes App Backend
@@ -141,6 +151,7 @@ WantedBy=multi-user.target
 ```
 
 PostgreSQL Setup:
+
 ```sql
 -- Create database and user
 CREATE DATABASE notes_app;
@@ -151,7 +162,8 @@ GRANT ALL PRIVILEGES ON DATABASE notes_app TO notes_user;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 ```
 
-## 1. The Login Screen  
+## 1. The Login Screen
+
 This is the front door to your application. Since you're not using email/passwords, this screen would be very simple.
 Purpose: Authenticate the user.
 Components:
@@ -159,7 +171,8 @@ A clean, minimal page with your app's name or logo.
 A set of "Sign in with..." buttons for each provider you support (e.g., Google, GitHub, Dropbox).
 There are no traditional input fields for username or password.
 
-## 2. The Main Application View  
+## 2. The Main Application View
+
 This is the user's workspace and where they'll spend almost all of their time. It's best imagined as a multi-pane layout.
 Purpose: Navigate, create, and edit notes.
 Components:
@@ -174,6 +187,7 @@ When a note is selected from the sidebar, its content appears here for viewing a
 It would also contain the controls for the current note, like a "delete" button, tag editor, and a menu to access Version History.
 
 ## 3. The Search Interface ⚙
+
 This is less of a full "screen" and more of an interactive state or overlay built on top of the Main View.
 Purpose: Allow the user to quickly find notes.
 Implementation Idea: When a user clicks a search icon or types in a search bar (likely located at the top of the sidebar), a full-screen modal or overlay appears.
@@ -181,7 +195,8 @@ This overlay would have a large text input field.
 As the user types, a list of results appears below, showing the note title and a small snippet of the text where the search term was found.
 Clicking a result would close the search interface and open that note in the Editor Pane.
 
-## 4. The Version History View  
+## 4. The Version History View
+
 This screen is dedicated to viewing and restoring older versions of a single note.
 Purpose: Compare and restore previous note versions.
 Components:
@@ -189,7 +204,8 @@ A list or timeline (perhaps in a sidebar) showing all saved versions with their 
 A large, read-only pane showing the content of the selected historical version.
 A prominent "Restore This Version" button. This would copy the content of the old version into a new version for the note.
 
-## 5. Account Settings Screen  
+## 5. Account Settings Screen
+
 This is a simple, form-based page for user management.
 Purpose: Allow the user to manage their profile and linked logins.
 Components:
@@ -203,4 +219,3 @@ Set backup frequency (daily, weekly, manual only).
 "Import from Dropbox" button with folder selection.
 Last backup timestamp display.
 Could also include application preferences, like switching between a light and dark theme.
-

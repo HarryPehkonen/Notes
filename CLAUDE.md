@@ -137,6 +137,7 @@ The frontend uses an **event-driven architecture** where:
 - **Root listens to events** and updates state, triggering re-renders
 
 Example flow:
+
 ```javascript
 // Child component dispatches event
 this.dispatchEvent(new CustomEvent('note-selected', {
@@ -151,6 +152,7 @@ handleNoteSelected(e) {
 ```
 
 Key events:
+
 - `note-selected` - User selects a note from list
 - `note-updated` - Note has been modified
 - `tags-selected` - User filters by tags
@@ -168,6 +170,7 @@ PostgreSQL with the following key tables:
 - **note_versions**: Automatic version history (created via database trigger)
 
 **Key features**:
+
 - Full-text search using PostgreSQL's native `tsvector` with weighted search (title=A, content=B)
 - GIN indexes for fast text search
 - Automatic version history via database triggers (captures old content before UPDATE)
@@ -175,6 +178,7 @@ PostgreSQL with the following key tables:
 - Row-level security: all queries filtered by `user_id`
 
 **Database triggers**:
+
 - `update_note_timestamp` - Automatically sets `updated_at` on note modifications
 - `save_note_version` - Creates version history entry before note updates
 
@@ -203,6 +207,7 @@ PostgreSQL with the following key tables:
 ### Auto-Save Behavior
 
 The `note-editor` component implements auto-save with:
+
 - `hasUnsavedChanges` flag tracks dirty state
 - Auto-save triggers when:
   - User switches views (edit → list)
@@ -259,6 +264,7 @@ All filtering happens at the **database level** (not in-memory) for scalability.
 The backup system has two components:
 
 **1. Automatic Scheduled Backups** (`backup-scheduler.js`):
+
 - Runs independently using `setInterval()`
 - Default schedule: every 24 hours (configurable via `BACKUP_INTERVAL_HOURS`)
 - Initial backup runs 1 minute after server start
@@ -269,12 +275,14 @@ The backup system has two components:
 - Graceful shutdown on SIGINT/SIGTERM signals
 
 **2. Manual Backups** (via `/api/backup/*` endpoints):
+
 - On-demand backup creation
 - Custom backup naming
 - Restore from specific backup file
 - Merge or replace existing data
 
 Configuration:
+
 - `BACKUP_INTERVAL_HOURS`: Hours between automatic backups (default: 24)
 - `AUTO_BACKUP_ENABLED`: Enable/disable automatic backups (default: true)
 - `DROPBOX_ACCESS_TOKEN`: Required for backup functionality
@@ -284,12 +292,14 @@ Configuration:
 Copy `.env.example` to `.env` and configure:
 
 **Required variables**:
+
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`: From Google Cloud Console OAuth credentials
 - `GOOGLE_REDIRECT_URI`: Must match Google Console exactly (e.g., `http://localhost:8000/auth/callback`)
 - `DB_USER` / `DB_NAME` / `DB_PASSWORD`: PostgreSQL credentials
 - `SESSION_SECRET`: Random string for session encryption
 
 **Optional variables**:
+
 - `DROPBOX_ACCESS_TOKEN`: For backup functionality
 - `BACKUP_INTERVAL_HOURS`: Default 24
 - `AUTO_BACKUP_ENABLED`: Default true
@@ -327,9 +337,11 @@ Copy `.env.example` to `.env` and configure:
 8. Import in parent component or `app.js`
 9. Communicate with parent via custom events:
    ```javascript
-   this.dispatchEvent(new CustomEvent('your-event', {
-     detail: { data: value }
-   }));
+   this.dispatchEvent(
+     new CustomEvent("your-event", {
+       detail: { data: value },
+     }),
+   );
    ```
 
 ### Working with Database Transactions
@@ -404,9 +416,11 @@ async updateNoteWithTags(noteId, updates, tagIds) {
 ```http
 GET /health
 ```
+
 Returns server health status (no authentication required)
 
 Response:
+
 ```json
 {
   "status": "healthy"
@@ -434,6 +448,7 @@ POST   /api/notes/:id/restore/:versionId # Restore version
 ```
 
 **Query parameters for GET /api/notes**:
+
 - `limit` - Number of results (default: 50)
 - `offset` - Pagination offset (default: 0)
 - `tags` - Comma-separated tag IDs (e.g., `tags=1,2,3`)
@@ -442,6 +457,7 @@ POST   /api/notes/:id/restore/:versionId # Restore version
 - `archived` - Include archived notes (`true`/`false`)
 
 **Response format**:
+
 ```json
 {
   "success": true,
@@ -512,14 +528,17 @@ These are **not part of the main application** and can be ignored for regular de
 ## Key Dependencies
 
 ### Backend (Deno)
+
 - `oak@v12.6.1`: Web framework (imported in deno.json)
 - `postgres@v0.17.0`: PostgreSQL driver (imported in deno.json)
 - `oak_sessions@v4.1.9`: Session management (imported in main.js)
 
 ### Frontend (Browser)
+
 - `lit@3.1.0`: Web Components framework (CDN import via importmap)
 
 ### Testing
+
 - `@playwright/test`: End-to-end browser testing (npm package)
 
 ## Mobile-First Design

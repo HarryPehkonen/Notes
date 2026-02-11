@@ -53,6 +53,7 @@ nano .env
 ```
 
 Add your credentials:
+
 ```env
 GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your_client_secret
@@ -105,12 +106,14 @@ google-auth-poc/
 ### Key Components
 
 #### `auth-handler.js`
+
 - `getAuthorizationUrl()` - Builds Google OAuth URL
 - `exchangeCodeForTokens()` - Trades code for tokens
 - `getUserInfo()` - Fetches user profile
 - `refreshAccessToken()` - Refreshes expired tokens
 
 #### `server.js`
+
 - `/` - Home page (login)
 - `/auth/google` - Starts OAuth flow
 - `/auth/callback` - Handles Google redirect
@@ -140,7 +143,7 @@ const authUrl = auth.getAuthorizationUrl(state);
 
 // Verify on callback
 if (state !== receivedState) {
-    throw new Error("Invalid state");
+  throw new Error("Invalid state");
 }
 ```
 
@@ -149,27 +152,30 @@ if (state !== receivedState) {
 This POC proves the authentication foundation for the Notes app:
 
 ### User Creation
+
 ```javascript
 // After successful OAuth
 const user = await createOrUpdateUser({
-    email: userInfo.email,
-    name: userInfo.name,
-    googleId: userInfo.id,
-    picture: userInfo.picture
+  email: userInfo.email,
+  name: userInfo.name,
+  googleId: userInfo.id,
+  picture: userInfo.picture,
 });
 ```
 
 ### Multiple Providers
+
 ```javascript
 // Same pattern for GitHub, Dropbox
-class GitHubAuthHandler { /* ... */ }
-class DropboxAuthHandler { /* ... */ }
+class GitHubAuthHandler {/* ... */}
+class DropboxAuthHandler {/* ... */}
 
 // Link accounts by email
 await linkProviderAccount(user.email, provider, providerId);
 ```
 
 ### Database Schema
+
 ```sql
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
@@ -192,30 +198,34 @@ CREATE TABLE auth_providers (
 ## Troubleshooting
 
 ### "Invalid client" Error
+
 - Check Client ID and Secret are correct
 - Ensure they're properly set in environment
 
 ### "Redirect URI mismatch"
+
 - Verify redirect URI matches exactly in Google Console
 - Include protocol (http://) and port (:8000)
 
 ### "Access blocked" Error
+
 - Enable Google+ API in Cloud Console
 - Check OAuth consent screen is configured
 
 ### Session Not Persisting
+
 - Cookies might be blocked
 - Try incognito mode or different browser
 
 ## Next Steps
 
 1. ✓ Basic OAuth flow working
-2.   Add GitHub OAuth
-3.   Add Dropbox OAuth
-4.   Integrate with PostgreSQL
-5.   Implement account linking
-6.   Add CSRF protection
-7.   Deploy with HTTPS
+2. Add GitHub OAuth
+3. Add Dropbox OAuth
+4. Integrate with PostgreSQL
+5. Implement account linking
+6. Add CSRF protection
+7. Deploy with HTTPS
 
 ## Resources
 

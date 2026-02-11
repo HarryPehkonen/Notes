@@ -94,20 +94,22 @@ The Dropbox integration is working perfectly.
 This proves we can implement:
 
 ### Automatic Backups
+
 ```javascript
 // Backup all user notes
 const backup = {
-    notes: await getAllUserNotes(userId),
-    timestamp: new Date().toISOString()
+  notes: await getAllUserNotes(userId),
+  timestamp: new Date().toISOString(),
 };
 
 await dropboxClient.upload(
-    `/notes-backup/user-${userId}/backup-${Date.now()}.json`,
-    JSON.stringify(backup)
+  `/notes-backup/user-${userId}/backup-${Date.now()}.json`,
+  JSON.stringify(backup),
 );
 ```
 
 ### Manual Restore
+
 ```javascript
 // List available backups
 const backups = await dropboxClient.listFolder(`/notes-backup/user-${userId}`);
@@ -121,13 +123,14 @@ await restoreNotes(data.notes);
 ```
 
 ### Export as Markdown
+
 ```javascript
 // Export each note as markdown
 for (const note of notes) {
-    await dropboxClient.upload(
-        `/notes-export/${note.title}.md`,
-        note.content
-    );
+  await dropboxClient.upload(
+    `/notes-export/${note.title}.md`,
+    note.content,
+  );
 }
 ```
 
@@ -148,23 +151,26 @@ for (const note of notes) {
 ## Next Steps
 
 1. ✓ Basic API integration proven
-2.   Implement OAuth flow for production
-3.   Add to main Notes application
-4.   Create backup scheduler
-5.   Build restore UI
+2. Implement OAuth flow for production
+3. Add to main Notes application
+4. Create backup scheduler
+5. Build restore UI
 
 ## Troubleshooting
 
 ### "Token verification failed"
+
 - Check token is correctly set in environment
 - Verify token hasn't expired
 - Ensure token has required permissions
 
 ### "Upload failed: 409"
+
 - File/folder already exists
 - Use different name or delete existing
 
 ### "DROPBOX_ACCESS_TOKEN environment variable not set"
+
 - Export the variable: `export DROPBOX_ACCESS_TOKEN="your_token"`
 - Or create `.env` file with the token
 

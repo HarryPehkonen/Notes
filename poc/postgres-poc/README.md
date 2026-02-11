@@ -45,6 +45,7 @@ nano .env
 ```
 
 Required environment variables:
+
 ```env
 DB_HOST=localhost
 DB_PORT=5432
@@ -75,6 +76,7 @@ deno run --allow-net --allow-read --allow-env test.js
 ```
 
 Expected output:
+
 ```
 → PostgreSQL Integration Tests
 
@@ -96,6 +98,7 @@ Expected output:
 ### Core Tables
 
 #### Users
+
 ```sql
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
@@ -109,6 +112,7 @@ CREATE TABLE users (
 ```
 
 #### Notes
+
 ```sql
 CREATE TABLE notes (
     id SERIAL PRIMARY KEY,
@@ -129,6 +133,7 @@ CREATE TABLE notes (
 ```
 
 #### Tags & Relationships
+
 ```sql
 CREATE TABLE tags (
     id SERIAL PRIMARY KEY,
@@ -146,6 +151,7 @@ CREATE TABLE note_tags (
 ```
 
 #### Version History
+
 ```sql
 CREATE TABLE note_versions (
     id SERIAL PRIMARY KEY,
@@ -161,6 +167,7 @@ CREATE TABLE note_versions (
 ### Key Features
 
 #### Full-Text Search
+
 ```sql
 -- Automatic search vector generation
 search_vector tsvector GENERATED ALWAYS AS (
@@ -177,6 +184,7 @@ RETURNS TABLE (id, title, content, rank, created_at, updated_at, tags)
 ```
 
 #### Automatic Version History
+
 ```sql
 -- Trigger creates version on note update
 CREATE TRIGGER create_note_version_trigger
@@ -189,12 +197,12 @@ FOR EACH ROW EXECUTE FUNCTION create_note_version();
 ### Database Client
 
 ```javascript
-import { DatabaseClient } from './db-client.js';
+import { DatabaseClient } from "./db-client.js";
 
 const db = new DatabaseClient({
-    user: "notes_user",
-    database: "notes_app",
-    password: "your_password"
+  user: "notes_user",
+  database: "notes_app",
+  password: "your_password",
 });
 ```
 
@@ -203,13 +211,13 @@ const db = new DatabaseClient({
 ```javascript
 // Create user (from OAuth)
 const user = await db.createUser({
-    email: 'user@example.com',
-    name: 'John Doe',
-    picture: 'https://example.com/avatar.jpg'
+  email: "user@example.com",
+  name: "John Doe",
+  picture: "https://example.com/avatar.jpg",
 });
 
 // Find user by email
-const user = await db.findUserByEmail('user@example.com');
+const user = await db.findUserByEmail("user@example.com");
 ```
 
 ### Note Operations
@@ -217,23 +225,23 @@ const user = await db.findUserByEmail('user@example.com');
 ```javascript
 // Create note with tags
 const note = await db.createNote({
-    userId: user.id,
-    title: 'My First Note',
-    content: '# Hello World\n\nThis is **markdown** content!',
-    tags: ['personal', 'getting-started']
+  userId: user.id,
+  title: "My First Note",
+  content: "# Hello World\n\nThis is **markdown** content!",
+  tags: ["personal", "getting-started"],
 });
 
 // Get user's notes with filters
 const notes = await db.getNotes(user.id, {
-    tags: ['personal'],
-    search: 'hello world',
-    limit: 10
+  tags: ["personal"],
+  search: "hello world",
+  limit: 10,
 });
 
 // Update note (automatically creates version)
 const updated = await db.updateNote(note.id, {
-    content: '# Updated Content\n\nNew information added.',
-    tags: ['personal', 'updated']
+  content: "# Updated Content\n\nNew information added.",
+  tags: ["personal", "updated"],
 });
 ```
 
@@ -241,11 +249,11 @@ const updated = await db.updateNote(note.id, {
 
 ```javascript
 // Full-text search with ranking
-const results = await db.searchNotes(user.id, 'project management');
+const results = await db.searchNotes(user.id, "project management");
 
 // Filter by tags
 const taggedNotes = await db.getNotes(user.id, {
-    tags: ['work', 'urgent']
+  tags: ["work", "urgent"],
 });
 
 // Get pinned notes only
@@ -256,7 +264,7 @@ const pinned = await db.getNotes(user.id, { pinned: true });
 
 ```javascript
 // Create custom tag
-const tag = await db.createTag(user.id, 'important', '#ff0000');
+const tag = await db.createTag(user.id, "important", "#ff0000");
 
 // Get all user tags with usage counts
 const tags = await db.getUserTags(user.id);
@@ -277,26 +285,27 @@ const restored = await db.restoreNoteVersion(note.id, versions[1].id);
 ```javascript
 // Complex operations with rollback support
 const result = await db.transaction(async (tx) => {
-    const note = await tx.query(
-        'INSERT INTO notes (user_id, title, content) VALUES ($1, $2, $3) RETURNING *',
-        [userId, title, content]
+  const note = await tx.query(
+    "INSERT INTO notes (user_id, title, content) VALUES ($1, $2, $3) RETURNING *",
+    [userId, title, content],
+  );
+
+  // Add tags
+  for (const tag of tags) {
+    await tx.query(
+      "INSERT INTO note_tags (note_id, tag_id) VALUES ($1, $2)",
+      [note.rows[0].id, tag.id],
     );
+  }
 
-    // Add tags
-    for (const tag of tags) {
-        await tx.query(
-            'INSERT INTO note_tags (note_id, tag_id) VALUES ($1, $2)',
-            [note.rows[0].id, tag.id]
-        );
-    }
-
-    return note.rows[0];
+  return note.rows[0];
 });
 ```
 
 ## Performance Features
 
 ### Indexing Strategy
+
 ```sql
 -- User-specific queries
 CREATE INDEX idx_notes_user ON notes(user_id);
@@ -314,6 +323,7 @@ CREATE INDEX idx_notes_pinned ON notes(is_pinned) WHERE is_pinned = true;
 ```
 
 ### Connection Pooling
+
 ```javascript
 // Pool of 3 concurrent connections
 this.pool = new Pool(this.config, 3);
@@ -321,10 +331,10 @@ this.pool = new Pool(this.config, 3);
 // Automatic connection management
 const client = await this.pool.connect();
 try {
-    const result = await client.queryObject(query, params);
-    return result;
+  const result = await client.queryObject(query, params);
+  return result;
 } finally {
-    client.release(); // Return to pool
+  client.release(); // Return to pool
 }
 ```
 
@@ -333,54 +343,57 @@ try {
 This database layer provides everything needed for the Notes application:
 
 ### Authentication Integration
+
 ```javascript
 // After successful OAuth
 const user = await db.findUserByEmail(oauthUser.email) ||
-             await db.createUser(oauthUser);
+  await db.createUser(oauthUser);
 
 // Store provider information
 await db.query(
-    'INSERT INTO auth_providers (user_id, provider, provider_id, access_token) VALUES ($1, $2, $3, $4)',
-    [user.id, 'google', oauthUser.id, tokens.access_token]
+  "INSERT INTO auth_providers (user_id, provider, provider_id, access_token) VALUES ($1, $2, $3, $4)",
+  [user.id, "google", oauthUser.id, tokens.access_token],
 );
 ```
 
 ### API Endpoints
+
 ```javascript
 // GET /api/notes
-app.get('/api/notes', async (ctx) => {
-    const notes = await db.getNotes(ctx.user.id, ctx.query);
-    ctx.response.body = notes;
+app.get("/api/notes", async (ctx) => {
+  const notes = await db.getNotes(ctx.user.id, ctx.query);
+  ctx.response.body = notes;
 });
 
 // POST /api/notes
-app.post('/api/notes', async (ctx) => {
-    const note = await db.createNote({
-        userId: ctx.user.id,
-        ...ctx.request.body
-    });
-    ctx.response.body = note;
+app.post("/api/notes", async (ctx) => {
+  const note = await db.createNote({
+    userId: ctx.user.id,
+    ...ctx.request.body,
+  });
+  ctx.response.body = note;
 });
 
 // GET /api/search
-app.get('/api/search', async (ctx) => {
-    const results = await db.searchNotes(ctx.user.id, ctx.query.q);
-    ctx.response.body = results;
+app.get("/api/search", async (ctx) => {
+  const results = await db.searchNotes(ctx.user.id, ctx.query.q);
+  ctx.response.body = results;
 });
 ```
 
 ### Backup Integration
+
 ```javascript
 // Export all user data for Dropbox backup
 const exportData = {
-    user: await db.findUserByEmail(email),
-    notes: await db.getNotes(userId),
-    tags: await db.getUserTags(userId)
+  user: await db.findUserByEmail(email),
+  notes: await db.getNotes(userId),
+  tags: await db.getUserTags(userId),
 };
 
 await dropboxClient.upload(
-    `/backup/user-${userId}/backup-${Date.now()}.json`,
-    JSON.stringify(exportData)
+  `/backup/user-${userId}/backup-${Date.now()}.json`,
+  JSON.stringify(exportData),
 );
 ```
 
@@ -396,6 +409,7 @@ For existing applications:
 ## Monitoring & Maintenance
 
 ### Query Performance
+
 ```sql
 -- Enable slow query logging
 SET log_min_duration_statement = 1000; -- Log queries > 1 second
@@ -405,6 +419,7 @@ EXPLAIN ANALYZE SELECT * FROM notes WHERE user_id = 1;
 ```
 
 ### Database Maintenance
+
 ```sql
 -- Regular maintenance
 VACUUM ANALYZE notes;
@@ -426,21 +441,23 @@ FROM pg_tables WHERE schemaname = 'public';
 ## Next Steps
 
 1. ✓ **Database layer proven**
-2.   **Integrate with OAuth system**
-3.   **Connect to Dropbox backup**
-4.   **Build REST API with Oak**
-5.   **Create frontend with Lit**
-6.   **Deploy with systemd + Caddy**
+2. **Integrate with OAuth system**
+3. **Connect to Dropbox backup**
+4. **Build REST API with Oak**
+5. **Create frontend with Lit**
+6. **Deploy with systemd + Caddy**
 
 ## Troubleshooting
 
 ### Connection Issues
+
 ```bash
 # Test connection
 psql -U notes_user -d notes_app -h localhost -c "SELECT version();"
 ```
 
 ### Permission Errors
+
 ```sql
 -- Grant all permissions
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO notes_user;
@@ -449,6 +466,7 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO notes_user;
 ```
 
 ### Performance Issues
+
 ```sql
 -- Check for missing indexes
 SELECT schemaname, tablename, attname, n_distinct, correlation
