@@ -1,10 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Notes App</title>
-    <meta name="description" content="Secure, searchable, synchronized notes with automatic Dropbox backup">
+    <meta
+      name="description"
+      content="Secure, searchable, synchronized notes with automatic Dropbox backup"
+    >
 
     <!-- PWA manifest -->
     <link rel="manifest" href="/static/manifest.json">
@@ -15,32 +18,31 @@
 
     <!-- Import Lit from CDN -->
     <script type="importmap">
-    {
+      {
         "imports": {
-            "lit": "https://cdn.skypack.dev/lit@3.1.0",
-            "lit/": "https://cdn.skypack.dev/lit@3.1.0/"
+          "lit": "https://cdn.jsdelivr.net/npm/lit@3.1.0/+esm"
         }
-    }
+      }
     </script>
 
     <!-- Styles -->
     <link rel="stylesheet" href="/static/styles/app.css">
-</head>
-<body>
+  </head>
+  <body>
     <div id="app">
-        <notes-app></notes-app>
+      <notes-app></notes-app>
     </div>
 
     <!-- Service worker registration -->
     <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/static/sw.js')
-                .then(registration => console.log('SW registered:', registration))
-                .catch(error => console.log('SW registration failed:', error));
-        }
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/static/sw.js")
+          .then((registration) => console.log("SW registered:", registration))
+          .catch((error) => console.log("SW registration failed:", error));
+      }
     </script>
 
     <!-- Main app -->
     <script type="module" src="/static/app.js"></script>
-</body>
+  </body>
 </html>
