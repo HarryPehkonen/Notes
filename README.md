@@ -5,6 +5,7 @@ A complete, production-ready notes application built with the minimal web stack 
 ## ★ Features
 
 ### Core Functionality
+
 - ✓ **Secure Authentication** - Google OAuth 2.0, no local passwords
 - ✓ **Rich Note Editor** - Markdown support with live preview
 - ✓ **Full-Text Search** - PostgreSQL native search with ranking
@@ -13,15 +14,19 @@ A complete, production-ready notes application built with the minimal web stack 
 - ✓ **Automatic Backups** - Scheduled Dropbox synchronization
 
 ### Technical Features
+
 - ✓ **Mobile-First Design** - Responsive, touch-friendly interface
 - ✓ **Progressive Web App** - Installable with offline capabilities
 - ✓ **Real-Time Updates** - Live search and auto-save
+- ✓ **Offline Support** - IndexedDB persistence with automatic sync when online
+- ✓ **Crash Recovery** - Local drafts protect against browser crashes and network failures
 - ✓ **No Build Process** - Direct browser execution with ES modules
 - ✓ **Minimal Dependencies** - Clean, maintainable codebase
 
-##   Architecture
+## Architecture
 
 ### Technology Stack
+
 - **Backend**: Deno + Oak framework
 - **Database**: PostgreSQL with full-text search
 - **Frontend**: Lit Web Components + Vanilla CSS
@@ -30,6 +35,7 @@ A complete, production-ready notes application built with the minimal web stack 
 - **Deployment**: Self-hosted with systemd + Caddy
 
 ### Project Structure
+
 ```
 ├── server/
 │   ├── main.js              # Main Oak server
@@ -55,10 +61,14 @@ A complete, production-ready notes application built with the minimal web stack 
 │   │   ├── note-list.js     # Notes listing component
 │   │   ├── search-bar.js    # Search interface
 │   │   └── tag-manager.js   # Tag management UI
+│   ├── services/
+│   │   ├── persistence.js   # IndexedDB offline storage
+│   │   └── sync-manager.js  # Sync coordinator with retry
 │   ├── styles/
 │   │   └── app.css          # Mobile-first CSS
 │   └── app.js               # Main application logic
-├── tests/                   # Playwright E2E tests
+├── tests/
+│   └── deno/                # Deno unit tests
 ├── poc/                     # Proof-of-concept projects
 ├── deno.json                # Deno configuration
 ├── .env.example             # Environment template
@@ -68,6 +78,7 @@ A complete, production-ready notes application built with the minimal web stack 
 ## → Quick Start
 
 ### Prerequisites
+
 - [Deno](https://deno.land/) 1.40+
 - [PostgreSQL](https://www.postgresql.org/) 12+
 - Google OAuth credentials
@@ -111,7 +122,7 @@ A complete, production-ready notes application built with the minimal web stack 
 6. **Open browser:**
    Navigate to `http://localhost:8000`
 
-##   Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -164,7 +175,7 @@ AUTO_BACKUP_ENABLED=true
 4. Generate an access token
 5. Copy token to `.env`
 
-##   Development
+## Development
 
 ### Available Commands
 
@@ -209,7 +220,7 @@ psql -U notes_user -d notes_app < backup.sql
 4. **Database Changes**: Update `schema.sql` and restart server
 5. **API Testing**: Use browser dev tools or curl for API testing
 
-##   Mobile-First Design
+## Mobile-First Design
 
 The application is built mobile-first with:
 
@@ -225,31 +236,35 @@ The application is built mobile-first with:
 - **Tablet**: 768px - 1024px
 - **Desktop**: > 1024px
 
-##   Security
+## Security
 
 ### Authentication
+
 - Google OAuth 2.0 with secure token exchange
 - No password storage or management
 - Secure session cookies with CSRF protection
 - Automatic session expiration
 
 ### Database Security
+
 - Parameterized queries prevent SQL injection
 - Row-level security with user ID filtering
 - Connection pooling with secure credentials
 - Regular schema updates and patches
 
 ### API Security
+
 - Authentication required for all endpoints
 - Input validation and sanitization
 - Rate limiting and error handling
 - CORS configuration for browser safety
 
-##   Database Schema
+## Database Schema
 
 ### Core Tables
 
 #### Users
+
 ```sql
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
@@ -262,6 +277,7 @@ CREATE TABLE users (
 ```
 
 #### Notes
+
 ```sql
 CREATE TABLE notes (
     id SERIAL PRIMARY KEY,
@@ -281,6 +297,7 @@ CREATE TABLE notes (
 ```
 
 #### Tags & Relationships
+
 ```sql
 CREATE TABLE tags (
     id SERIAL PRIMARY KEY,
@@ -304,9 +321,10 @@ CREATE TABLE note_tags (
 - **Efficient Indexing**: GIN indexes for search, B-tree for queries
 - **Data Integrity**: Foreign key constraints and cascading deletes
 
-##   Backup System
+## Backup System
 
 ### Automatic Backups
+
 - **Schedule**: Every 24 hours (configurable)
 - **Storage**: Dropbox `/notes-app-backups/` folder
 - **Format**: JSON with complete user data
@@ -314,18 +332,20 @@ CREATE TABLE note_tags (
 - **Cleanup**: Automatic deletion of old backups
 
 ### Manual Backups
+
 - **On-Demand**: Create backup via API or UI
 - **Custom Naming**: User-defined backup names
 - **Immediate**: No scheduling delays
 - **Download**: Direct download capability
 
 ### Restore Process
+
 - **Selective**: Choose specific backup to restore
 - **Merge Modes**: Append or replace existing data
 - **Validation**: Backup format verification
 - **Rollback**: Database transaction protection
 
-##   API Documentation
+## API Documentation
 
 ### Authentication Endpoints
 
@@ -471,7 +491,7 @@ GET    /api/backup/status     # Backup status
 - **SSL**: HTTPS-only with secure headers
 - **Firewall**: Restrict access to necessary ports only
 
-##   Testing
+## Testing
 
 ### Manual Testing
 
@@ -495,6 +515,18 @@ GET    /api/backup/status     # Backup status
    - Test restore functionality
    - Verify automatic backups
 
+### Unit Tests
+
+```bash
+# Run all Deno tests
+deno task test
+```
+
+Tests cover:
+
+- **Persistence layer** - IndexedDB operations for drafts and pending operations
+- **Sync manager** - Save flow, offline queueing, retry logic, event emission
+
 ### API Testing
 
 ```bash
@@ -513,11 +545,12 @@ curl -X GET "http://localhost:8000/api/search?q=test" \
   -H "Cookie: session=your_session_cookie"
 ```
 
-##   Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
 #### Database Connection Errors
+
 ```bash
 # Check PostgreSQL status
 sudo systemctl status postgresql
@@ -530,16 +563,19 @@ sudo -u postgres psql -c "\du notes_user"
 ```
 
 #### OAuth Authentication Errors
+
 - Verify redirect URI matches Google Console exactly
 - Check client ID and secret in environment
 - Ensure HTTPS in production (required by Google)
 
 #### Dropbox API Errors
+
 - Verify access token permissions
 - Check token expiration
 - Ensure proper scopes are enabled
 
 #### Performance Issues
+
 ```sql
 -- Check database performance
 EXPLAIN ANALYZE SELECT * FROM notes WHERE search_vector @@ plainto_tsquery('english', 'test');
@@ -565,7 +601,7 @@ sudo tail -f /var/log/postgresql/postgresql-*.log
 journalctl -u caddy -f
 ```
 
-##   Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/new-feature`
@@ -581,11 +617,11 @@ journalctl -u caddy -f
 - Use semantic commit messages
 - Ensure mobile compatibility
 
-##   License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-##   Acknowledgments
+## Acknowledgments
 
 - [Deno](https://deno.land/) for the modern JavaScript runtime
 - [Oak](https://oakserver.github.io/oak/) for the web framework
@@ -594,14 +630,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Google](https://developers.google.com/identity) for OAuth 2.0
 - [Dropbox](https://www.dropbox.com/developers) for API integration
 
-##   Support
+## Support
 
 For questions, issues, or contributions:
 
 - ▶ Issues: [GitHub Issues](https://github.com/HarryPehkonen/Notes/issues)
--   Documentation: [Wiki](https://github.com/HarryPehkonen/Notes/wiki)
--   Discussions: [GitHub Discussions](https://github.com/HarryPehkonen/Notes/discussions)
+- Documentation: [Wiki](https://github.com/HarryPehkonen/Notes/wiki)
+- Discussions: [GitHub Discussions](https://github.com/HarryPehkonen/Notes/discussions)
 
 ---
 
-Built with   using the minimal web stack philosophy.
+Built with using the minimal web stack philosophy.
