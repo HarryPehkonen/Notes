@@ -3,6 +3,9 @@
  * Lit Web Components based frontend
  */
 
+// Import services
+import { syncManager } from './services/sync-manager.js';
+
 // Import all components
 import './components/notes-app.js';
 import './components/note-editor.js';
@@ -25,15 +28,30 @@ window.NotesApp = {
     searchQuery: '',
     selectedTags: [],
 
-    // API helper methods
+    // Sync manager reference
+    syncManager,
+
+    // Track active requests for deduplication
+    _activeRequests: new Map(),
+
+    // API helper methods with AbortController support
     async request(endpoint, options = {}) {
         const url = `${this.apiUrl}${endpoint}`;
+
+        // Extract signal from options if provided
+        const { signal: externalSignal, ...restOptions } = options;
+
         const config = {
             headers: {
                 'Content-Type': 'application/json',
             },
-            ...options,
+            ...restOptions,
         };
+
+        // Add signal to config
+        if (externalSignal) {
+            config.signal = externalSignal;
+        }
 
         if (config.body && typeof config.body === 'object') {
             config.body = JSON.stringify(config.body);
@@ -51,14 +69,28 @@ window.NotesApp = {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || `HTTP ${response.status}`);
+                const error = new Error(data.error || `HTTP ${response.status}`);
+                error.status = response.status;
+                throw error;
             }
 
             return data;
         } catch (error) {
+            // Re-throw abort errors without logging
+            if (error.name === 'AbortError') {
+                throw error;
+            }
             console.error(`API Error (${endpoint}):`, error);
             throw error;
         }
+    },
+
+    /**
+     * Create an AbortController for a request
+     * @returns {AbortController}
+     */
+    createAbortController() {
+        return new AbortController();
     },
 
     // Notes API
@@ -87,11 +119,42 @@ window.NotesApp = {
         });
     },
 
-    async updateNote(id, updates) {
+    async updateNote(id, updates, options = {}) {
         return this.request(`/notes/${id}`, {
             method: 'PUT',
             body: updates,
+            ...options,
         });
+    },
+
+    /**
+     * Save a note through the sync manager (recommended for UI components)
+     * This provides offline support, retry logic, and crash protection
+     */
+    async saveNoteWithSync(id, updates, serverUpdatedAt = null) {
+        return syncManager.saveNote(id, updates, serverUpdatedAt);
+    },
+
+    /**
+     * Wait for all pending syncs to complete
+     * Use before navigation or closing the editor
+     */
+    async waitForSync(timeout = 5000) {
+        return syncManager.waitForSync(timeout);
+    },
+
+    /**
+     * Get count of pending sync operations
+     */
+    async getPendingSyncCount() {
+        return syncManager.getPendingCount();
+    },
+
+    /**
+     * Check if there are unsaved changes for a note
+     */
+    async hasUnsavedChanges(noteId) {
+        return syncManager.hasUnsavedChanges(noteId);
     },
 
     async deleteNote(id) {
@@ -259,8 +322,16 @@ window.NotesApp = {
 };
 
 // Initialize app when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     console.log('※ Notes App initialized');
+
+    // Initialize sync manager for offline support and crash recovery
+    try {
+        await syncManager.init();
+        console.log('※ Sync manager initialized');
+    } catch (error) {
+        console.error('Failed to initialize sync manager:', error);
+    }
 
     // Set up global error handling
     window.addEventListener('error', (event) => {
@@ -294,13 +365,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Set up online/offline detection
-    window.addEventListener('online', () => {
-        NotesApp.showToast('Back online', 'success');
+    // Sync manager events are now handled by sync manager itself
+    // Just show toasts for online/offline state changes
+    document.addEventListener('sync-online', () => {
+        NotesApp.showToast('Back online - syncing changes', 'success');
     });
 
-    window.addEventListener('offline', () => {
-        NotesApp.showToast('You are offline', 'warning');
+    document.addEventListener('sync-offline', () => {
+        NotesApp.showToast('You are offline - changes saved locally', 'warning');
+    });
+
+    document.addEventListener('sync-failed', (event) => {
+        const { error, willRetry } = event.detail;
+        if (willRetry) {
+            NotesApp.showToast('Save failed, will retry automatically', 'warning');
+        } else {
+            NotesApp.showToast(`Save failed: ${error}`, 'error');
+        }
+    });
+
+    document.addEventListener('sync-recovery-found', (event) => {
+        const { drafts } = event.detail;
+        if (drafts.length > 0) {
+            NotesApp.showToast(`Found ${drafts.length} unsaved change(s) from previous session`, 'info');
+        }
     });
 });
 

@@ -185,17 +185,22 @@ export class SearchBar extends LitElement {
         this.selectedIndex = -1;
         this.loading = false;
         this.debounceTimer = null;
+
+        // Store bound handler to prevent memory leak
+        // (bind() creates a new function each call, so we need to store the reference)
+        this._boundHandleGlobalKeydown = this.handleGlobalKeydown.bind(this);
     }
 
     connectedCallback() {
         super.connectedCallback();
-        // Add keyboard shortcut listener
-        document.addEventListener('keydown', this.handleGlobalKeydown.bind(this));
+        // Add keyboard shortcut listener using stored bound handler
+        document.addEventListener('keydown', this._boundHandleGlobalKeydown);
     }
 
     disconnectedCallback() {
         super.disconnectedCallback();
-        document.removeEventListener('keydown', this.handleGlobalKeydown.bind(this));
+        // Remove using the same bound handler reference
+        document.removeEventListener('keydown', this._boundHandleGlobalKeydown);
         if (this.debounceTimer) {
             clearTimeout(this.debounceTimer);
         }

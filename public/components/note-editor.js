@@ -1,5 +1,6 @@
 /**
  * Note Editor Component
+ * Now uses SyncManager for reliable saves with offline support
  */
 import { LitElement, html, css } from 'lit';
 
@@ -9,8 +10,9 @@ export class NoteEditor extends LitElement {
         tags: { type: Array },
         loading: { type: Boolean },
         selectedTags: { type: Array },
-        saveStatus: { type: String }, // 'saved', 'saving', 'unsaved'
-        hasUnsavedChanges: { type: Boolean }
+        saveStatus: { type: String }, // 'saved', 'saving', 'unsaved', 'pending', 'error'
+        hasUnsavedChanges: { type: Boolean },
+        pendingCount: { type: Number }
     };
 
     static styles = css`
@@ -157,6 +159,14 @@ export class NoteEditor extends LitElement {
             color: var(--warning);
         }
 
+        .save-status.pending {
+            color: var(--info);
+        }
+
+        .save-status.error {
+            color: var(--error);
+        }
+
         .save-indicator {
             width: 8px;
             height: 8px;
@@ -174,6 +184,15 @@ export class NoteEditor extends LitElement {
 
         .save-indicator.unsaved {
             background: var(--warning);
+        }
+
+        .save-indicator.pending {
+            background: var(--info);
+            animation: pulse 2s infinite;
+        }
+
+        .save-indicator.error {
+            background: var(--error);
         }
 
         @keyframes pulse {
@@ -262,6 +281,16 @@ export class NoteEditor extends LitElement {
         this.hasUnsavedChanges = false;
         this.autoSaveTimer = null;
         this.originalNote = null;
+        this.pendingCount = 0;
+
+        // Store bound handlers to fix memory leak
+        this._boundHandleInput = this.handleInputChange.bind(this);
+        this._boundHandleChange = this.handleInputChange.bind(this);
+        this._boundHandleSyncStarted = this._handleSyncStarted.bind(this);
+        this._boundHandleSyncCompleted = this._handleSyncCompleted.bind(this);
+        this._boundHandleSyncFailed = this._handleSyncFailed.bind(this);
+        this._boundHandleSyncPending = this._handleSyncPending.bind(this);
+        this._boundHandleDraftSaved = this._handleDraftSaved.bind(this);
     }
 
     connectedCallback() {
@@ -270,11 +299,101 @@ export class NoteEditor extends LitElement {
             this.selectedTags = [...this.note.tags];
         }
         this.setupAutoSave();
+        this._setupSyncListeners();
+        this._checkForDraft();
     }
 
     disconnectedCallback() {
         super.disconnectedCallback();
         this.clearAutoSaveTimer();
+        this._removeSyncListeners();
+    }
+
+    /**
+     * Set up sync manager event listeners
+     */
+    _setupSyncListeners() {
+        document.addEventListener('sync-started', this._boundHandleSyncStarted);
+        document.addEventListener('sync-completed', this._boundHandleSyncCompleted);
+        document.addEventListener('sync-failed', this._boundHandleSyncFailed);
+        document.addEventListener('sync-pending', this._boundHandleSyncPending);
+        document.addEventListener('sync-draft-saved', this._boundHandleDraftSaved);
+    }
+
+    /**
+     * Remove sync manager event listeners
+     */
+    _removeSyncListeners() {
+        document.removeEventListener('sync-started', this._boundHandleSyncStarted);
+        document.removeEventListener('sync-completed', this._boundHandleSyncCompleted);
+        document.removeEventListener('sync-failed', this._boundHandleSyncFailed);
+        document.removeEventListener('sync-pending', this._boundHandleSyncPending);
+        document.removeEventListener('sync-draft-saved', this._boundHandleDraftSaved);
+    }
+
+    _handleSyncStarted(event) {
+        if (this.note && String(event.detail.noteId) === String(this.note.id)) {
+            this.saveStatus = 'saving';
+        }
+    }
+
+    _handleSyncCompleted(event) {
+        if (this.note && String(event.detail.noteId) === String(this.note.id)) {
+            this.saveStatus = 'saved';
+            this.hasUnsavedChanges = false;
+        }
+    }
+
+    _handleSyncFailed(event) {
+        if (this.note && String(event.detail.noteId) === String(this.note.id)) {
+            this.saveStatus = event.detail.willRetry ? 'pending' : 'error';
+        }
+    }
+
+    _handleSyncPending(event) {
+        this.pendingCount = event.detail.count;
+    }
+
+    _handleDraftSaved(event) {
+        if (this.note && String(event.detail.noteId) === String(this.note.id)) {
+            // Draft saved to IndexedDB - data is safe
+            this.hasUnsavedChanges = false;
+        }
+    }
+
+    /**
+     * Check for recovered draft on load
+     */
+    async _checkForDraft() {
+        if (!this.note || !window.NotesApp.syncManager) return;
+
+        try {
+            const draft = await window.NotesApp.syncManager.getDraft(this.note.id);
+            if (draft && draft.updatedAt > new Date(this.note.updated_at).getTime()) {
+                // Draft is newer than server version - offer recovery
+                this._offerDraftRecovery(draft);
+            }
+        } catch (error) {
+            console.error('Failed to check for draft:', error);
+        }
+    }
+
+    /**
+     * Offer to recover a draft that's newer than server version
+     */
+    _offerDraftRecovery(draft) {
+        // For now, auto-recover. Could add a UI prompt later.
+        const titleInput = this.shadowRoot?.querySelector('.title-input');
+        const contentTextarea = this.shadowRoot?.querySelector('.content-textarea');
+
+        if (titleInput && contentTextarea) {
+            titleInput.value = draft.title;
+            contentTextarea.value = draft.content;
+            this.selectedTags = draft.tags || [];
+            this.hasUnsavedChanges = true;
+            this.saveStatus = 'unsaved';
+            this.showToast('Recovered unsaved changes', 'info');
+        }
     }
 
     updated(changedProperties) {
@@ -304,9 +423,9 @@ export class NoteEditor extends LitElement {
     }
 
     setupAutoSave() {
-        // Set up event listeners for input changes
-        this.addEventListener('input', this.handleInputChange.bind(this));
-        this.addEventListener('change', this.handleInputChange.bind(this));
+        // Set up event listeners for input changes using stored bound handlers
+        this.addEventListener('input', this._boundHandleInput);
+        this.addEventListener('change', this._boundHandleChange);
     }
 
     handleInputChange() {
@@ -380,8 +499,22 @@ export class NoteEditor extends LitElement {
         this.loading = true;
 
         try {
-            const result = await window.NotesApp.updateNote(this.note.id, updates);
-            // Use the tags from the server response (which should be full tag objects)
+            // Use sync manager for reliable saves with offline support
+            const result = await window.NotesApp.saveNoteWithSync(
+                this.note.id,
+                updates,
+                this.note.updated_at
+            );
+
+            // If queued for later (offline), update UI accordingly
+            if (result.queued) {
+                this.saveStatus = 'pending';
+                this.hasUnsavedChanges = false; // Data is safe in IndexedDB
+                this.showToast(result.message || 'Changes saved locally', 'info');
+                return;
+            }
+
+            // Successful sync - use the tags from the server response
             const updatedNote = {
                 ...result.data,
                 tags: result.data.tags || this.selectedTags
@@ -400,8 +533,15 @@ export class NoteEditor extends LitElement {
 
         } catch (error) {
             console.error('Failed to auto-save note:', error);
-            this.showToast('Failed to save changes', 'error');
-            this.saveStatus = 'unsaved';
+            // Don't show error toast if data is safe locally
+            if (await window.NotesApp.hasUnsavedChanges(this.note.id)) {
+                this.saveStatus = 'pending';
+                this.hasUnsavedChanges = false;
+                this.showToast('Changes saved locally, will sync when online', 'warning');
+            } else {
+                this.showToast('Failed to save changes', 'error');
+                this.saveStatus = 'error';
+            }
         } finally {
             this.loading = false;
         }
@@ -415,6 +555,15 @@ export class NoteEditor extends LitElement {
 
         // Clear any pending auto-save timer
         this.clearAutoSaveTimer();
+
+        // Wait for sync to complete (with timeout)
+        if (this.note && window.NotesApp.waitForSync) {
+            const syncResult = await window.NotesApp.waitForSync(3000);
+            if (!syncResult.success && syncResult.pending > 0) {
+                // Data is safe locally, user can proceed
+                this.showToast('Changes saved locally', 'info');
+            }
+        }
 
         this.dispatchEvent(new CustomEvent('close-editor', {
             bubbles: true,
@@ -500,6 +649,8 @@ export class NoteEditor extends LitElement {
                             <span class="save-indicator ${this.saveStatus}"></span>
                             ${this.saveStatus === 'saving' ? 'Saving...' :
                               this.saveStatus === 'saved' ? 'Saved' :
+                              this.saveStatus === 'pending' ? 'Saved locally' :
+                              this.saveStatus === 'error' ? 'Save failed' :
                               'Unsaved changes'}
                         </div>
                     </div>

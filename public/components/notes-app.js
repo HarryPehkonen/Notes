@@ -15,6 +15,8 @@ class NotesApp extends LitElement {
         loading: { type: Boolean },
         viewMode: { type: String }, // 'list', 'edit', 'search'
         sidebarOpen: { type: Boolean },
+        pendingSyncCount: { type: Number },
+        syncStatus: { type: String }, // 'idle', 'syncing', 'pending', 'offline', 'error'
     };
 
     static styles = css`
@@ -221,6 +223,57 @@ class NotesApp extends LitElement {
             background: var(--gray-50);
         }
 
+        .sync-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .sync-status.idle {
+            display: none;
+        }
+
+        .sync-status.syncing {
+            background: var(--info-light, #e0f2fe);
+            color: var(--info, #0284c7);
+        }
+
+        .sync-status.pending {
+            background: var(--warning-light, #fef3c7);
+            color: var(--warning, #d97706);
+        }
+
+        .sync-status.offline {
+            background: var(--gray-100);
+            color: var(--gray-600);
+        }
+
+        .sync-status.error {
+            background: var(--error-light, #fee2e2);
+            color: var(--error, #dc2626);
+        }
+
+        .sync-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .sync-status.syncing .sync-indicator,
+        .sync-status.pending .sync-indicator {
+            animation: syncPulse 1.5s infinite;
+        }
+
+        @keyframes syncPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
         .mobile-header {
             display: none;
             padding: 1rem;
@@ -390,15 +443,127 @@ class NotesApp extends LitElement {
         this.viewMode = 'list';
         this.sidebarOpen = false;
         this.toasts = [];
+        this.pendingSyncCount = 0;
+        this.syncStatus = 'idle';
 
         // Get user info from global context (set by server)
         this.user = window.user || null;
+
+        // Store bound handlers for proper cleanup
+        this._boundHandleBeforeUnload = this._handleBeforeUnload.bind(this);
+        this._boundHandleSyncPending = this._handleSyncPending.bind(this);
+        this._boundHandleSyncCompleted = this._handleSyncCompleted.bind(this);
+        this._boundHandleSyncStarted = this._handleSyncStarted.bind(this);
+        this._boundHandleSyncOffline = this._handleSyncOffline.bind(this);
+        this._boundHandleSyncOnline = this._handleSyncOnline.bind(this);
+        this._boundHandleRecoveryFound = this._handleRecoveryFound.bind(this);
     }
 
     connectedCallback() {
         super.connectedCallback();
         this.loadInitialData();
         this.setupEventListeners();
+        this._setupNavigationGuards();
+        this._setupSyncListeners();
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        this._removeNavigationGuards();
+        this._removeSyncListeners();
+    }
+
+    /**
+     * Set up navigation guards to prevent data loss
+     */
+    _setupNavigationGuards() {
+        window.addEventListener('beforeunload', this._boundHandleBeforeUnload);
+    }
+
+    _removeNavigationGuards() {
+        window.removeEventListener('beforeunload', this._boundHandleBeforeUnload);
+    }
+
+    /**
+     * Handle beforeunload event - warn about unsaved changes
+     */
+    async _handleBeforeUnload(event) {
+        // Check if there are pending syncs
+        if (window.NotesApp && window.NotesApp.getPendingSyncCount) {
+            const pendingCount = await window.NotesApp.getPendingSyncCount();
+            if (pendingCount > 0) {
+                event.preventDefault();
+                event.returnValue = 'You have unsaved changes that are still syncing. Are you sure you want to leave?';
+                return event.returnValue;
+            }
+        }
+
+        // Check if current editor has unsaved changes
+        const editor = this.shadowRoot?.querySelector('note-editor');
+        if (editor && editor.hasUnsavedChanges) {
+            event.preventDefault();
+            event.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+            return event.returnValue;
+        }
+    }
+
+    /**
+     * Set up sync manager event listeners
+     */
+    _setupSyncListeners() {
+        document.addEventListener('sync-pending', this._boundHandleSyncPending);
+        document.addEventListener('sync-completed', this._boundHandleSyncCompleted);
+        document.addEventListener('sync-started', this._boundHandleSyncStarted);
+        document.addEventListener('sync-offline', this._boundHandleSyncOffline);
+        document.addEventListener('sync-online', this._boundHandleSyncOnline);
+        document.addEventListener('sync-recovery-found', this._boundHandleRecoveryFound);
+    }
+
+    _removeSyncListeners() {
+        document.removeEventListener('sync-pending', this._boundHandleSyncPending);
+        document.removeEventListener('sync-completed', this._boundHandleSyncCompleted);
+        document.removeEventListener('sync-started', this._boundHandleSyncStarted);
+        document.removeEventListener('sync-offline', this._boundHandleSyncOffline);
+        document.removeEventListener('sync-online', this._boundHandleSyncOnline);
+        document.removeEventListener('sync-recovery-found', this._boundHandleRecoveryFound);
+    }
+
+    _handleSyncPending(event) {
+        this.pendingSyncCount = event.detail.count;
+        this.syncStatus = 'pending';
+    }
+
+    _handleSyncCompleted() {
+        this._updatePendingCount();
+    }
+
+    _handleSyncStarted() {
+        this.syncStatus = 'syncing';
+    }
+
+    _handleSyncOffline() {
+        this.syncStatus = 'offline';
+    }
+
+    _handleSyncOnline() {
+        this.syncStatus = 'idle';
+        this._updatePendingCount();
+    }
+
+    _handleRecoveryFound(event) {
+        const { drafts } = event.detail;
+        if (drafts.length > 0) {
+            this.showToast(`Found ${drafts.length} unsaved note(s) from previous session`, 'info');
+        }
+    }
+
+    async _updatePendingCount() {
+        if (window.NotesApp && window.NotesApp.getPendingSyncCount) {
+            this.pendingSyncCount = await window.NotesApp.getPendingSyncCount();
+            if (this.pendingSyncCount === 0) {
+                this.syncStatus = 'idle';
+            }
+        }
     }
 
     async loadInitialData() {
@@ -460,7 +625,15 @@ class NotesApp extends LitElement {
         });
 
         // Listen for component events
-        this.addEventListener('note-selected', (event) => {
+        this.addEventListener('note-selected', async (event) => {
+            // Save any pending changes before switching notes
+            if (this.viewMode === 'edit' && this.currentNote) {
+                const editor = this.shadowRoot.querySelector('note-editor');
+                if (editor && editor.hasUnsavedChanges) {
+                    await editor.autoSave();
+                }
+            }
+
             this.currentNote = event.detail.note;
             this.viewMode = 'edit';
             this.sidebarOpen = false; // Close sidebar on mobile
@@ -708,6 +881,58 @@ class NotesApp extends LitElement {
         this.toasts = this.toasts.filter(t => t.id !== toastId);
     }
 
+    /**
+     * Handle closing the editor - note-editor.handleClose already saves and waits
+     */
+    _handleCloseEditor() {
+        this.viewMode = 'list';
+        this.currentNote = null;
+    }
+
+    /**
+     * Render sync status indicator
+     */
+    _renderSyncStatus() {
+        if (this.syncStatus === 'idle' && this.pendingSyncCount === 0) {
+            return '';
+        }
+
+        const statusText = {
+            syncing: 'Syncing...',
+            pending: `${this.pendingSyncCount} pending`,
+            offline: 'Offline',
+            error: 'Sync error'
+        };
+
+        const text = statusText[this.syncStatus] || '';
+        if (!text) return '';
+
+        return html`
+            <div class="sync-status ${this.syncStatus}" title="${this._getSyncStatusTitle()}">
+                <span class="sync-indicator"></span>
+                ${text}
+            </div>
+        `;
+    }
+
+    /**
+     * Get detailed sync status for tooltip
+     */
+    _getSyncStatusTitle() {
+        switch (this.syncStatus) {
+            case 'syncing':
+                return 'Syncing changes to server...';
+            case 'pending':
+                return `${this.pendingSyncCount} change(s) saved locally, waiting to sync`;
+            case 'offline':
+                return 'You are offline. Changes will sync when back online.';
+            case 'error':
+                return 'Some changes failed to sync. Will retry automatically.';
+            default:
+                return '';
+        }
+    }
+
     render() {
         return html`
             <div class="app-layout">
@@ -774,6 +999,8 @@ class NotesApp extends LitElement {
                             </div>
                         ` : ''}
 
+                        ${this._renderSyncStatus()}
+
                         <div class="user-menu">
                             ${this.user ? html`
                                 <img class="user-avatar" src="${this.user.picture}" alt="${this.user.name}">
@@ -795,17 +1022,13 @@ class NotesApp extends LitElement {
                                 .note=${this.currentNote}
                                 .tags=${this.tags}
                                 @note-updated=${(e) => this.currentNote = e.detail.note}
-                                @close-editor=${() => { this.viewMode = 'list'; this.currentNote = null; }}
+                                @close-editor=${this._handleCloseEditor}
                             ></note-editor>
                         ` : html`
                             <note-list
                                 .notes=${this.notes}
                                 .searchQuery=${this.searchQuery}
                                 .selectedTags=${this.selectedTags}
-                                @note-selected=${(e) => {
-                                    this.currentNote = e.detail.note;
-                                    this.viewMode = 'edit';
-                                }}
                             ></note-list>
                         `}
                     </div>
