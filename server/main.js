@@ -198,18 +198,40 @@ router.get("/login", redirectIfAuthenticated, async (ctx) => {
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
+            padding: 1rem;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
         .login-card {
             background: white;
             padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            /* Phase 2.3: Enhanced shadow for depth */
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
             text-align: center;
             max-width: 400px;
-            width: 90%;
+            width: 100%;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        /* Phase 2.3: Subtle lift on hover */
+        .login-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+        }
+        /* Phase 2.2: Better mobile spacing */
+        @media (max-width: 375px) {
+            .login-card {
+                padding: 1.5rem;
+                margin: 1rem;
+                max-width: calc(100% - 2rem);
+            }
+            h1 {
+                font-size: 1.5rem;
+            }
+            p {
+                font-size: 0.9rem;
+            }
         }
         .login-btn {
             background: #4285f4;
@@ -221,18 +243,74 @@ router.get("/login", redirectIfAuthenticated, async (ctx) => {
             display: inline-block;
             margin-top: 1rem;
             font-size: 16px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s ease;
+            min-width: 200px;
         }
-        .login-btn:hover { background: #3367d6; }
+        /* Phase 2.3: Enhanced hover effect */
+        .login-btn:hover {
+            background: #3367d6;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(66, 133, 244, 0.3);
+        }
+        .login-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(66, 133, 244, 0.2);
+        }
+        /* Phase 2.1: Loading state */
+        .login-btn.loading {
+            pointer-events: none;
+            background: #93b4f7;
+            padding-right: 48px;
+        }
+        .login-btn.loading::after {
+            content: "";
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            border: 2px solid white;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: translateY(-50%) rotate(360deg); }
+        }
+        /* Phase 2.1: Feedback message */
+        .feedback-message {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: #666;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .feedback-message.show {
+            opacity: 1;
+        }
         h1 { color: #333; margin-bottom: 0.5rem; }
-        p { color: #666; }
+        p { color: #666; line-height: 1.5; }
     </style>
 </head>
 <body>
     <div class="login-card">
         <h1>※ Notes App</h1>
         <p>Secure, searchable, synchronized notes with automatic Dropbox backup.</p>
-        <a href="/auth/login" class="login-btn">Login with Google</a>
+        <a href="/auth/login" class="login-btn" id="loginBtn">Login with Google</a>
+        <div class="feedback-message" id="feedbackMsg">Redirecting to Google...</div>
     </div>
+
+    <script>
+        // Phase 2.1: Add loading state on click
+        document.getElementById('loginBtn').addEventListener('click', function(e) {
+            this.classList.add('loading');
+            this.textContent = 'Signing in...';
+            document.getElementById('feedbackMsg').classList.add('show');
+        });
+    </script>
 </body>
 </html>`;
 });
