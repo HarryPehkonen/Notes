@@ -772,22 +772,13 @@ class NotesApp extends LitElement {
 
   async performSearch() {
     if (!this.searchQuery.trim()) {
-      // If no search query, reload all notes
-      this.loadInitialData();
+      // If no search query, filter by tags only (or show all)
+      this.filterNotes();
       return;
     }
 
-    try {
-      this.loading = true;
-      const result = await window.NotesApp.searchNotes(this.searchQuery);
-      this.notes = result.data.results || [];
-      this.viewMode = "search";
-    } catch (error) {
-      console.error("Search failed:", error);
-      this.showToast("Search failed", "error");
-    } finally {
-      this.loading = false;
-    }
+    // Use filterNotes which handles both search and tag filtering
+    this.filterNotes();
   }
 
   async handleTagsSelected(tags) {
@@ -808,17 +799,38 @@ class NotesApp extends LitElement {
 
   async filterNotes() {
     try {
-      console.log("  filterNotes called with selectedTags:", this.selectedTags);
+      console.log("  filterNotes called with selectedTags:", this.selectedTags, "searchQuery:", this.searchQuery);
       this.loading = true;
-      const options = {};
-      if (this.selectedTags.length > 0) {
-        options.tags = this.selectedTags.map((tag) => tag.id);
-      }
-      console.log("  Filtering with options:", options);
 
-      const result = await window.NotesApp.getNotes(options);
-      console.log("  Filter result:", result);
-      this.notes = result.data || [];
+      const hasSearchQuery = this.searchQuery && this.searchQuery.trim();
+      const hasTagFilter = this.selectedTags.length > 0;
+
+      if (hasSearchQuery && hasTagFilter) {
+        // Both search and tags - use advanced search (expects tag names)
+        const result = await window.NotesApp.advancedSearch({
+          query: this.searchQuery,
+          tags: this.selectedTags.map((tag) => tag.name),
+        });
+        this.notes = result.data?.results || [];
+        this.viewMode = "search";
+      } else if (hasSearchQuery) {
+        // Just search query
+        const result = await window.NotesApp.searchNotes(this.searchQuery);
+        this.notes = result.data?.results || [];
+        this.viewMode = "search";
+      } else {
+        // No search query, just filter by tags (or show all)
+        const options = {};
+        if (hasTagFilter) {
+          options.tags = this.selectedTags.map((tag) => tag.id);
+        }
+        console.log("  Filtering with options:", options);
+
+        const result = await window.NotesApp.getNotes(options);
+        console.log("  Filter result:", result);
+        this.notes = result.data || [];
+        this.viewMode = "list";
+      }
       console.log("  Updated notes:", this.notes);
       this.requestUpdate(); // Force re-render
     } catch (error) {
