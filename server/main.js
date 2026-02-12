@@ -160,6 +160,37 @@ app.use(async (ctx, next) => {
   await next();
 });
 
+// Dev/staging auth bypass - auto-login as specified user
+// Useful for LAN testing where OAuth redirect URIs don't work
+// Usage: DEV_USER_EMAIL=your@email.com deno task staging
+// WARNING: Never use in production!
+const devUserEmail = Deno.env.get("DEV_USER_EMAIL");
+if (devUserEmail) {
+  console.log(`⚠ DEV_USER_EMAIL set - auto-authenticating as ${devUserEmail}`);
+  app.use(async (ctx, next) => {
+    const existingUser = await ctx.state.session.get("user");
+    if (!existingUser) {
+      // Find or create the dev user
+      let user = await db.findUserByEmail(devUserEmail);
+      if (!user) {
+        user = await db.createUser({
+          email: devUserEmail,
+          name: "Dev User",
+          picture: null,
+        });
+        console.log(`  Created dev user: ${devUserEmail}`);
+      }
+      await ctx.state.session.set("user", {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        picture: user.picture,
+      });
+    }
+    await next();
+  });
+}
+
 // Routes
 const router = new Router();
 
