@@ -62,9 +62,11 @@ const authHandler = new GoogleAuthHandler(
 const backupScheduler = createBackupScheduler(db);
 
 // Initialize Oak application
-const app = new Application();
+// proxy: true tells Oak to trust X-Forwarded-* headers from reverse proxy (Caddy)
+const app = new Application({ proxy: true });
 
 // Session middleware with secure cookies in production
+// Note: With proxy=true, Oak checks X-Forwarded-Proto for HTTPS detection
 const isProduction = Deno.env.get("NODE_ENV") === "production";
 app.use(Session.initMiddleware(undefined, {
   cookieSetOptions: {
@@ -74,6 +76,16 @@ app.use(Session.initMiddleware(undefined, {
     maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
   },
 }));
+
+// Helper to get real client IP (respects X-Forwarded-For behind proxy)
+function getClientIp(ctx) {
+  // Oak with proxy=true handles this, but let's be explicit
+  const forwarded = ctx.request.headers.get("x-forwarded-for");
+  if (forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+  return ctx.request.ip;
+}
 
 // Rate limiting for auth endpoints
 const rateLimitMap = new Map();
@@ -162,7 +174,7 @@ router.get("/health", (ctx) => {
 
 // Authentication routes (rate limited)
 router.get("/auth/login", redirectIfAuthenticated, async (ctx) => {
-  const ip = ctx.request.ip;
+  const ip = getClientIp(ctx);
   if (!rateLimit(ctx, `auth:${ip}`)) return;
 
   const authUrl = authHandler.getAuthorizationUrl();
@@ -170,7 +182,7 @@ router.get("/auth/login", redirectIfAuthenticated, async (ctx) => {
 });
 
 router.get("/auth/callback", async (ctx) => {
-  const ip = ctx.request.ip;
+  const ip = getClientIp(ctx);
   if (!rateLimit(ctx, `auth:${ip}`)) return;
 
   const code = ctx.request.url.searchParams.get("code");
