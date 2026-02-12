@@ -9,6 +9,8 @@ export class NoteList extends LitElement {
     searchQuery: { type: String },
     selectedTags: { type: Array },
     viewType: { type: String }, // 'grid' or 'list'
+    sortField: { type: String }, // 'modified', 'created', 'title'
+    sortDirection: { type: String }, // 'asc' or 'desc'
   };
 
   static styles = css`
@@ -63,6 +65,51 @@ export class NoteList extends LitElement {
       background: white;
       color: var(--primary);
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .sort-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .sort-select {
+      padding: 0.375rem 0.75rem;
+      border: 1px solid var(--gray-300);
+      border-radius: 0.375rem;
+      background: white;
+      font-size: 0.875rem;
+      color: var(--gray-700);
+      cursor: pointer;
+    }
+
+    .sort-select:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .sort-direction {
+      padding: 0.375rem;
+      background: var(--gray-100);
+      border: none;
+      border-radius: 0.375rem;
+      cursor: pointer;
+      color: var(--gray-600);
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sort-direction:hover {
+      background: var(--gray-200);
+      color: var(--gray-800);
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
     }
 
     .notes-grid {
@@ -259,6 +306,22 @@ export class NoteList extends LitElement {
         padding: 1rem;
       }
 
+      .notes-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+      }
+
+      .header-controls {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .sort-select {
+        flex: 1;
+        min-width: 0;
+      }
+
       .notes-grid {
         grid-template-columns: 1fr;
         gap: 1rem;
@@ -276,6 +339,8 @@ export class NoteList extends LitElement {
     this.searchQuery = "";
     this.selectedTags = [];
     this.viewType = "grid";
+    this.sortField = "modified";
+    this.sortDirection = "desc";
   }
 
   toggleView(type) {
@@ -326,14 +391,38 @@ export class NoteList extends LitElement {
   getFilteredNotes() {
     let filtered = [...this.notes];
 
-    // Sort pinned notes first
+    // Sort based on current sort settings
     filtered.sort((a, b) => {
+      // Pinned notes always first
       if (a.is_pinned && !b.is_pinned) return -1;
       if (!a.is_pinned && b.is_pinned) return 1;
-      return new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at);
+
+      let comparison = 0;
+      switch (this.sortField) {
+        case "title":
+          comparison = (a.title || "").localeCompare(b.title || "");
+          break;
+        case "created":
+          comparison = new Date(a.created_at) - new Date(b.created_at);
+          break;
+        case "modified":
+        default:
+          comparison = new Date(a.updated_at || a.created_at) - new Date(b.updated_at || b.created_at);
+          break;
+      }
+
+      return this.sortDirection === "asc" ? comparison : -comparison;
     });
 
     return filtered;
+  }
+
+  handleSortFieldChange(e) {
+    this.sortField = e.target.value;
+  }
+
+  toggleSortDirection() {
+    this.sortDirection = this.sortDirection === "asc" ? "desc" : "asc";
   }
 
   renderEmptyState() {
@@ -481,30 +570,59 @@ export class NoteList extends LitElement {
               : ""}
           </div>
 
-          <div class="view-toggle">
-            <button
-              class="${this.viewType === "grid" ? "active" : ""}"
-              @click="${() => this.toggleView("grid")}"
-              title="Grid view"
-            >
-              <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                <path
-                  d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3z"
-                />
-              </svg>
-            </button>
-            <button
-              class="${this.viewType === "list" ? "active" : ""}"
-              @click="${() => this.toggleView("list")}"
-              title="List view"
-            >
-              <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                <path
-                  fill-rule="evenodd"
-                  d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"
-                />
-              </svg>
-            </button>
+          <div class="header-controls">
+            <div class="sort-controls">
+              <select
+                class="sort-select"
+                .value="${this.sortField}"
+                @change="${this.handleSortFieldChange}"
+                title="Sort by"
+              >
+                <option value="modified">Modified</option>
+                <option value="created">Created</option>
+                <option value="title">Title</option>
+              </select>
+              <button
+                class="sort-direction"
+                @click="${this.toggleSortDirection}"
+                title="${this.sortDirection === "asc" ? "Ascending" : "Descending"}"
+              >
+                ${this.sortDirection === "asc"
+                  ? html`<svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                      <path fill-rule="evenodd" d="M8 15a.5.5 0 0 0 .5-.5V2.707l3.146 3.147a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 1 0 .708.708L7.5 2.707V14.5a.5.5 0 0 0 .5.5z"/>
+                    </svg>`
+                  : html`<svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                      <path fill-rule="evenodd" d="M8 1a.5.5 0 0 1 .5.5v11.793l3.146-3.147a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 .708-.708L7.5 13.293V1.5A.5.5 0 0 1 8 1z"/>
+                    </svg>`
+                }
+              </button>
+            </div>
+
+            <div class="view-toggle">
+              <button
+                class="${this.viewType === "grid" ? "active" : ""}"
+                @click="${() => this.toggleView("grid")}"
+                title="Grid view"
+              >
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                  <path
+                    d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3z"
+                  />
+                </svg>
+              </button>
+              <button
+                class="${this.viewType === "list" ? "active" : ""}"
+                @click="${() => this.toggleView("list")}"
+                title="List view"
+              >
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                  <path
+                    fill-rule="evenodd"
+                    d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 

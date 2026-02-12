@@ -2,7 +2,7 @@
  * Service Worker for Notes App
  */
 
-const CACHE_NAME = "notes-app-v6";
+const CACHE_NAME = "notes-app-v7";
 const urlsToCache = [
   "/",
   "/static/app.js",
