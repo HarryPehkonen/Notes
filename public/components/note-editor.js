@@ -4,11 +4,11 @@
  * Supports Markdown preview
  */
 import { css, html, LitElement } from "lit";
-import { unsafeHTML } from "https://cdn.jsdelivr.net/npm/lit@3.1.0/directives/unsafe-html.js";
+import { unsafeHTML } from "https://cdn.jsdelivr.net/npm/lit@3.1.0/directives/unsafe-html.js/+esm";
 import { marked } from "marked";
 
 // Configure marked for safe rendering
-marked.setOptions({
+marked.use({
   breaks: true, // Convert \n to <br>
   gfm: true, // GitHub Flavored Markdown
 });
