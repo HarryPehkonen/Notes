@@ -4,6 +4,7 @@
  * Supports Markdown preview
  */
 import { css, html, LitElement } from "lit";
+import { unsafeHTML } from "https://cdn.jsdelivr.net/npm/lit@3.1.0/directives/unsafe-html.js";
 import { marked } from "marked";
 
 // Configure marked for safe rendering
@@ -836,10 +837,9 @@ export class NoteEditor extends LitElement {
 
           ${this.previewMode
             ? html`
-              <div
-                class="markdown-preview"
-                .innerHTML="${this.renderMarkdown(this.getMarkdownContent())}"
-              ></div>
+              <div class="markdown-preview">
+                ${unsafeHTML(this.renderMarkdown(this.getMarkdownContent()))}
+              </div>
             `
             : html`
               <textarea
