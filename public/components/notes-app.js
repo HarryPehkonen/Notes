@@ -61,6 +61,11 @@ class NotesApp extends LitElement {
       padding: 1rem;
     }
 
+    .mobile-search {
+      display: none;
+      margin-bottom: 1rem;
+    }
+
     .sidebar-section {
       margin-bottom: 1.5rem;
     }
@@ -358,11 +363,16 @@ class NotesApp extends LitElement {
 
     /* Mobile styles */
     @media (max-width: 768px) {
+      .app-layout {
+        flex-direction: column;
+      }
+
       .sidebar {
         position: absolute;
         top: 0;
         left: 0;
         bottom: 0;
+        width: 240px;
         z-index: 20;
         transform: translateX(-100%);
       }
@@ -395,7 +405,12 @@ class NotesApp extends LitElement {
       }
 
       .main-content {
-        height: 100%;
+        flex: 1;
+        min-height: 0;
+      }
+
+      .mobile-search {
+        display: block;
       }
     }
 
@@ -978,6 +993,17 @@ class NotesApp extends LitElement {
           </div>
 
           <div class="sidebar-content">
+            <div class="mobile-search">
+              <search-bar
+                .query="${this.searchQuery}"
+                @search-query="${(e) => {
+                  this.searchQuery = e.detail.query;
+                  this.performSearch();
+                  this.sidebarOpen = false;
+                }}"
+              ></search-bar>
+            </div>
+
             <button class="new-note-btn" @click="${this.createNewNote}">
               New Note
             </button>
