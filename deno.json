@@ -20,6 +20,7 @@
   "tasks": {
     "dev": "deno run --env --allow-net --allow-read --allow-env --allow-write --watch server/main.js",
     "start": "deno run --env --allow-net --allow-read --allow-env --allow-write server/main.js",
+    "staging": "HOST=0.0.0.0 deno run --env --allow-net --allow-read --allow-env --allow-write server/main.js",
     "test": "deno test --no-check --allow-read tests/deno/",
     "lint": "deno lint",
     "fmt": "deno fmt"

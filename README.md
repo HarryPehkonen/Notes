@@ -180,11 +180,14 @@ AUTO_BACKUP_ENABLED=true
 ### Available Commands
 
 ```bash
-# Development with auto-reload
+# Development with auto-reload (localhost:8000)
 deno task dev
 
-# Production start
+# Production start (localhost:8000, use behind reverse proxy)
 deno task start
+
+# Staging (0.0.0.0:8000, direct external access)
+deno task staging
 
 # Run tests
 deno task test
@@ -196,14 +199,24 @@ deno task lint
 deno task fmt
 ```
 
+| Task | Host | Watch | Use case |
+|------|------|-------|----------|
+| `dev` | localhost | Yes | Local development |
+| `start` | localhost | No | Production behind Caddy |
+| `staging` | 0.0.0.0 | No | Direct external access |
+
 ### Database Management
 
-```bash
-# Initialize schema (automatic on startup)
-deno run --allow-net --allow-read --allow-env server/main.js
+The server uses two schema files:
+- **`schema-init.sql`** - Production-safe, uses `IF NOT EXISTS` (default)
+- **`schema.sql`** - Development reset, drops all tables first
 
-# Manual schema updates
-psql -U notes_user -d notes_app -f server/database/schema.sql
+```bash
+# Normal startup (preserves data)
+deno task start
+
+# Reset database (DESTROYS ALL DATA - development only)
+RESET_DATABASE=true deno task dev
 
 # Database backup
 pg_dump -U notes_user notes_app > backup.sql

@@ -13,11 +13,14 @@ This is a notes application built with the **minimal web stack philosophy**: no 
 ### Running the Application
 
 ```bash
-# Development with auto-reload (use this for development)
+# Development with auto-reload (localhost:8000)
 deno task dev
 
-# Production start
+# Production start (localhost:8000, behind reverse proxy)
 deno task start
+
+# Staging (0.0.0.0:8000, direct external access)
+deno task staging
 
 # Lint code
 deno task lint
@@ -29,28 +32,22 @@ deno task fmt
 ### Testing
 
 ```bash
-# Run Playwright tests
-npx playwright test
-
-# Run Playwright tests in headed mode
-npx playwright test --headed
-
-# Run specific test file
-npx playwright test tests/example.spec.ts
-
-# Run tests matching a pattern
-npx playwright test --grep "pattern"
-
-# Open Playwright test report
-npx playwright show-report
+# Run Deno unit tests
+deno task test
 ```
 
 ### Database Operations
 
+The server uses two schema files:
+- **`schema-init.sql`** - Production-safe with `IF NOT EXISTS` (default)
+- **`schema.sql`** - Development reset, drops all tables
+
 ```bash
-# Database will auto-initialize on server startup from schema.sql
-# For manual schema updates:
-psql -U notes_user -d notes_app -f server/database/schema.sql
+# Normal startup (preserves data)
+deno task start
+
+# Reset database (DESTROYS ALL DATA)
+RESET_DATABASE=true deno task dev
 
 # Database backup
 pg_dump -U notes_user notes_app > backup.sql

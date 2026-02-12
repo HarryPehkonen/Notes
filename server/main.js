@@ -376,9 +376,14 @@ app.use(router.routes());
 app.use(router.allowedMethods());
 
 // Initialize database schema on startup
+// Use schema-init.sql (production-safe with IF NOT EXISTS)
+// Use schema.sql only for dev reset (drops all tables!)
 try {
-  console.log("  Initializing database schema...");
-  await db.initializeSchema("./server/database/schema.sql");
+  const schemaFile = Deno.env.get("RESET_DATABASE") === "true"
+    ? "./server/database/schema.sql"
+    : "./server/database/schema-init.sql";
+  console.log(`  Initializing database schema from ${schemaFile}...`);
+  await db.initializeSchema(schemaFile);
   console.log("✓ Database schema initialized successfully");
 } catch (error) {
   console.error("✗ Failed to initialize database:", error.message);
