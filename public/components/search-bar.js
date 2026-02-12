@@ -189,6 +189,7 @@ export class SearchBar extends LitElement {
     this.selectedIndex = -1;
     this.loading = false;
     this.debounceTimer = null;
+    this._isFocused = false;
 
     // Store bound handler to prevent memory leak
     // (bind() creates a new function each call, so we need to store the reference)
@@ -207,6 +208,21 @@ export class SearchBar extends LitElement {
     document.removeEventListener("keydown", this._boundHandleGlobalKeydown);
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
+    }
+  }
+
+  updated(changedProperties) {
+    super.updated(changedProperties);
+    // Restore focus if we were focused before the update
+    // This prevents keyboard from hiding on mobile during re-renders (e.g., sync status changes)
+    if (this._isFocused) {
+      const input = this.shadowRoot?.querySelector(".search-input");
+      if (input && document.activeElement !== input) {
+        // Use requestAnimationFrame to ensure DOM is ready
+        requestAnimationFrame(() => {
+          input.focus();
+        });
+      }
     }
   }
 
@@ -319,12 +335,14 @@ export class SearchBar extends LitElement {
   }
 
   handleFocus() {
+    this._isFocused = true;
     if (this.query && this.suggestions.length > 0) {
       this.showSuggestions = true;
     }
   }
 
   handleBlur(e) {
+    this._isFocused = false;
     // Delay hiding to allow click on suggestion
     setTimeout(() => {
       this.showSuggestions = false;
