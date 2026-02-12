@@ -256,10 +256,11 @@ export function createSearchRouter() {
       } = body;
 
       // Build advanced search query
+      // Return tags as array of JSON objects (same format as getNotes)
       let searchQuery = `
                 SELECT n.*,
                        ARRAY(
-                           SELECT t.name
+                           SELECT json_build_object('id', t.id, 'name', t.name, 'color', t.color)
                            FROM tags t
                            JOIN note_tags nt ON t.id = nt.tag_id
                            WHERE nt.note_id = n.id

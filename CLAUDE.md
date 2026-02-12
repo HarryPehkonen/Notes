@@ -406,6 +406,12 @@ async updateNoteWithTags(noteId, updates, tagIds) {
    - Always use `lit@3.1.0` (not `lit@2`)
    - Version specified in `index.html` importmap
 
+5. **Service worker cache**:
+   - Frontend files are cached by the service worker (`public/sw.js`)
+   - After modifying any frontend file, bump `CACHE_NAME` version (e.g., `notes-app-v5` → `notes-app-v6`)
+   - Users may need to clear site data or hard refresh to get updates
+   - The service worker uses `skipWaiting()` and `clients.claim()` for faster updates
+
 ## API Documentation
 
 ### Health Check
