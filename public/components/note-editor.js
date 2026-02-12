@@ -1,8 +1,16 @@
 /**
  * Note Editor Component
  * Now uses SyncManager for reliable saves with offline support
+ * Supports Markdown preview
  */
 import { css, html, LitElement } from "lit";
+import { marked } from "marked";
+
+// Configure marked for safe rendering
+marked.setOptions({
+  breaks: true, // Convert \n to <br>
+  gfm: true, // GitHub Flavored Markdown
+});
 
 export class NoteEditor extends LitElement {
   static properties = {
@@ -13,6 +21,7 @@ export class NoteEditor extends LitElement {
     saveStatus: { type: String }, // 'saved', 'saving', 'unsaved', 'pending', 'error'
     hasUnsavedChanges: { type: Boolean },
     pendingCount: { type: Number },
+    previewMode: { type: Boolean },
   };
 
   static styles = css`
@@ -243,6 +252,152 @@ export class NoteEditor extends LitElement {
       cursor: not-allowed;
     }
 
+    .editor-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 0.5rem;
+    }
+
+    .preview-toggle {
+      display: flex;
+      background: var(--gray-100);
+      border-radius: 0.375rem;
+      padding: 0.25rem;
+    }
+
+    .preview-toggle button {
+      padding: 0.375rem 0.75rem;
+      border: none;
+      background: transparent;
+      border-radius: 0.25rem;
+      font-size: 0.875rem;
+      cursor: pointer;
+      color: var(--gray-600);
+      transition: all 0.2s;
+    }
+
+    .preview-toggle button:hover {
+      color: var(--gray-800);
+    }
+
+    .preview-toggle button.active {
+      background: white;
+      color: var(--primary);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    .markdown-preview {
+      width: 100%;
+      min-height: 400px;
+      padding: 1rem;
+      border: 1px solid var(--gray-300);
+      border-radius: 0.5rem;
+      background: var(--white);
+      overflow-y: auto;
+      line-height: 1.6;
+    }
+
+    .markdown-preview h1 {
+      font-size: 1.75rem;
+      font-weight: 600;
+      margin: 1.5rem 0 1rem 0;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--gray-200);
+    }
+
+    .markdown-preview h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin: 1.25rem 0 0.75rem 0;
+    }
+
+    .markdown-preview h3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin: 1rem 0 0.5rem 0;
+    }
+
+    .markdown-preview p {
+      margin: 0.75rem 0;
+    }
+
+    .markdown-preview ul, .markdown-preview ol {
+      margin: 0.75rem 0;
+      padding-left: 1.5rem;
+    }
+
+    .markdown-preview li {
+      margin: 0.25rem 0;
+    }
+
+    .markdown-preview code {
+      background: var(--gray-100);
+      padding: 0.125rem 0.375rem;
+      border-radius: 0.25rem;
+      font-family: monospace;
+      font-size: 0.875em;
+    }
+
+    .markdown-preview pre {
+      background: var(--gray-100);
+      padding: 1rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+
+    .markdown-preview pre code {
+      background: transparent;
+      padding: 0;
+    }
+
+    .markdown-preview blockquote {
+      border-left: 4px solid var(--primary);
+      margin: 1rem 0;
+      padding: 0.5rem 1rem;
+      background: var(--gray-50);
+      color: var(--gray-700);
+    }
+
+    .markdown-preview a {
+      color: var(--primary);
+      text-decoration: underline;
+    }
+
+    .markdown-preview img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 0.5rem;
+    }
+
+    .markdown-preview hr {
+      border: none;
+      border-top: 1px solid var(--gray-200);
+      margin: 1.5rem 0;
+    }
+
+    .markdown-preview table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+    }
+
+    .markdown-preview th, .markdown-preview td {
+      border: 1px solid var(--gray-300);
+      padding: 0.5rem;
+      text-align: left;
+    }
+
+    .markdown-preview th {
+      background: var(--gray-50);
+      font-weight: 600;
+    }
+
+    .empty-preview {
+      color: var(--gray-500);
+      font-style: italic;
+    }
+
     @media (max-width: 768px) {
       .editor-header,
       .editor-content,
@@ -286,6 +441,7 @@ export class NoteEditor extends LitElement {
     this.autoSaveTimer = null;
     this.originalNote = null;
     this.pendingCount = 0;
+    this.previewMode = false;
 
     // Store bound handlers to fix memory leak
     this._boundHandleInput = this.handleInputChange.bind(this);
@@ -598,6 +754,28 @@ export class NoteEditor extends LitElement {
     });
   }
 
+  togglePreviewMode() {
+    this.previewMode = !this.previewMode;
+  }
+
+  getMarkdownContent() {
+    const contentTextarea = this.shadowRoot?.querySelector(".content-textarea");
+    const content = contentTextarea?.value || this.note?.content || "";
+    return content;
+  }
+
+  renderMarkdown(content) {
+    if (!content || !content.trim()) {
+      return "<p class=\"empty-preview\">Nothing to preview. Start writing in Edit mode.</p>";
+    }
+    try {
+      return marked.parse(content);
+    } catch (error) {
+      console.error("Markdown parsing error:", error);
+      return `<p>Error rendering markdown</p>`;
+    }
+  }
+
   render() {
     if (!this.note) {
       return html`
@@ -639,12 +817,39 @@ export class NoteEditor extends LitElement {
         </div>
 
         <div class="editor-content">
-          <textarea
-            class="content-textarea"
-            .value="${this.note.content || ""}"
-            placeholder="Start writing your note..."
-            ?disabled="${this.loading}"
-          ></textarea>
+          <div class="editor-toolbar">
+            <div class="preview-toggle">
+              <button
+                class="${!this.previewMode ? "active" : ""}"
+                @click="${() => this.previewMode = false}"
+              >
+                Edit
+              </button>
+              <button
+                class="${this.previewMode ? "active" : ""}"
+                @click="${() => this.previewMode = true}"
+              >
+                Preview
+              </button>
+            </div>
+          </div>
+
+          ${this.previewMode
+            ? html`
+              <div
+                class="markdown-preview"
+                .innerHTML="${this.renderMarkdown(this.getMarkdownContent())}"
+              ></div>
+            `
+            : html`
+              <textarea
+                class="content-textarea"
+                .value="${this.note.content || ""}"
+                placeholder="Start writing your note (Markdown supported)..."
+                ?disabled="${this.loading}"
+              ></textarea>
+            `
+          }
         </div>
 
         <div class="editor-footer">
