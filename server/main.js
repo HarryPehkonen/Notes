@@ -64,8 +64,58 @@ const backupScheduler = createBackupScheduler(db);
 // Initialize Oak application
 const app = new Application();
 
-// Session middleware
-app.use(Session.initMiddleware());
+// Session middleware with secure cookies in production
+const isProduction = Deno.env.get("NODE_ENV") === "production";
+app.use(Session.initMiddleware(undefined, {
+  cookieSetOptions: {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "lax",
+    maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
+  },
+}));
+
+// Rate limiting for auth endpoints
+const rateLimitMap = new Map();
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX = 10; // 10 requests per minute
+
+function rateLimit(ctx, key) {
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW;
+
+  // Get or create entry
+  let entry = rateLimitMap.get(key);
+  if (!entry) {
+    entry = { requests: [], blocked: false };
+    rateLimitMap.set(key, entry);
+  }
+
+  // Clean old requests
+  entry.requests = entry.requests.filter((t) => t > windowStart);
+
+  // Check limit
+  if (entry.requests.length >= RATE_LIMIT_MAX) {
+    ctx.response.status = 429;
+    ctx.response.body = { error: "Too many requests. Please try again later." };
+    return false;
+  }
+
+  entry.requests.push(now);
+  return true;
+}
+
+// Clean up rate limit map periodically (every 5 minutes)
+setInterval(() => {
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW;
+  for (const [key, entry] of rateLimitMap) {
+    entry.requests = entry.requests.filter((t) => t > windowStart);
+    if (entry.requests.length === 0) {
+      rateLimitMap.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
 
 // Error handling middleware
 app.use(async (ctx, next) => {
@@ -110,13 +160,19 @@ router.get("/health", (ctx) => {
   };
 });
 
-// Authentication routes
+// Authentication routes (rate limited)
 router.get("/auth/login", redirectIfAuthenticated, async (ctx) => {
+  const ip = ctx.request.ip;
+  if (!rateLimit(ctx, `auth:${ip}`)) return;
+
   const authUrl = authHandler.getAuthorizationUrl();
   ctx.response.redirect(authUrl);
 });
 
 router.get("/auth/callback", async (ctx) => {
+  const ip = ctx.request.ip;
+  if (!rateLimit(ctx, `auth:${ip}`)) return;
+
   const code = ctx.request.url.searchParams.get("code");
   const error = ctx.request.url.searchParams.get("error");
 
