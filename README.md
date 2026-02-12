@@ -485,6 +485,12 @@ GET    /api/backup/status     # Backup status
    }
    ```
 
+   **Reverse Proxy Support:** The application is configured to work behind Caddy:
+   - Oak runs with `proxy: true` to trust `X-Forwarded-*` headers
+   - Caddy automatically sends `X-Forwarded-For` and `X-Forwarded-Proto`
+   - Rate limiting uses the real client IP (not Caddy's internal IP)
+   - Session cookies use `secure: true` in production (requires HTTPS via Caddy)
+
 6. **SSL & Domain:**
    ```bash
    # Update DNS to point to your server
