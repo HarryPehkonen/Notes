@@ -23,6 +23,9 @@ export class NoteEditor extends LitElement {
     hasUnsavedChanges: { type: Boolean },
     pendingCount: { type: Number },
     previewMode: { type: Boolean },
+    headerCollapsed: { type: Boolean },
+    isInputFocused: { type: Boolean },
+    keyboardVisible: { type: Boolean },
   };
 
   static styles = css`
@@ -42,6 +45,61 @@ export class NoteEditor extends LitElement {
       padding: 1.5rem;
       border-bottom: 1px solid var(--gray-200);
       background: var(--gray-50);
+    }
+
+    .editor-header.collapsed {
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .collapsed-title {
+      flex: 1;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--gray-800);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .header-toggle {
+      background: none;
+      border: none;
+      padding: 0.25rem;
+      cursor: pointer;
+      color: var(--gray-500);
+      display: flex;
+      align-items: center;
+      transition: transform 0.2s;
+    }
+
+    .header-toggle:hover {
+      color: var(--gray-700);
+    }
+
+    .header-toggle.expanded {
+      transform: rotate(180deg);
+    }
+
+    .collapse-btn {
+      background: none;
+      border: none;
+      padding: 0.25rem 0.5rem;
+      cursor: pointer;
+      color: var(--gray-500);
+      font-size: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      margin-left: auto;
+    }
+
+    .collapse-btn:hover {
+      color: var(--gray-700);
     }
 
     .title-input {
@@ -140,6 +198,17 @@ export class NoteEditor extends LitElement {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+
+    .editor-footer.hidden {
+      transform: translateY(100%);
+      opacity: 0;
+      pointer-events: none;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
     }
 
     .metadata {
@@ -442,7 +511,12 @@ export class NoteEditor extends LitElement {
     this.autoSaveTimer = null;
     this.originalNote = null;
     this.pendingCount = 0;
-    this.previewMode = false;
+    this.previewMode = localStorage.getItem("notes-previewMode") === "true";
+    this.headerCollapsed = localStorage.getItem("notes-headerCollapsed") !== "false";
+    this.isInputFocused = false;
+    this.keyboardVisible = false;
+    this._boundHandleViewportResize = this._handleViewportResize.bind(this);
+    this._initialViewportHeight = null;
 
     // Store bound handlers to fix memory leak
     this._boundHandleInput = this.handleInputChange.bind(this);
@@ -462,12 +536,14 @@ export class NoteEditor extends LitElement {
     this.setupAutoSave();
     this._setupSyncListeners();
     this._checkForDraft();
+    this._setupViewportListener();
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     this.clearAutoSaveTimer();
     this._removeSyncListeners();
+    this._removeViewportListener();
   }
 
   /**
@@ -757,6 +833,60 @@ export class NoteEditor extends LitElement {
 
   togglePreviewMode() {
     this.previewMode = !this.previewMode;
+    localStorage.setItem("notes-previewMode", this.previewMode);
+  }
+
+  toggleHeader() {
+    this.headerCollapsed = !this.headerCollapsed;
+    localStorage.setItem("notes-headerCollapsed", this.headerCollapsed);
+  }
+
+  getCurrentTitle() {
+    const titleInput = this.shadowRoot?.querySelector(".title-input");
+    return titleInput?.value || this.note?.title || "Untitled";
+  }
+
+  handleInputFocus() {
+    this.isInputFocused = true;
+  }
+
+  handleInputBlur() {
+    // Small delay to prevent flicker when switching between inputs
+    setTimeout(() => {
+      const activeEl = this.shadowRoot?.activeElement;
+      const isStillFocused = activeEl?.classList?.contains("content-textarea") ||
+                             activeEl?.classList?.contains("title-input");
+      if (!isStillFocused) {
+        this.isInputFocused = false;
+      }
+    }, 100);
+  }
+
+  _setupViewportListener() {
+    if (window.visualViewport) {
+      this._initialViewportHeight = window.visualViewport.height;
+      window.visualViewport.addEventListener("resize", this._boundHandleViewportResize);
+    }
+  }
+
+  _removeViewportListener() {
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener("resize", this._boundHandleViewportResize);
+    }
+  }
+
+  _handleViewportResize() {
+    if (!this._initialViewportHeight) {
+      this._initialViewportHeight = window.visualViewport.height;
+    }
+
+    const currentHeight = window.visualViewport.height;
+    const heightDiff = this._initialViewportHeight - currentHeight;
+
+    // If viewport shrunk significantly (>150px), keyboard is probably visible
+    // If viewport is back to near original, keyboard is hidden
+    const keyboardThreshold = 150;
+    this.keyboardVisible = heightDiff > keyboardThreshold;
   }
 
   getMarkdownContent() {
@@ -786,49 +916,70 @@ export class NoteEditor extends LitElement {
 
     return html`
       <div class="editor-container">
-        <div class="editor-header">
-          <input
-            type="text"
-            class="title-input"
-            .value="${this.note.title || ""}"
-            placeholder="Note title..."
-            ?disabled="${this.loading}"
-          />
-
-          <div class="tags-section">
-            <label class="tags-label">Tags</label>
-            <div class="tags-container">
-              ${this.tags?.map((tag) => {
-                const isSelected = this.selectedTags.some((t) => t.id === tag.id);
-                return html`
-                  <div
-                    class="tag-chip ${isSelected ? "selected" : ""}"
-                    @click="${() => this.toggleTag(tag.id)}"
-                  >
-                    <span
-                      class="tag-color-dot"
-                      style="background-color: ${tag.color}"
-                    ></span>
-                    ${tag.name}
-                  </div>
-                `;
-              })}
+        ${this.headerCollapsed
+          ? html`
+            <div class="editor-header collapsed" @click="${this.toggleHeader}">
+              <span class="collapsed-title">${this.note.title || "Untitled"}</span>
+              <button class="header-toggle" title="Expand header">
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                  <path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+                </svg>
+              </button>
             </div>
-          </div>
-        </div>
+          `
+          : html`
+            <div class="editor-header">
+              <input
+                type="text"
+                class="title-input"
+                .value="${this.note.title || ""}"
+                placeholder="Note title..."
+                ?disabled="${this.loading}"
+                @focus="${this.handleInputFocus}"
+                @blur="${this.handleInputBlur}"
+              />
+
+              <div class="tags-section">
+                <div class="tags-container">
+                  ${this.tags?.map((tag) => {
+                    const isSelected = this.selectedTags.some((t) => t.id === tag.id);
+                    return html`
+                      <div
+                        class="tag-chip ${isSelected ? "selected" : ""}"
+                        @click="${() => this.toggleTag(tag.id)}"
+                      >
+                        <span
+                          class="tag-color-dot"
+                          style="background-color: ${tag.color}"
+                        ></span>
+                        ${tag.name}
+                      </div>
+                    `;
+                  })}
+                  <button class="collapse-btn" @click="${this.toggleHeader}" title="Collapse header">
+                    <svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
+                      <path fill-rule="evenodd" d="M7.646 4.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1-.708.708L8 5.707l-5.646 5.647a.5.5 0 0 1-.708-.708l6-6z"/>
+                    </svg>
+                    Collapse
+                  </button>
+                </div>
+              </div>
+            </div>
+          `
+        }
 
         <div class="editor-content">
           <div class="editor-toolbar">
             <div class="preview-toggle">
               <button
                 class="${!this.previewMode ? "active" : ""}"
-                @click="${() => this.previewMode = false}"
+                @click="${() => { this.previewMode = false; localStorage.setItem('notes-previewMode', 'false'); }}"
               >
                 Edit
               </button>
               <button
                 class="${this.previewMode ? "active" : ""}"
-                @click="${() => this.previewMode = true}"
+                @click="${() => { this.previewMode = true; localStorage.setItem('notes-previewMode', 'true'); }}"
               >
                 Preview
               </button>
@@ -847,12 +998,14 @@ export class NoteEditor extends LitElement {
                 .value="${this.note.content || ""}"
                 placeholder="Start writing your note (Markdown supported)..."
                 ?disabled="${this.loading}"
+                @focus="${this.handleInputFocus}"
+                @blur="${this.handleInputBlur}"
               ></textarea>
             `
           }
         </div>
 
-        <div class="editor-footer">
+        <div class="editor-footer ${this.keyboardVisible ? "hidden" : ""}">
           <div class="metadata">
             <div>
               ${this.note.updated_at

@@ -338,13 +338,15 @@ export class NoteList extends LitElement {
     this.notes = [];
     this.searchQuery = "";
     this.selectedTags = [];
-    this.viewType = "grid";
-    this.sortField = "modified";
-    this.sortDirection = "desc";
+    // Load preferences from localStorage
+    this.viewType = localStorage.getItem("notes-viewType") || "grid";
+    this.sortField = localStorage.getItem("notes-sortField") || "modified";
+    this.sortDirection = localStorage.getItem("notes-sortDirection") || "desc";
   }
 
   toggleView(type) {
     this.viewType = type;
+    localStorage.setItem("notes-viewType", type);
     this.requestUpdate();
   }
 
@@ -419,10 +421,12 @@ export class NoteList extends LitElement {
 
   handleSortFieldChange(e) {
     this.sortField = e.target.value;
+    localStorage.setItem("notes-sortField", this.sortField);
   }
 
   toggleSortDirection() {
     this.sortDirection = this.sortDirection === "asc" ? "desc" : "asc";
+    localStorage.setItem("notes-sortDirection", this.sortDirection);
   }
 
   renderEmptyState() {
