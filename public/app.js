@@ -223,28 +223,6 @@ window.NotesApp = {
     });
   },
 
-  // Backup API
-  async createBackup() {
-    return this.request("/backup/create", {
-      method: "POST",
-    });
-  },
-
-  async listBackups() {
-    return this.request("/backup/list");
-  },
-
-  async restoreBackup(backupPath, mergeMode = "merge") {
-    return this.request("/backup/restore", {
-      method: "POST",
-      body: { backup_path: backupPath, merge_mode: mergeMode },
-    });
-  },
-
-  async getBackupStatus() {
-    return this.request("/backup/status");
-  },
-
   // Logout
   async logout() {
     try {

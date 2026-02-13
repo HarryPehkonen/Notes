@@ -1,6 +1,6 @@
 /**
  * Notes Application - Main Server
- * Integrates PostgreSQL, Google OAuth, and Dropbox APIs
+ * Integrates PostgreSQL and Google OAuth
  */
 
 import { Application, Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
@@ -13,8 +13,6 @@ import { optionalAuth, redirectIfAuthenticated, requireAuth } from "./auth/middl
 import { createNotesRouter } from "./api/notes.js";
 import { createTagsRouter } from "./api/tags.js";
 import { createSearchRouter } from "./api/search.js";
-import { createBackupRouter } from "./api/backup.js";
-import { createBackupScheduler } from "./services/backup-scheduler.js";
 
 // Configuration
 const config = {
@@ -58,8 +56,6 @@ const authHandler = new GoogleAuthHandler(
   config.googleClientSecret,
   config.googleRedirectUri,
 );
-
-const backupScheduler = createBackupScheduler(db);
 
 // Initialize Oak application
 // proxy: true tells Oak to trust X-Forwarded-* headers from reverse proxy (Caddy)
@@ -399,7 +395,7 @@ router.get("/login", redirectIfAuthenticated, async (ctx) => {
 <body>
     <div class="login-card">
         <h1>※ Notes App</h1>
-        <p>Secure, searchable, synchronized notes with automatic Dropbox backup.</p>
+        <p>Secure, searchable notes with full-text search and offline support.</p>
         <a href="/auth/login" class="login-btn" id="loginBtn">Login with Google</a>
         <div class="feedback-message" id="feedbackMsg">Redirecting to Google...</div>
     </div>
@@ -420,12 +416,9 @@ router.get("/login", redirectIfAuthenticated, async (ctx) => {
 const notesRouter = createNotesRouter();
 const tagsRouter = createTagsRouter();
 const searchRouter = createSearchRouter();
-const backupRouter = createBackupRouter();
-
 router.use("/api/notes", requireAuth, notesRouter.routes(), notesRouter.allowedMethods());
 router.use("/api/tags", requireAuth, tagsRouter.routes(), tagsRouter.allowedMethods());
 router.use("/api/search", requireAuth, searchRouter.routes(), searchRouter.allowedMethods());
-router.use("/api/backup", requireAuth, backupRouter.routes(), backupRouter.allowedMethods());
 
 // Static file serving
 router.get("/static/:path*", async (ctx) => {
@@ -495,13 +488,9 @@ console.log(`→ Notes App server starting on http://${config.host}:${config.por
 console.log(`  Environment: ${Deno.env.get("NODE_ENV") || "development"}`);
 console.log(`   Database: ${Deno.env.get("DB_NAME")} on ${Deno.env.get("DB_HOST")}`);
 
-// Start backup scheduler
-backupScheduler.start();
-
 // Graceful shutdown
 const handleShutdown = async (signal) => {
   console.log(`\n  Received ${signal}, shutting down gracefully...`);
-  backupScheduler.stop();
   await db.close();
   Deno.exit(0);
 };

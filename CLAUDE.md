@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a notes application built with the **minimal web stack philosophy**: no build process, minimal dependencies, and direct browser execution. The app features secure OAuth authentication, full-text search, automatic Dropbox backups, and a mobile-first design.
+This is a notes application built with the **minimal web stack philosophy**: no build process, minimal dependencies, and direct browser execution. The app features secure OAuth authentication, full-text search, offline support, and a mobile-first design.
 
 **Key principle**: Code runs directly without compilation or bundling. Frontend JavaScript is served straight to the browser, and Deno executes backend code without transpilation.
 
@@ -67,7 +67,6 @@ psql -U notes_user -d notes_app
 - **Database**: PostgreSQL with full-text search (pg_trgm extension)
 - **Frontend**: Lit Web Components v3.1.0 (CDN imports, no npm)
 - **Authentication**: Google OAuth 2.0
-- **External Services**: Dropbox API for automatic backups
 - **Deployment**: Self-hosted with systemd + Caddy
 
 ### Core Principle: No Build Process
@@ -89,14 +88,10 @@ psql -U notes_user -d notes_app
 │   ├── database/
 │   │   ├── client.js        # PostgreSQL connection and query wrapper
 │   │   └── schema.sql       # Database schema (auto-applied on startup)
-│   ├── api/
-│   │   ├── notes.js         # CRUD endpoints for notes
-│   │   ├── tags.js          # Tag management endpoints
-│   │   ├── search.js        # Full-text search with PostgreSQL
-│   │   └── backup.js        # Dropbox backup/restore endpoints
-│   └── services/
-│       ├── dropbox.js       # Dropbox API wrapper
-│       └── backup-scheduler.js # Automatic scheduled backups
+│   └── api/
+│       ├── notes.js         # CRUD endpoints for notes
+│       ├── tags.js          # Tag management endpoints
+│       └── search.js        # Full-text search with PostgreSQL
 ├── public/
 │   ├── index.html           # Main app shell (served to authenticated users)
 │   ├── app.js               # Main application logic
@@ -160,7 +155,7 @@ Key events:
 PostgreSQL with the following key tables:
 
 - **users**: User profiles (email, name, picture from OAuth)
-- **auth_providers**: OAuth provider linkage (Google, GitHub, Dropbox)
+- **auth_providers**: OAuth provider linkage (Google, GitHub)
 - **notes**: Core notes table with `search_vector` (generated tsvector column for full-text search)
 - **tags**: User-specific tags with colors
 - **note_tags**: Many-to-many relationship between notes and tags
@@ -256,34 +251,6 @@ All filtering happens at the **database level** (not in-memory) for scalability.
 - Search results include highlighted snippets using `ts_headline()`
 - Supports combining with tag filters and status filters
 
-### Automatic Backups
-
-The backup system has two components:
-
-**1. Automatic Scheduled Backups** (`backup-scheduler.js`):
-
-- Runs independently using `setInterval()`
-- Default schedule: every 24 hours (configurable via `BACKUP_INTERVAL_HOURS`)
-- Initial backup runs 1 minute after server start
-- For each user:
-  - Exports all notes + tags to JSON format
-  - Uploads to Dropbox: `/notes-app-backups/user-{userId}/auto-backup-{timestamp}.json`
-  - Keeps only last 10 auto-backups per user (automatic cleanup)
-- Graceful shutdown on SIGINT/SIGTERM signals
-
-**2. Manual Backups** (via `/api/backup/*` endpoints):
-
-- On-demand backup creation
-- Custom backup naming
-- Restore from specific backup file
-- Merge or replace existing data
-
-Configuration:
-
-- `BACKUP_INTERVAL_HOURS`: Hours between automatic backups (default: 24)
-- `AUTO_BACKUP_ENABLED`: Enable/disable automatic backups (default: true)
-- `DROPBOX_ACCESS_TOKEN`: Required for backup functionality
-
 ## Environment Configuration
 
 Copy `.env.example` to `.env` and configure:
@@ -297,9 +264,6 @@ Copy `.env.example` to `.env` and configure:
 
 **Optional variables**:
 
-- `DROPBOX_ACCESS_TOKEN`: For backup functionality
-- `BACKUP_INTERVAL_HOURS`: Default 24
-- `AUTO_BACKUP_ENABLED`: Default true
 - `DEBUG_SQL`: Enable SQL query logging
 
 ## Common Development Tasks
@@ -493,14 +457,6 @@ PUT    /api/tags/:id          # Update tag color
 DELETE /api/tags/:id          # Soft delete tag
 ```
 
-### Backup Endpoints
-
-```http
-GET    /api/backup/status     # Get backup scheduler status
-POST   /api/backup/now        # Trigger manual backup for current user
-POST   /api/backup/restore    # Restore from backup file
-```
-
 ## Testing Strategy
 
 - **End-to-end tests**: Playwright tests in `tests/` directory
@@ -516,13 +472,11 @@ POST   /api/backup/restore    # Restore from backup file
 - **Caddy proxies API**: Requests to `/api/*` proxied to Deno backend on `localhost:8000`
 - **Database migrations**: Currently manual via `schema.sql` (no migration framework)
 - **HTTPS**: Caddy handles automatic HTTPS certificates via Let's Encrypt
-- **Backup scheduler**: Runs within main server process (no separate service needed)
 
 ## POC Directories
 
 The repository includes proof-of-concept directories in the `poc/` folder that were used during development:
 
-- `poc/dropbox-poc/`: Dropbox API integration testing
 - `poc/google-auth-poc/`: Google OAuth flow prototyping
 - `poc/postgres-poc/`: PostgreSQL full-text search experiments
 

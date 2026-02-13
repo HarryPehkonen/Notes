@@ -1,6 +1,6 @@
 # Notes Application
 
-A complete, production-ready notes application built with the minimal web stack philosophy. Features secure authentication, full-text search, automatic backups, and a mobile-first design.
+A complete, production-ready notes application built with the minimal web stack philosophy. Features secure authentication, full-text search, offline support, and a mobile-first design.
 
 ## ★ Features
 
@@ -11,7 +11,6 @@ A complete, production-ready notes application built with the minimal web stack 
 - ✓ **Full-Text Search** - PostgreSQL native search with ranking
 - ✓ **Tag System** - Organize notes with colored tags
 - ✓ **Version History** - Automatic versioning with restore capability
-- ✓ **Automatic Backups** - Scheduled Dropbox synchronization
 
 ### Technical Features
 
@@ -31,7 +30,6 @@ A complete, production-ready notes application built with the minimal web stack 
 - **Database**: PostgreSQL with full-text search
 - **Frontend**: Lit Web Components + Vanilla CSS
 - **Authentication**: Google OAuth 2.0
-- **Backup**: Dropbox API integration
 - **Deployment**: Self-hosted with systemd + Caddy
 
 ### Project Structure
@@ -45,14 +43,10 @@ A complete, production-ready notes application built with the minimal web stack 
 │   ├── database/
 │   │   ├── client.js        # PostgreSQL client wrapper
 │   │   └── schema.sql       # Database schema
-│   ├── api/
-│   │   ├── notes.js         # Notes CRUD endpoints
-│   │   ├── tags.js          # Tag management endpoints
-│   │   ├── search.js        # Search endpoints
-│   │   └── backup.js        # Backup/restore endpoints
-│   └── services/
-│       ├── dropbox.js       # Dropbox API wrapper
-│       └── backup-scheduler.js # Automatic backup service
+│   └── api/
+│       ├── notes.js         # Notes CRUD endpoints
+│       ├── tags.js          # Tag management endpoints
+│       └── search.js        # Search endpoints
 ├── public/
 │   ├── index.html           # Main app shell
 │   ├── components/
@@ -82,7 +76,6 @@ A complete, production-ready notes application built with the minimal web stack 
 - [Deno](https://deno.land/) 1.40+
 - [PostgreSQL](https://www.postgresql.org/) 12+
 - Google OAuth credentials
-- Dropbox API access token
 
 ### Installation
 
@@ -112,7 +105,6 @@ A complete, production-ready notes application built with the minimal web stack 
 
 4. **Get API credentials:**
    - **Google OAuth**: [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
-   - **Dropbox**: [Dropbox Developers](https://www.dropbox.com/developers/apps)
 
 5. **Start the application:**
    ```bash
@@ -144,15 +136,8 @@ GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your_client_secret
 GOOGLE_REDIRECT_URI=http://localhost:8000/auth/callback
 
-# Dropbox Configuration
-DROPBOX_ACCESS_TOKEN=your_dropbox_access_token
-
 # Session Configuration
 SESSION_SECRET=your_super_secret_session_key
-
-# Backup Configuration
-BACKUP_INTERVAL_HOURS=24
-AUTO_BACKUP_ENABLED=true
 ```
 
 ### Google OAuth Setup
@@ -163,17 +148,6 @@ AUTO_BACKUP_ENABLED=true
 4. Create OAuth 2.0 Client ID credentials
 5. Add authorized redirect URI: `http://localhost:8000/auth/callback`
 6. Copy Client ID and Client Secret to `.env`
-
-### Dropbox API Setup
-
-1. Go to [Dropbox Developers](https://www.dropbox.com/developers/apps)
-2. Create a new app with "Scoped access" and "Full Dropbox"
-3. Enable required permissions in the Permissions tab:
-   - `files.metadata.write`
-   - `files.content.write`
-   - `files.content.read`
-4. Generate an access token
-5. Copy token to `.env`
 
 ## Development
 
@@ -334,30 +308,6 @@ CREATE TABLE note_tags (
 - **Efficient Indexing**: GIN indexes for search, B-tree for queries
 - **Data Integrity**: Foreign key constraints and cascading deletes
 
-## Backup System
-
-### Automatic Backups
-
-- **Schedule**: Every 24 hours (configurable)
-- **Storage**: Dropbox `/notes-app-backups/` folder
-- **Format**: JSON with complete user data
-- **Retention**: Last 10 automatic backups per user
-- **Cleanup**: Automatic deletion of old backups
-
-### Manual Backups
-
-- **On-Demand**: Create backup via API or UI
-- **Custom Naming**: User-defined backup names
-- **Immediate**: No scheduling delays
-- **Download**: Direct download capability
-
-### Restore Process
-
-- **Selective**: Choose specific backup to restore
-- **Merge Modes**: Append or replace existing data
-- **Validation**: Backup format verification
-- **Rollback**: Database transaction protection
-
 ## API Documentation
 
 ### Authentication Endpoints
@@ -397,17 +347,6 @@ POST   /api/tags              # Create tag
 PUT    /api/tags/:id          # Update tag
 DELETE /api/tags/:id          # Delete tag
 GET    /api/tags/:id/notes    # Get notes with tag
-```
-
-### Backup Endpoints
-
-```http
-POST   /api/backup/create     # Create backup
-GET    /api/backup/list       # List backups
-GET    /api/backup/download   # Download backup
-POST   /api/backup/restore    # Restore backup
-DELETE /api/backup/:path      # Delete backup
-GET    /api/backup/status     # Backup status
 ```
 
 ## → Deployment
@@ -504,7 +443,7 @@ GET    /api/backup/status     # Backup status
 ### Production Considerations
 
 - **Security**: Use strong passwords and session secrets
-- **Backups**: Regular database backups beyond Dropbox
+- **Backups**: Regular database backups
 - **Monitoring**: Set up logs and health checks
 - **Updates**: Regular security patches and updates
 - **SSL**: HTTPS-only with secure headers
@@ -528,11 +467,6 @@ GET    /api/backup/status     # Backup status
    - Test full-text search
    - Verify search suggestions
    - Test tag filtering
-
-4. **Backup System:**
-   - Create manual backup
-   - Test restore functionality
-   - Verify automatic backups
 
 ### Unit Tests
 
@@ -586,12 +520,6 @@ sudo -u postgres psql -c "\du notes_user"
 - Verify redirect URI matches Google Console exactly
 - Check client ID and secret in environment
 - Ensure HTTPS in production (required by Google)
-
-#### Dropbox API Errors
-
-- Verify access token permissions
-- Check token expiration
-- Ensure proper scopes are enabled
 
 #### Performance Issues
 
@@ -647,7 +575,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Lit](https://lit.dev/) for efficient web components
 - [PostgreSQL](https://www.postgresql.org/) for powerful database features
 - [Google](https://developers.google.com/identity) for OAuth 2.0
-- [Dropbox](https://www.dropbox.com/developers) for API integration
 
 ## Support
 
