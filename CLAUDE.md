@@ -101,11 +101,13 @@ psql -U notes_user -d notes_app
 │   │   ├── note-list.js     # Notes listing with filtering
 │   │   ├── search-bar.js    # Search interface with live results
 │   │   └── tag-manager.js   # Tag CRUD and color management
+│   ├── utils/
+│   │   └── text.js          # HTML escaping and search highlighting
 │   ├── styles/
 │   │   └── app.css          # Mobile-first CSS (no frameworks)
 │   └── sw.js                # Service worker for PWA functionality
 ├── tests/
-│   └── *.spec.ts            # Playwright E2E tests
+│   └── deno/                # Deno unit tests for pure functions
 └── poc/                     # Proof-of-concept projects (not part of main app)
     ├── dropbox-poc/         # Dropbox API integration testing
     ├── google-auth-poc/     # Google OAuth flow prototyping
@@ -459,10 +461,9 @@ DELETE /api/tags/:id          # Soft delete tag
 
 ## Testing Strategy
 
-- **End-to-end tests**: Playwright tests in `tests/` directory
-- **API testing**: Use `curl` or Playwright's request context
+- **Unit tests**: Deno tests in `tests/deno/` for pure functions (text utils, SQL parser, markdown stripping, auth handler)
+- **API testing**: Use `curl` or test scripts
 - **Database testing**: Use separate test database (update `.env` when running tests)
-- No unit tests currently (minimal abstraction = less need for unit tests)
 
 ## Deployment Notes
 
@@ -496,7 +497,7 @@ These are **not part of the main application** and can be ignored for regular de
 
 ### Testing
 
-- `@playwright/test`: End-to-end browser testing (npm package)
+- `std@0.208.0/assert`: Deno standard library assertions (URL import)
 
 ## Mobile-First Design
 

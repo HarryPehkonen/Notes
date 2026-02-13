@@ -14,7 +14,7 @@ import "./components/search-bar.js";
 import "./components/tag-manager.js";
 
 // Global app state and utilities
-window.NotesApp = {
+globalThis.NotesApp = {
   // API base URL
   apiUrl: "/api",
 
@@ -62,7 +62,7 @@ window.NotesApp = {
 
       // Handle 401 Unauthorized - redirect to login
       if (response.status === 401) {
-        window.location.href = "/login";
+        globalThis.location.href = "/login";
         return;
       }
 
@@ -94,7 +94,7 @@ window.NotesApp = {
   },
 
   // Notes API
-  async getNotes(options = {}) {
+  getNotes(options = {}) {
     const params = new URLSearchParams();
     if (options.limit) params.set("limit", options.limit);
     if (options.offset) params.set("offset", options.offset);
@@ -108,18 +108,18 @@ window.NotesApp = {
     return this.request(endpoint);
   },
 
-  async getNote(id) {
+  getNote(id) {
     return this.request(`/notes/${id}`);
   },
 
-  async createNote(noteData) {
+  createNote(noteData) {
     return this.request("/notes", {
       method: "POST",
       body: noteData,
     });
   },
 
-  async updateNote(id, updates, options = {}) {
+  updateNote(id, updates, options = {}) {
     return this.request(`/notes/${id}`, {
       method: "PUT",
       body: updates,
@@ -131,7 +131,7 @@ window.NotesApp = {
    * Save a note through the sync manager (recommended for UI components)
    * This provides offline support, retry logic, and crash protection
    */
-  async saveNoteWithSync(id, updates, serverUpdatedAt = null) {
+  saveNoteWithSync(id, updates, serverUpdatedAt = null) {
     return syncManager.saveNote(id, updates, serverUpdatedAt);
   },
 
@@ -139,67 +139,100 @@ window.NotesApp = {
    * Wait for all pending syncs to complete
    * Use before navigation or closing the editor
    */
-  async waitForSync(timeout = 5000) {
+  waitForSync(timeout = 5000) {
     return syncManager.waitForSync(timeout);
   },
 
   /**
    * Get count of pending sync operations
    */
-  async getPendingSyncCount() {
+  getPendingSyncCount() {
     return syncManager.getPendingCount();
   },
 
   /**
    * Check if there are unsaved changes for a note
    */
-  async hasUnsavedChanges(noteId) {
+  hasUnsavedChanges(noteId) {
     return syncManager.hasUnsavedChanges(noteId);
   },
 
-  async deleteNote(id) {
+  deleteNote(id) {
     return this.request(`/notes/${id}`, {
       method: "DELETE",
     });
   },
 
-  async getNoteVersions(id) {
+  getNoteVersions(id) {
     return this.request(`/notes/${id}/versions`);
   },
 
-  async restoreNoteVersion(noteId, versionId) {
+  restoreNoteVersion(noteId, versionId) {
     return this.request(`/notes/${noteId}/restore/${versionId}`, {
       method: "POST",
     });
   },
 
   // Tags API
-  async getTags() {
+  getTags() {
     return this.request("/tags");
   },
 
-  async createTag(tagData) {
+  createTag(tagData) {
     return this.request("/tags", {
       method: "POST",
       body: tagData,
     });
   },
 
-  async updateTag(id, updates) {
+  updateTag(id, updates) {
     return this.request(`/tags/${id}`, {
       method: "PUT",
       body: updates,
     });
   },
 
-  async deleteTag(id) {
+  deleteTag(id) {
     return this.request(`/tags/${id}`, {
       method: "DELETE",
     });
   },
 
+  // Images API
+  async uploadImage(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(`${this.apiUrl}/images`, {
+      method: "POST",
+      body: formData,
+      credentials: "include",
+    });
+
+    if (response.status === 401) {
+      globalThis.location.href = "/login";
+      return;
+    }
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      const error = new Error(data.error || `HTTP ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
+
+    return data;
+  },
+
+  deleteImage(filename) {
+    return this.request(`/images/${filename}`, {
+      method: "DELETE",
+    });
+  },
+
   // Search API
-  async searchNotes(query, options = {}) {
+  searchNotes(query, options = {}) {
     const params = new URLSearchParams();
     params.set("q", query);
     if (options.limit) params.set("limit", options.limit);
@@ -208,7 +241,7 @@ window.NotesApp = {
     return this.request(`/search?${params.toString()}`);
   },
 
-  async getSearchSuggestions(query, limit = 10) {
+  getSearchSuggestions(query, limit = 10) {
     const params = new URLSearchParams();
     if (query) params.set("q", query);
     params.set("limit", limit);
@@ -216,7 +249,7 @@ window.NotesApp = {
     return this.request(`/search/suggestions?${params.toString()}`);
   },
 
-  async advancedSearch(criteria) {
+  advancedSearch(criteria) {
     return this.request("/search/advanced", {
       method: "POST",
       body: criteria,
@@ -227,11 +260,11 @@ window.NotesApp = {
   async logout() {
     try {
       await this.request("/auth/logout", { method: "POST" });
-      window.location.href = "/login";
+      globalThis.location.href = "/login";
     } catch (error) {
       console.error("Logout error:", error);
       // Force redirect even if logout fails
-      window.location.href = "/login";
+      globalThis.location.href = "/login";
     }
   },
 
@@ -312,12 +345,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // Set up global error handling
-  window.addEventListener("error", (event) => {
+  globalThis.addEventListener("error", (event) => {
     console.error("Global error:", event.error);
     NotesApp.showToast("An error occurred. Please try again.", "error");
   });
 
-  window.addEventListener("unhandledrejection", (event) => {
+  globalThis.addEventListener("unhandledrejection", (event) => {
     console.error("Unhandled promise rejection:", event.reason);
     NotesApp.showToast("An error occurred. Please try again.", "error");
     event.preventDefault();
@@ -371,4 +404,4 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 // Export for use in components
-export default window.NotesApp;
+export default globalThis.NotesApp;

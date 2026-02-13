@@ -298,10 +298,13 @@ export function createTagsRouter() {
       const tagName = tagCheck.rows[0].name;
 
       // Get notes with this tag
+      const cappedLimit = Math.min(parseInt(limit) || 20, 100);
+      const cappedOffset = Math.max(parseInt(offset) || 0, 0);
+
       const notes = await db.getNotes(user.id, {
         tags: [tagName],
-        limit: parseInt(limit),
-        offset: parseInt(offset),
+        limit: cappedLimit,
+        offset: cappedOffset,
       });
 
       ctx.response.body = {
@@ -313,9 +316,9 @@ export function createTagsRouter() {
           },
           notes: notes,
           meta: {
-            limit: parseInt(limit),
-            offset: parseInt(offset),
-            hasMore: notes.length === parseInt(limit),
+            limit: cappedLimit,
+            offset: cappedOffset,
+            hasMore: notes.length === cappedLimit,
           },
         },
       };

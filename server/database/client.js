@@ -3,7 +3,7 @@
  * Minimal wrapper around Deno's postgres driver
  */
 
-import { Client, Pool } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
+import { Pool } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 
 /**
  * @typedef {Object} User
@@ -36,6 +36,136 @@ import { Client, Pool } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
  * @property {string} name
  * @property {string} color
  */
+
+/**
+ * Strip markdown formatting for plain text search
+ * @param {string} markdown - Markdown text
+ * @returns {string} Plain text
+ */
+export function stripMarkdown(markdown) {
+  if (!markdown) return "";
+  return markdown
+    .replace(/#{1,6}\s/g, "") // Headers
+    .replace(/[*_~`]/g, "") // Formatting
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Links
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1") // Images
+    .replace(/```[\s\S]*?```/g, "") // Code blocks
+    .replace(/`[^`]+`/g, "") // Inline code
+    .replace(/^\s*[-*+]\s/gm, "") // Lists
+    .replace(/^\s*\d+\.\s/gm, "") // Numbered lists
+    .replace(/\n{2,}/g, "\n") // Multiple newlines
+    .trim();
+}
+
+/**
+ * Parse PostgreSQL statements with dollar-quote handling and proper execution ordering
+ * @param {string} sql - Raw SQL content
+ * @returns {string[]} Array of individual statements in proper execution order
+ */
+export function parsePostgreSQLStatements(sql) {
+  // Remove single-line comments (but preserve content)
+  const cleaned = sql.replace(/--.*$/gm, "");
+
+  // Split by semicolons, but handle dollar-quoted strings properly
+  const statements = [];
+  let current = "";
+  let inDollarQuote = false;
+  let dollarTag = "";
+
+  for (let i = 0; i < cleaned.length; i++) {
+    const char = cleaned[i];
+    const remaining = cleaned.substring(i);
+
+    // Check for dollar quote start/end
+    if (char === "$" && !inDollarQuote) {
+      const match = remaining.match(/^\$([^$]*)\$/);
+      if (match) {
+        inDollarQuote = true;
+        dollarTag = match[1];
+        current += match[0];
+        i += match[0].length - 1;
+        continue;
+      }
+    } else if (char === "$" && inDollarQuote) {
+      const expectedEnd = `$${dollarTag}$`;
+      if (remaining.startsWith(expectedEnd)) {
+        inDollarQuote = false;
+        dollarTag = "";
+        current += expectedEnd;
+        i += expectedEnd.length - 1;
+        continue;
+      }
+    }
+
+    // If we hit a semicolon and we're not in a dollar quote
+    if (char === ";" && !inDollarQuote) {
+      current += char;
+      const trimmed = current.trim();
+      if (trimmed && trimmed.match(/^(DROP|CREATE|ALTER|GRANT|DELETE|UPDATE)/i)) {
+        statements.push(trimmed);
+      }
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+
+  // Add final statement if exists
+  const trimmed = current.trim();
+  if (trimmed && trimmed.match(/^(DROP|CREATE|ALTER|GRANT|DELETE|UPDATE)/i)) {
+    statements.push(trimmed);
+  }
+
+  // Clean up statements - remove extra whitespace and comments
+  const cleanedStatements = statements
+    .map((stmt) => stmt.trim())
+    .filter((stmt) => stmt.length > 0 && !stmt.startsWith("/*"))
+    .filter((stmt) => !stmt.match(/^\s*\/\*/)); // Remove comment blocks
+
+  // Categorize statements by type
+  const drops = [];
+  const extensions = [];
+  const tables = [];
+  const indexes = [];
+  const triggers = [];
+  const functions = [];
+  const other = [];
+
+  for (const stmt of cleanedStatements) {
+    const upperStmt = stmt.toUpperCase().replace(/\s+/g, " ").trim();
+
+    if (upperStmt.startsWith("DROP")) {
+      drops.push(stmt);
+    } else if (upperStmt.startsWith("CREATE EXTENSION")) {
+      extensions.push(stmt);
+    } else if (upperStmt.startsWith("CREATE TABLE")) {
+      tables.push(stmt);
+    } else if (
+      upperStmt.startsWith("CREATE INDEX") || upperStmt.startsWith("CREATE UNIQUE INDEX")
+    ) {
+      indexes.push(stmt);
+    } else if (upperStmt.startsWith("CREATE TRIGGER")) {
+      triggers.push(stmt);
+    } else if (
+      upperStmt.includes("CREATE OR REPLACE FUNCTION") || upperStmt.includes("CREATE FUNCTION")
+    ) {
+      functions.push(stmt);
+    } else {
+      other.push(stmt);
+    }
+  }
+
+  // Return in proper execution order
+  return [
+    ...drops, // Drop existing objects first
+    ...extensions, // Create extensions
+    ...tables, // Create tables
+    ...functions, // Create functions
+    ...indexes, // Create indexes (after tables exist)
+    ...triggers, // Create triggers (after functions exist)
+    ...other, // Everything else
+  ];
+}
 
 /**
  * Database client with connection pooling
@@ -212,17 +342,18 @@ export class DatabaseClient {
         params.push(is_pinned);
       }
 
+      let note;
       if (updateFields.length > 0) {
         params.push(noteId);
         const result = await tx.query(
           `UPDATE notes SET ${updateFields.join(", ")} WHERE id = $${paramIndex} RETURNING *`,
           params,
         );
-        var note = result.rows[0];
+        note = result.rows[0];
       } else {
         // No fields to update, just get the note
         const result = await tx.query(`SELECT * FROM notes WHERE id = $1`, [noteId]);
-        var note = result.rows[0];
+        note = result.rows[0];
       }
 
       // Update tags if provided
@@ -494,8 +625,6 @@ export class DatabaseClient {
     const schema = await Deno.readTextFile(schemaPath);
     const statements = this.parsePostgreSQLStatements(schema);
 
-    console.log(`\nExecuting ${statements.length} SQL statements in order...\n`);
-
     for (const statement of statements) {
       if (statement.trim()) {
         try {
@@ -509,135 +638,11 @@ export class DatabaseClient {
   }
 
   /**
-   * Parse PostgreSQL statements using simplified regex approach with dollar-quote handling
+   * Parse PostgreSQL statements - delegates to standalone function
    * @private
-   * @param {string} sql - Raw SQL content
-   * @returns {string[]} Array of individual statements in proper execution order
    */
   parsePostgreSQLStatements(sql) {
-    // Remove single-line comments (but preserve content)
-    const cleaned = sql.replace(/--.*$/gm, "");
-
-    // Split by semicolons, but handle dollar-quoted strings properly
-    const statements = [];
-    let current = "";
-    let inDollarQuote = false;
-    let dollarTag = "";
-
-    for (let i = 0; i < cleaned.length; i++) {
-      const char = cleaned[i];
-      const remaining = cleaned.substring(i);
-
-      // Check for dollar quote start/end
-      if (char === "$" && !inDollarQuote) {
-        const match = remaining.match(/^\$([^$]*)\$/);
-        if (match) {
-          inDollarQuote = true;
-          dollarTag = match[1];
-          current += match[0];
-          i += match[0].length - 1;
-          continue;
-        }
-      } else if (char === "$" && inDollarQuote) {
-        const expectedEnd = `$${dollarTag}$`;
-        if (remaining.startsWith(expectedEnd)) {
-          inDollarQuote = false;
-          dollarTag = "";
-          current += expectedEnd;
-          i += expectedEnd.length - 1;
-          continue;
-        }
-      }
-
-      // If we hit a semicolon and we're not in a dollar quote
-      if (char === ";" && !inDollarQuote) {
-        current += char;
-        const trimmed = current.trim();
-        if (trimmed && trimmed.match(/^(DROP|CREATE|ALTER|GRANT|DELETE|UPDATE)/i)) {
-          statements.push(trimmed);
-        }
-        current = "";
-      } else {
-        current += char;
-      }
-    }
-
-    // Add final statement if exists
-    const trimmed = current.trim();
-    if (trimmed && trimmed.match(/^(DROP|CREATE|ALTER|GRANT|DELETE|UPDATE)/i)) {
-      statements.push(trimmed);
-    }
-
-    // Clean up statements - remove extra whitespace and comments
-    const cleanedStatements = statements
-      .map((stmt) => stmt.trim())
-      .filter((stmt) => stmt.length > 0 && !stmt.startsWith("/*"))
-      .filter((stmt) => !stmt.match(/^\s*\/\*/)); // Remove comment blocks
-
-    console.log(`\n= Raw parsed statements (first 10):`);
-    for (let i = 0; i < Math.min(10, cleanedStatements.length); i++) {
-      const stmt = cleanedStatements[i];
-      const lines = stmt.split("\n").length;
-      const preview = stmt.substring(0, 100).replace(/\s+/g, " ");
-      console.log(`  ${i + 1}. [${lines} lines] ${preview}${stmt.length > 100 ? "..." : ""}`);
-    }
-
-    // Categorize statements by type
-    const drops = [];
-    const extensions = [];
-    const tables = [];
-    const indexes = [];
-    const triggers = [];
-    const functions = [];
-    const other = [];
-
-    console.log(`\n= Categorizing ${cleanedStatements.length} statements:`);
-    for (const stmt of cleanedStatements) {
-      const upperStmt = stmt.toUpperCase().replace(/\s+/g, " ").trim();
-      const preview = stmt.substring(0, 50).replace(/\s+/g, " ");
-
-      if (upperStmt.startsWith("DROP")) {
-        drops.push(stmt);
-        console.log(`  DROP: ${preview}...`);
-      } else if (upperStmt.startsWith("CREATE EXTENSION")) {
-        extensions.push(stmt);
-        console.log(`  EXTENSION: ${preview}...`);
-      } else if (upperStmt.startsWith("CREATE TABLE")) {
-        tables.push(stmt);
-        console.log(`  TABLE: ${preview}...`);
-      } else if (
-        upperStmt.startsWith("CREATE INDEX") || upperStmt.startsWith("CREATE UNIQUE INDEX")
-      ) {
-        indexes.push(stmt);
-        console.log(`  INDEX: ${preview}...`);
-      } else if (upperStmt.startsWith("CREATE TRIGGER")) {
-        triggers.push(stmt);
-        console.log(`  TRIGGER: ${preview}...`);
-      } else if (
-        upperStmt.includes("CREATE OR REPLACE FUNCTION") || upperStmt.includes("CREATE FUNCTION")
-      ) {
-        functions.push(stmt);
-        console.log(`  FUNCTION: ${preview}...`);
-      } else {
-        other.push(stmt);
-        console.log(`  OTHER: ${preview}...`);
-      }
-    }
-
-    console.log(
-      `\n Statement counts: DROP=${drops.length}, EXT=${extensions.length}, TABLE=${tables.length}, INDEX=${indexes.length}, TRIGGER=${triggers.length}, FUNC=${functions.length}, OTHER=${other.length}\n`,
-    );
-
-    // Return in proper execution order
-    return [
-      ...drops, // Drop existing objects first
-      ...extensions, // Create extensions
-      ...tables, // Create tables
-      ...functions, // Create functions
-      ...indexes, // Create indexes (after tables exist)
-      ...triggers, // Create triggers (after functions exist)
-      ...other, // Everything else
-    ];
+    return parsePostgreSQLStatements(sql);
   }
 
   // Helper Methods
@@ -669,22 +674,11 @@ export class DatabaseClient {
   }
 
   /**
-   * Strip markdown for plain text search
+   * Strip markdown - delegates to standalone function
    * @private
    */
   stripMarkdown(markdown) {
-    if (!markdown) return "";
-    return markdown
-      .replace(/#{1,6}\s/g, "") // Headers
-      .replace(/[*_~`]/g, "") // Formatting
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Links
-      .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1") // Images
-      .replace(/```[\s\S]*?```/g, "") // Code blocks
-      .replace(/`[^`]+`/g, "") // Inline code
-      .replace(/^\s*[-*+]\s/gm, "") // Lists
-      .replace(/^\s*\d+\.\s/gm, "") // Numbered lists
-      .replace(/\n{2,}/g, "\n") // Multiple newlines
-      .trim();
+    return stripMarkdown(markdown);
   }
 
   /**

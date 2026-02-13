@@ -2,7 +2,7 @@
  * Service Worker for Notes App
  */
 
-const CACHE_NAME = "notes-app-v18";
+const CACHE_NAME = "notes-app-v24";
 const urlsToCache = [
   "/",
   "/static/app.js",
@@ -12,6 +12,7 @@ const urlsToCache = [
   "/static/components/note-list.js",
   "/static/components/search-bar.js",
   "/static/components/tag-manager.js",
+  "/static/utils/text.js",
   "/static/services/persistence.js",
   "/static/services/sync-manager.js",
 ];
@@ -39,10 +40,36 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  const url = new URL(event.request.url);
+
+  // Never cache API, auth, or health routes - always go to network
+  if (
+    url.pathname.startsWith("/api/") ||
+    url.pathname.startsWith("/auth/") ||
+    url.pathname === "/health"
+  ) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // For the root path, use network-first to ensure fresh auth state
+  if (url.pathname === "/") {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          return response;
+        })
+        .catch(() => caches.match(event.request)),
+    );
+    return;
+  }
+
+  // For static assets, use cache-first strategy
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
-        // Return cached version or fetch from network
         return response || fetch(event.request);
       }),
   );

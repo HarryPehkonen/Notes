@@ -3,7 +3,7 @@
  */
 
 // Import fake-indexeddb to polyfill IndexedDB
-import "npm:fake-indexeddb/auto";
+import "npm:fake-indexeddb@6.0.0/auto";
 
 // Mock navigator.onLine
 Object.defineProperty(globalThis, "navigator", {
@@ -80,7 +80,7 @@ const documentListeners = new Map<string, Array<(e: Event) => void>>();
 
 // Mock NotesApp
 (globalThis as unknown as { NotesApp: Record<string, unknown> }).NotesApp = {
-  updateNote: async () => ({ data: { id: 1, title: "Test", content: "Test content" } }),
+  updateNote: () => Promise.resolve({ data: { id: 1, title: "Test", content: "Test content" } }),
 };
 
 export { documentListeners, globalListeners };

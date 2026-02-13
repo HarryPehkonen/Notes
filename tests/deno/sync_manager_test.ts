@@ -32,14 +32,15 @@ async function resetState() {
 
   // Reset mock NotesApp
   g.NotesApp = {
-    updateNote: async () => ({
-      data: {
-        id: 1,
-        title: "Saved",
-        content: "Saved content",
-        updated_at: new Date().toISOString(),
-      },
-    }),
+    updateNote: () =>
+      Promise.resolve({
+        data: {
+          id: 1,
+          title: "Saved",
+          content: "Saved content",
+          updated_at: new Date().toISOString(),
+        },
+      }),
   };
 }
 
@@ -117,9 +118,9 @@ Deno.test({
     await syncManager.init();
 
     let called = false;
-    g.NotesApp.updateNote = async () => {
+    g.NotesApp.updateNote = () => {
       called = true;
-      return { data: { id: "456" } };
+      return Promise.resolve({ data: { id: "456" } });
     };
 
     await syncManager.saveNote("456", { title: "Test", content: "Content", tags: [] });

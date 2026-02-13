@@ -6,6 +6,7 @@
 import { css, html, LitElement } from "lit";
 import { unsafeHTML } from "https://cdn.jsdelivr.net/npm/lit@3.1.0/directives/unsafe-html.js/+esm";
 import { marked } from "marked";
+import DOMPurify from "dompurify";
 
 // Configure marked for safe rendering
 marked.use({
@@ -26,6 +27,7 @@ export class NoteEditor extends LitElement {
     headerCollapsed: { type: Boolean },
     isInputFocused: { type: Boolean },
     keyboardVisible: { type: Boolean },
+    uploadingImage: { type: Boolean },
   };
 
   static styles = css`
@@ -325,6 +327,8 @@ export class NoteEditor extends LitElement {
     .editor-toolbar {
       display: flex;
       justify-content: flex-end;
+      align-items: center;
+      gap: 0.5rem;
       margin-bottom: 0.5rem;
     }
 
@@ -354,6 +358,44 @@ export class NoteEditor extends LitElement {
       background: white;
       color: var(--primary);
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    .toolbar-btn {
+      padding: 0.375rem 0.75rem;
+      border: 1px solid var(--gray-300);
+      background: white;
+      border-radius: 0.375rem;
+      font-size: 0.875rem;
+      cursor: pointer;
+      color: var(--gray-600);
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+    }
+
+    .toolbar-btn:hover:not(:disabled) {
+      background: var(--gray-50);
+      border-color: var(--gray-400);
+      color: var(--gray-800);
+    }
+
+    .toolbar-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .toolbar-btn.uploading {
+      color: var(--info);
+    }
+
+    .toolbar-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .hidden-file-input {
+      display: none;
     }
 
     .markdown-preview {
@@ -515,6 +557,8 @@ export class NoteEditor extends LitElement {
     this.headerCollapsed = localStorage.getItem("notes-headerCollapsed") !== "false";
     this.isInputFocused = false;
     this.keyboardVisible = false;
+    this.uploadingImage = false;
+    this._isSaving = false; // Non-reactive guard against concurrent saves
     this._boundHandleViewportResize = this._handleViewportResize.bind(this);
     this._initialViewportHeight = null;
 
@@ -526,6 +570,7 @@ export class NoteEditor extends LitElement {
     this._boundHandleSyncFailed = this._handleSyncFailed.bind(this);
     this._boundHandleSyncPending = this._handleSyncPending.bind(this);
     this._boundHandleDraftSaved = this._handleDraftSaved.bind(this);
+    this._boundHandlePaste = this._handlePaste.bind(this);
   }
 
   connectedCallback() {
@@ -537,6 +582,7 @@ export class NoteEditor extends LitElement {
     this._setupSyncListeners();
     this._checkForDraft();
     this._setupViewportListener();
+    this._setupPasteListener();
   }
 
   disconnectedCallback() {
@@ -544,6 +590,7 @@ export class NoteEditor extends LitElement {
     this.clearAutoSaveTimer();
     this._removeSyncListeners();
     this._removeViewportListener();
+    this._removePasteListener();
   }
 
   /**
@@ -602,10 +649,10 @@ export class NoteEditor extends LitElement {
    * Check for recovered draft on load
    */
   async _checkForDraft() {
-    if (!this.note || !window.NotesApp.syncManager) return;
+    if (!this.note || !globalThis.NotesApp.syncManager) return;
 
     try {
-      const draft = await window.NotesApp.syncManager.getDraft(this.note.id);
+      const draft = await globalThis.NotesApp.syncManager.getDraft(this.note.id);
       if (draft && draft.updatedAt > new Date(this.note.updated_at).getTime()) {
         // Draft is newer than server version - offer recovery
         this._offerDraftRecovery(draft);
@@ -635,10 +682,20 @@ export class NoteEditor extends LitElement {
 
   updated(changedProperties) {
     if (changedProperties.has("note") && this.note) {
-      this.selectedTags = this.note.tags || [];
-      this.originalNote = this.deepCopy(this.note);
-      this.saveStatus = "saved";
-      this.hasUnsavedChanges = false;
+      const prevNote = changedProperties.get("note");
+      const isSameNote = prevNote && prevNote.id === this.note.id;
+
+      if (isSameNote) {
+        // Same note updated (e.g. after auto-save) — update tracking
+        // without resetting editor state or disrupting focus
+        this.originalNote = this.deepCopy(this.note);
+      } else {
+        // Switching to a different note — full reset
+        this.selectedTags = this.note.tags || [];
+        this.originalNote = this.deepCopy(this.note);
+        this.saveStatus = "saved";
+        this.hasUnsavedChanges = false;
+      }
     }
   }
 
@@ -701,9 +758,9 @@ export class NoteEditor extends LitElement {
     const titleInput = this.shadowRoot.querySelector(".title-input");
     const contentTextarea = this.shadowRoot.querySelector(".content-textarea");
 
-    if (!titleInput || !contentTextarea) return false;
+    if (!contentTextarea) return false;
 
-    const currentTitle = titleInput.value.trim();
+    const currentTitle = titleInput ? titleInput.value.trim() : this.note.title;
     const currentContent = contentTextarea.value;
     const currentTagIds = this.selectedTags.map((t) => t.id).sort();
     const originalTagIds = (this.originalNote.tags || []).map((t) => t.id).sort();
@@ -714,15 +771,15 @@ export class NoteEditor extends LitElement {
   }
 
   async autoSave() {
-    if (!this.note || this.loading || !this.hasUnsavedChanges) return;
+    if (!this.note || this._isSaving || !this.hasUnsavedChanges) return;
 
     const titleInput = this.shadowRoot.querySelector(".title-input");
     const contentTextarea = this.shadowRoot.querySelector(".content-textarea");
 
-    if (!titleInput || !contentTextarea) return;
+    if (!contentTextarea) return;
 
     const updates = {
-      title: titleInput.value.trim(),
+      title: titleInput ? titleInput.value.trim() : this.note.title,
       content: contentTextarea.value,
       tags: this.selectedTags.filter((t) => t && t.id).map((t) => t.id),
     };
@@ -733,11 +790,11 @@ export class NoteEditor extends LitElement {
     }
 
     this.saveStatus = "saving";
-    this.loading = true;
+    this._isSaving = true;
 
     try {
       // Use sync manager for reliable saves with offline support
-      const result = await window.NotesApp.saveNoteWithSync(
+      const result = await globalThis.NotesApp.saveNoteWithSync(
         this.note.id,
         updates,
         this.note.updated_at,
@@ -772,7 +829,7 @@ export class NoteEditor extends LitElement {
     } catch (error) {
       console.error("Failed to auto-save note:", error);
       // Don't show error toast if data is safe locally
-      if (await window.NotesApp.hasUnsavedChanges(this.note.id)) {
+      if (await globalThis.NotesApp.hasUnsavedChanges(this.note.id)) {
         this.saveStatus = "pending";
         this.hasUnsavedChanges = false;
         this.showToast("Changes saved locally, will sync when online", "warning");
@@ -781,7 +838,7 @@ export class NoteEditor extends LitElement {
         this.saveStatus = "error";
       }
     } finally {
-      this.loading = false;
+      this._isSaving = false;
     }
   }
 
@@ -795,8 +852,8 @@ export class NoteEditor extends LitElement {
     this.clearAutoSaveTimer();
 
     // Wait for sync to complete (with timeout)
-    if (this.note && window.NotesApp.waitForSync) {
-      const syncResult = await window.NotesApp.waitForSync(3000);
+    if (this.note && globalThis.NotesApp.waitForSync) {
+      const syncResult = await globalThis.NotesApp.waitForSync(3000);
       if (!syncResult.success && syncResult.pending > 0) {
         // Data is safe locally, user can proceed
         this.showToast("Changes saved locally", "info");
@@ -863,30 +920,146 @@ export class NoteEditor extends LitElement {
   }
 
   _setupViewportListener() {
-    if (window.visualViewport) {
-      this._initialViewportHeight = window.visualViewport.height;
-      window.visualViewport.addEventListener("resize", this._boundHandleViewportResize);
+    if (globalThis.visualViewport) {
+      this._initialViewportHeight = globalThis.visualViewport.height;
+      globalThis.visualViewport.addEventListener("resize", this._boundHandleViewportResize);
     }
   }
 
   _removeViewportListener() {
-    if (window.visualViewport) {
-      window.visualViewport.removeEventListener("resize", this._boundHandleViewportResize);
+    if (globalThis.visualViewport) {
+      globalThis.visualViewport.removeEventListener("resize", this._boundHandleViewportResize);
     }
   }
 
   _handleViewportResize() {
     if (!this._initialViewportHeight) {
-      this._initialViewportHeight = window.visualViewport.height;
+      this._initialViewportHeight = globalThis.visualViewport.height;
     }
 
-    const currentHeight = window.visualViewport.height;
+    const currentHeight = globalThis.visualViewport.height;
     const heightDiff = this._initialViewportHeight - currentHeight;
 
     // If viewport shrunk significantly (>150px), keyboard is probably visible
     // If viewport is back to near original, keyboard is hidden
     const keyboardThreshold = 150;
     this.keyboardVisible = heightDiff > keyboardThreshold;
+  }
+
+  _setupPasteListener() {
+    this.addEventListener("paste", this._boundHandlePaste);
+  }
+
+  _removePasteListener() {
+    this.removeEventListener("paste", this._boundHandlePaste);
+  }
+
+  /**
+   * Handle paste events to detect image content
+   */
+  async _handlePaste(event) {
+    // Only handle paste in edit mode
+    if (this.previewMode) return;
+
+    const items = event.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        event.preventDefault();
+        const file = item.getAsFile();
+        if (file) {
+          await this._uploadImage(file);
+        }
+        return;
+      }
+    }
+  }
+
+  /**
+   * Trigger file input click
+   */
+  _triggerFileInput() {
+    const fileInput = this.shadowRoot?.querySelector(".hidden-file-input");
+    fileInput?.click();
+  }
+
+  /**
+   * Handle file input change
+   */
+  async _handleFileInputChange(event) {
+    const file = event.target.files?.[0];
+    if (file) {
+      await this._uploadImage(file);
+    }
+    // Reset the input so the same file can be selected again
+    event.target.value = "";
+  }
+
+  /**
+   * Upload an image and insert markdown at cursor
+   */
+  async _uploadImage(file) {
+    if (this.uploadingImage) return;
+
+    // Validate file type client-side
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"];
+    if (!allowedTypes.includes(file.type)) {
+      this.showToast("Invalid file type. Allowed: JPEG, PNG, GIF, WebP, SVG", "error");
+      return;
+    }
+
+    // Validate file size (5MB)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      this.showToast("File too large. Maximum size is 5MB", "error");
+      return;
+    }
+
+    this.uploadingImage = true;
+
+    try {
+      const result = await globalThis.NotesApp.uploadImage(file);
+
+      if (result.success) {
+        const markdown = `![${result.data.originalName || "image"}](${result.data.url})`;
+        this._insertTextAtCursor(markdown);
+        this.markAsChanged();
+        this.showToast("Image uploaded", "success");
+      } else {
+        throw new Error(result.error || "Upload failed");
+      }
+    } catch (error) {
+      console.error("Image upload failed:", error);
+      this.showToast(error.message || "Failed to upload image", "error");
+    } finally {
+      this.uploadingImage = false;
+    }
+  }
+
+  /**
+   * Insert text at the current cursor position in the textarea
+   */
+  _insertTextAtCursor(text) {
+    const textarea = this.shadowRoot?.querySelector(".content-textarea");
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const value = textarea.value;
+
+    // Insert the text at cursor position
+    textarea.value = value.substring(0, start) + text + value.substring(end);
+
+    // Move cursor to after inserted text
+    const newCursorPos = start + text.length;
+    textarea.setSelectionRange(newCursorPos, newCursorPos);
+
+    // Focus the textarea
+    textarea.focus();
+
+    // Trigger input event to mark as changed
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
   getMarkdownContent() {
@@ -900,7 +1073,7 @@ export class NoteEditor extends LitElement {
       return "<p class=\"empty-preview\">Nothing to preview. Start writing in Edit mode.</p>";
     }
     try {
-      return marked.parse(content);
+      return DOMPurify.sanitize(marked.parse(content));
     } catch (error) {
       console.error("Markdown parsing error:", error);
       return `<p>Error rendering markdown</p>`;
@@ -970,6 +1143,24 @@ export class NoteEditor extends LitElement {
 
         <div class="editor-content">
           <div class="editor-toolbar">
+            <input
+              type="file"
+              class="hidden-file-input"
+              accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
+              @change="${this._handleFileInputChange}"
+            />
+            <button
+              class="toolbar-btn ${this.uploadingImage ? "uploading" : ""}"
+              @click="${this._triggerFileInput}"
+              ?disabled="${this.uploadingImage || this.previewMode}"
+              title="Upload image (or paste from clipboard)"
+            >
+              <svg viewBox="0 0 16 16" fill="currentColor">
+                <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                <path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/>
+              </svg>
+              ${this.uploadingImage ? "Uploading..." : "Image"}
+            </button>
             <div class="preview-toggle">
               <button
                 class="${!this.previewMode ? "active" : ""}"

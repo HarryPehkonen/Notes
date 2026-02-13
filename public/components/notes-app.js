@@ -478,7 +478,7 @@ class NotesApp extends LitElement {
     this.syncStatus = "idle";
 
     // Get user info from global context (set by server)
-    this.user = window.user || null;
+    this.user = globalThis.user || null;
 
     // Store bound handlers for proper cleanup
     this._boundHandleBeforeUnload = this._handleBeforeUnload.bind(this);
@@ -508,11 +508,11 @@ class NotesApp extends LitElement {
    * Set up navigation guards to prevent data loss
    */
   _setupNavigationGuards() {
-    window.addEventListener("beforeunload", this._boundHandleBeforeUnload);
+    globalThis.addEventListener("beforeunload", this._boundHandleBeforeUnload);
   }
 
   _removeNavigationGuards() {
-    window.removeEventListener("beforeunload", this._boundHandleBeforeUnload);
+    globalThis.removeEventListener("beforeunload", this._boundHandleBeforeUnload);
   }
 
   /**
@@ -520,8 +520,8 @@ class NotesApp extends LitElement {
    */
   async _handleBeforeUnload(event) {
     // Check if there are pending syncs
-    if (window.NotesApp && window.NotesApp.getPendingSyncCount) {
-      const pendingCount = await window.NotesApp.getPendingSyncCount();
+    if (globalThis.NotesApp && globalThis.NotesApp.getPendingSyncCount) {
+      const pendingCount = await globalThis.NotesApp.getPendingSyncCount();
       if (pendingCount > 0) {
         event.preventDefault();
         event.returnValue =
@@ -590,8 +590,8 @@ class NotesApp extends LitElement {
   }
 
   async _updatePendingCount() {
-    if (window.NotesApp && window.NotesApp.getPendingSyncCount) {
-      this.pendingSyncCount = await window.NotesApp.getPendingSyncCount();
+    if (globalThis.NotesApp && globalThis.NotesApp.getPendingSyncCount) {
+      this.pendingSyncCount = await globalThis.NotesApp.getPendingSyncCount();
       if (this.pendingSyncCount === 0) {
         this.syncStatus = "idle";
       }
@@ -605,8 +605,8 @@ class NotesApp extends LitElement {
       await this.waitForNotesApp();
 
       const [notesResult, tagsResult] = await Promise.all([
-        window.NotesApp.getNotes(),
-        window.NotesApp.getTags(),
+        globalThis.NotesApp.getNotes(),
+        globalThis.NotesApp.getTags(),
       ]);
 
       this.notes = notesResult.data || [];
@@ -621,7 +621,7 @@ class NotesApp extends LitElement {
 
   async loadTags() {
     try {
-      const result = await window.NotesApp.getTags();
+      const result = await globalThis.NotesApp.getTags();
       this.tags = result.data || [];
     } catch (error) {
       console.error("Failed to load tags:", error);
@@ -629,7 +629,7 @@ class NotesApp extends LitElement {
   }
 
   async waitForNotesApp() {
-    while (!window.NotesApp || !window.NotesApp.getNotes) {
+    while (!globalThis.NotesApp || !globalThis.NotesApp.getNotes) {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
   }
@@ -758,7 +758,7 @@ class NotesApp extends LitElement {
         tags: [],
       };
 
-      const result = await window.NotesApp.createNote(newNote);
+      const result = await globalThis.NotesApp.createNote(newNote);
       this.dispatchEvent(
         new CustomEvent("note-created", {
           detail: { note: result.data },
@@ -770,7 +770,7 @@ class NotesApp extends LitElement {
     }
   }
 
-  async performSearch() {
+  performSearch() {
     if (!this.searchQuery.trim()) {
       // If no search query, filter by tags only (or show all)
       this.filterNotes();
@@ -807,7 +807,7 @@ class NotesApp extends LitElement {
 
       if (hasSearchQuery && hasTagFilter) {
         // Both search and tags - use advanced search (expects tag names)
-        const result = await window.NotesApp.advancedSearch({
+        const result = await globalThis.NotesApp.advancedSearch({
           query: this.searchQuery,
           tags: this.selectedTags.map((tag) => tag.name),
         });
@@ -815,7 +815,7 @@ class NotesApp extends LitElement {
         this.viewMode = "search";
       } else if (hasSearchQuery) {
         // Just search query
-        const result = await window.NotesApp.searchNotes(this.searchQuery);
+        const result = await globalThis.NotesApp.searchNotes(this.searchQuery);
         this.notes = result.data?.results || [];
         this.viewMode = "search";
       } else {
@@ -826,7 +826,7 @@ class NotesApp extends LitElement {
         }
         console.log("  Filtering with options:", options);
 
-        const result = await window.NotesApp.getNotes(options);
+        const result = await globalThis.NotesApp.getNotes(options);
         console.log("  Filter result:", result);
         this.notes = result.data || [];
         this.viewMode = "list";
@@ -900,14 +900,14 @@ class NotesApp extends LitElement {
     this.loadInitialData();
 
     // Close sidebar on mobile
-    if (window.innerWidth <= 768) {
+    if (globalThis.innerWidth <= 768) {
       this.sidebarOpen = false;
     }
   }
 
   async logout() {
     try {
-      await window.NotesApp.logout();
+      await globalThis.NotesApp.logout();
     } catch (error) {
       console.error("Logout failed:", error);
       this.showToast("Logout failed", "error");

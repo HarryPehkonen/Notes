@@ -1,11 +1,12 @@
 {
   "version": "5",
   "specifiers": {
-    "npm:fake-indexeddb@*": "6.2.5"
+    "npm:fake-indexeddb@*": "6.0.0",
+    "npm:fake-indexeddb@6.0.0": "6.0.0"
   },
   "npm": {
-    "fake-indexeddb@6.2.5": {
-      "integrity": "sha512-CGnyrvbhPlWYMngksqrSSUT1BAVP49dZocrHuK0SvtR0D5TMs5wP0o3j7jexDJW01KSadjBp1M/71o/KR3nD1w=="
+    "fake-indexeddb@6.0.0": {
+      "integrity": "sha512-YEboHE5VfopUclOck7LncgIqskAqnv4q0EWbYCaxKKjAvO93c+TJIaBuGy8CBFdbg9nKdpN3AuPRwVBJ4k7NrQ=="
     }
   },
   "remote": {

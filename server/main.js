@@ -13,12 +13,13 @@ import { optionalAuth, redirectIfAuthenticated, requireAuth } from "./auth/middl
 import { createNotesRouter } from "./api/notes.js";
 import { createTagsRouter } from "./api/tags.js";
 import { createSearchRouter } from "./api/search.js";
+import { createImagesRouter } from "./api/images.js";
 
 // Configuration
 const config = {
   port: parseInt(Deno.env.get("PORT") || "8000"),
   host: Deno.env.get("HOST") || "localhost",
-  sessionSecret: Deno.env.get("SESSION_SECRET") || "your-super-secret-session-key",
+  sessionSecret: Deno.env.get("SESSION_SECRET"),
   googleClientId: Deno.env.get("GOOGLE_CLIENT_ID"),
   googleClientSecret: Deno.env.get("GOOGLE_CLIENT_SECRET"),
   googleRedirectUri: Deno.env.get("GOOGLE_REDIRECT_URI"),
@@ -26,6 +27,7 @@ const config = {
 
 // Validate required environment variables
 const requiredEnvVars = [
+  "SESSION_SECRET",
   "GOOGLE_CLIENT_ID",
   "GOOGLE_CLIENT_SECRET",
   "GOOGLE_REDIRECT_URI",
@@ -159,9 +161,8 @@ app.use(async (ctx, next) => {
 // Dev/staging auth bypass - auto-login as specified user
 // Useful for LAN testing where OAuth redirect URIs don't work
 // Usage: DEV_USER_EMAIL=your@email.com deno task staging
-// WARNING: Never use in production!
 const devUserEmail = Deno.env.get("DEV_USER_EMAIL");
-if (devUserEmail) {
+if (devUserEmail && !isProduction) {
   console.log(`⚠ DEV_USER_EMAIL set - auto-authenticating as ${devUserEmail}`);
   app.use(async (ctx, next) => {
     const existingUser = await ctx.state.session.get("user");
@@ -204,7 +205,11 @@ router.get("/auth/login", redirectIfAuthenticated, async (ctx) => {
   const ip = getClientIp(ctx);
   if (!rateLimit(ctx, `auth:${ip}`)) return;
 
-  const authUrl = authHandler.getAuthorizationUrl();
+  // Generate CSRF state token and store in session
+  const state = crypto.randomUUID();
+  await ctx.state.session.set("oauth_state", state);
+
+  const authUrl = authHandler.getAuthorizationUrl(state);
   ctx.response.redirect(authUrl);
 });
 
@@ -214,6 +219,7 @@ router.get("/auth/callback", async (ctx) => {
 
   const code = ctx.request.url.searchParams.get("code");
   const error = ctx.request.url.searchParams.get("error");
+  const state = ctx.request.url.searchParams.get("state");
 
   if (error) {
     ctx.response.status = 400;
@@ -224,6 +230,15 @@ router.get("/auth/callback", async (ctx) => {
   if (!code) {
     ctx.response.status = 400;
     ctx.response.body = { error: "Missing authorization code" };
+    return;
+  }
+
+  // Validate CSRF state token
+  const expectedState = await ctx.state.session.get("oauth_state");
+  await ctx.state.session.set("oauth_state", null);
+  if (!state || state !== expectedState) {
+    ctx.response.status = 400;
+    ctx.response.body = { error: "Invalid OAuth state - possible CSRF attack" };
     return;
   }
 
@@ -280,7 +295,7 @@ router.get("/", optionalAuth, async (ctx) => {
   ctx.response.body = await Deno.readTextFile("./public/index.html");
 });
 
-router.get("/login", redirectIfAuthenticated, async (ctx) => {
+router.get("/login", redirectIfAuthenticated, (ctx) => {
   ctx.response.type = "text/html";
   ctx.response.body = `
 <!DOCTYPE html>
@@ -416,15 +431,26 @@ router.get("/login", redirectIfAuthenticated, async (ctx) => {
 const notesRouter = createNotesRouter();
 const tagsRouter = createTagsRouter();
 const searchRouter = createSearchRouter();
+const imagesRouter = createImagesRouter();
 router.use("/api/notes", requireAuth, notesRouter.routes(), notesRouter.allowedMethods());
 router.use("/api/tags", requireAuth, tagsRouter.routes(), tagsRouter.allowedMethods());
 router.use("/api/search", requireAuth, searchRouter.routes(), searchRouter.allowedMethods());
+router.use("/api/images", requireAuth, imagesRouter.routes(), imagesRouter.allowedMethods());
 
 // Static file serving
 router.get("/static/:path*", async (ctx) => {
   const filePath = ctx.params.path;
   try {
-    const file = await Deno.readFile(`./public/${filePath}`);
+    // Resolve to absolute path and verify it stays within ./public/
+    const publicDir = await Deno.realPath("./public");
+    const requestedPath = await Deno.realPath(`./public/${filePath}`);
+    if (!requestedPath.startsWith(publicDir + "/") && requestedPath !== publicDir) {
+      ctx.response.status = 403;
+      ctx.response.body = "Forbidden";
+      return;
+    }
+
+    const file = await Deno.readFile(requestedPath);
 
     // Set content type based on extension
     const ext = filePath.split(".").pop()?.toLowerCase();
@@ -444,7 +470,13 @@ router.get("/static/:path*", async (ctx) => {
     // Cache for 1 hour in development, 1 day in production
     const maxAge = Deno.env.get("ENVIRONMENT") === "production" ? 86400 : 3600;
     ctx.response.headers.set("Cache-Control", `public, max-age=${maxAge}`);
-    ctx.response.headers.set("ETag", `"${file.length}-${Date.now()}"`);
+
+    // ETag based on file size + content hash for stable cache validation
+    const hashBuffer = await crypto.subtle.digest("SHA-1", file);
+    const hashHex = Array.from(new Uint8Array(hashBuffer)).map((b) =>
+      b.toString(16).padStart(2, "0")
+    ).join("");
+    ctx.response.headers.set("ETag", `"${hashHex}"`);
 
     // Set longer cache for assets that rarely change
     if (ext === "svg" || ext === "png" || ext === "jpg" || filePath.includes("favicon")) {
@@ -452,7 +484,7 @@ router.get("/static/:path*", async (ctx) => {
     }
 
     ctx.response.body = file;
-  } catch (error) {
+  } catch (_error) {
     ctx.response.status = 404;
     ctx.response.body = "File not found";
   }

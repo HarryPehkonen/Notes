@@ -77,6 +77,18 @@ CREATE TABLE IF NOT EXISTS note_versions (
     created_by INTEGER REFERENCES users(id)
 );
 
+-- Images table for uploaded images
+CREATE TABLE IF NOT EXISTS images (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    filename VARCHAR(255) NOT NULL,
+    original_name VARCHAR(500),
+    mime_type VARCHAR(100) NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, filename)
+);
+
 -- Indexes (IF NOT EXISTS for safety)
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_auth_providers_user ON auth_providers(user_id);
@@ -89,6 +101,7 @@ CREATE INDEX IF NOT EXISTS idx_tags_user ON tags(user_id);
 CREATE INDEX IF NOT EXISTS idx_note_tags_note ON note_tags(note_id);
 CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_note_versions_note ON note_versions(note_id);
+CREATE INDEX IF NOT EXISTS idx_images_user ON images(user_id);
 
 -- Functions and triggers (use CREATE OR REPLACE for safety)
 CREATE OR REPLACE FUNCTION update_updated_at_column()

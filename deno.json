@@ -7,7 +7,8 @@
   "lint": {
     "rules": {
       "tags": ["recommended"]
-    }
+    },
+    "exclude": ["poc/"]
   },
   "fmt": {
     "useTabs": false,

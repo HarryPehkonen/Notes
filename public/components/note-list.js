@@ -2,6 +2,8 @@
  * Note List Component
  */
 import { css, html, LitElement } from "lit";
+import { unsafeHTML } from "https://cdn.jsdelivr.net/npm/lit@3.1.0/directives/unsafe-html.js/+esm";
+import { highlightText } from "../utils/text.js";
 
 export class NoteList extends LitElement {
   static properties = {
@@ -360,12 +362,6 @@ export class NoteList extends LitElement {
     );
   }
 
-  highlightText(text, query) {
-    if (!query || !text) return text;
-
-    const regex = new RegExp(`(${query})`, "gi");
-    return text.replace(regex, '<span class="highlight">$1</span>');
-  }
 
   formatDate(dateString) {
     if (!dateString) return "";
@@ -391,7 +387,7 @@ export class NoteList extends LitElement {
   }
 
   getFilteredNotes() {
-    let filtered = [...this.notes];
+    const filtered = [...this.notes];
 
     // Sort based on current sort settings
     filtered.sort((a, b) => {
@@ -462,16 +458,12 @@ export class NoteList extends LitElement {
           <div class="note-main">
             <div class="note-title">
               ${note.is_pinned ? "  " : ""}${this.searchQuery
-                ? html`
-                  <span .innerHTML="${this.highlightText(note.title, this.searchQuery)}"></span>
-                `
+                ? unsafeHTML(highlightText(note.title, this.searchQuery))
                 : note.title}
             </div>
             <div class="note-content">
               ${this.searchQuery
-                ? html`
-                  <span .innerHTML="${this.highlightText(note.content, this.searchQuery)}"></span>
-                `
+                ? unsafeHTML(highlightText(note.content, this.searchQuery))
                 : note.content}
             </div>
           </div>
@@ -514,17 +506,13 @@ export class NoteList extends LitElement {
 
         <div class="note-title">
           ${this.searchQuery
-            ? html`
-              <span .innerHTML="${this.highlightText(note.title, this.searchQuery)}"></span>
-            `
+            ? unsafeHTML(highlightText(note.title, this.searchQuery))
             : note.title}
         </div>
 
         <div class="note-content">
           ${this.searchQuery
-            ? html`
-              <span .innerHTML="${this.highlightText(note.content, this.searchQuery)}"></span>
-            `
+            ? unsafeHTML(highlightText(note.content, this.searchQuery))
             : note.content}
         </div>
 

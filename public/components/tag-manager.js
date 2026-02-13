@@ -304,7 +304,7 @@ export class TagManager extends LitElement {
       let savedTag;
       if (this.editingTag) {
         // Update existing tag
-        const result = await window.NotesApp.updateTag(this.editingTag.id, { name, color });
+        const result = await globalThis.NotesApp.updateTag(this.editingTag.id, { name, color });
         savedTag = result.data;
 
         this.dispatchEvent(
@@ -316,7 +316,7 @@ export class TagManager extends LitElement {
         );
       } else {
         // Create new tag
-        const result = await window.NotesApp.createTag({ name, color });
+        const result = await globalThis.NotesApp.createTag({ name, color });
         savedTag = result.data;
 
         this.dispatchEvent(
@@ -329,7 +329,7 @@ export class TagManager extends LitElement {
       }
 
       // Refresh tags
-      const result = await window.NotesApp.getTags();
+      const result = await globalThis.NotesApp.getTags();
       this.tags = result.data || [];
 
       // Reset form
@@ -346,7 +346,7 @@ export class TagManager extends LitElement {
     if (!confirm(`Delete tag "${tag.name}"?`)) return;
 
     try {
-      await window.NotesApp.deleteTag(tag.id);
+      await globalThis.NotesApp.deleteTag(tag.id);
 
       // Dispatch tag-deleted event
       this.dispatchEvent(
@@ -358,7 +358,7 @@ export class TagManager extends LitElement {
       );
 
       // Refresh tags
-      const result = await window.NotesApp.getTags();
+      const result = await globalThis.NotesApp.getTags();
       this.tags = result.data || [];
 
       // Remove from selection if it was selected

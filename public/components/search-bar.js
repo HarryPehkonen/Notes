@@ -274,14 +274,14 @@ export class SearchBar extends LitElement {
     }
   }
 
-  async performSearch(query) {
+  performSearch(query) {
     this.dispatchSearchEvent(query);
     this.loading = false;
   }
 
   async loadSuggestions(query) {
     try {
-      const result = await window.NotesApp.getSearchSuggestions(query, 8);
+      const result = await globalThis.NotesApp.getSearchSuggestions(query, 8);
       if (result && result.data && result.data.suggestions) {
         this.suggestions = result.data.suggestions;
         this.showSuggestions = this.suggestions.length > 0;
@@ -341,7 +341,7 @@ export class SearchBar extends LitElement {
     }
   }
 
-  handleBlur(e) {
+  handleBlur(_e) {
     this._isFocused = false;
     // Delay hiding to allow click on suggestion
     setTimeout(() => {

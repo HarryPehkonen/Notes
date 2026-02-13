@@ -23,8 +23,8 @@ export function createNotesRouter() {
 
     try {
       const options = {
-        limit: parseInt(limit),
-        offset: parseInt(offset),
+        limit: Math.min(parseInt(limit) || 20, 100),
+        offset: Math.max(parseInt(offset) || 0, 0),
       };
 
       if (tags) {
@@ -134,6 +134,24 @@ export function createNotesRouter() {
         ctx.response.body = {
           success: false,
           error: "Title and content are required",
+        };
+        return;
+      }
+
+      if (title.length > 500) {
+        ctx.response.status = 400;
+        ctx.response.body = {
+          success: false,
+          error: "Title must be 500 characters or less",
+        };
+        return;
+      }
+
+      if (content.length > 1_000_000) {
+        ctx.response.status = 400;
+        ctx.response.body = {
+          success: false,
+          error: "Content must be 1MB or less",
         };
         return;
       }
