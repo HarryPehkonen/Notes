@@ -37,7 +37,7 @@ export function createNotesRouter() {
         options.search = search;
       }
 
-      if (pinned !== null) {
+      if (pinned === "true" || pinned === "false") {
         options.pinned = pinned === "true";
       }
 
@@ -90,7 +90,7 @@ export function createNotesRouter() {
                             WHERE nt.note_id = n.id
                         ) as tags
                  FROM notes n
-                 WHERE n.id = $1 AND n.user_id = $2 AND NOT n.is_archived`,
+                 WHERE n.id = $1 AND n.user_id = $2`,
         [noteId, user.id],
       );
 
