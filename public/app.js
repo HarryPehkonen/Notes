@@ -344,15 +344,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.error("Failed to initialize sync manager:", error);
   }
 
-  // Set up global error handling
+  // Set up global error handling (log only — specific handlers show their own toasts)
   globalThis.addEventListener("error", (event) => {
     console.error("Global error:", event.error);
-    NotesApp.showToast("An error occurred. Please try again.", "error");
   });
 
   globalThis.addEventListener("unhandledrejection", (event) => {
     console.error("Unhandled promise rejection:", event.reason);
-    NotesApp.showToast("An error occurred. Please try again.", "error");
     event.preventDefault();
   });
 
