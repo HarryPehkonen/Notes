@@ -558,6 +558,7 @@ export class NoteEditor extends LitElement {
     this.isInputFocused = false;
     this.keyboardVisible = false;
     this.uploadingImage = false;
+    this._editingContent = null; // Track textarea content across preview toggles
     this._isSaving = false; // Non-reactive guard against concurrent saves
     this._boundHandleViewportResize = this._handleViewportResize.bind(this);
     this._initialViewportHeight = null;
@@ -691,6 +692,7 @@ export class NoteEditor extends LitElement {
         this.originalNote = this.deepCopy(this.note);
       } else {
         // Switching to a different note — full reset
+        this._editingContent = null;
         this.selectedTags = this.note.tags || [];
         this.originalNote = this.deepCopy(this.note);
         this.saveStatus = "saved";
@@ -722,7 +724,10 @@ export class NoteEditor extends LitElement {
     this.addEventListener("change", this._boundHandleChange);
   }
 
-  handleInputChange() {
+  handleInputChange(e) {
+    if (e?.target?.classList?.contains("content-textarea")) {
+      this._editingContent = e.target.value;
+    }
     this.markAsChanged();
   }
 
@@ -776,11 +781,12 @@ export class NoteEditor extends LitElement {
     const titleInput = this.shadowRoot.querySelector(".title-input");
     const contentTextarea = this.shadowRoot.querySelector(".content-textarea");
 
-    if (!contentTextarea) return;
+    const content = contentTextarea?.value ?? this._editingContent;
+    if (content === null || content === undefined) return;
 
     const updates = {
       title: titleInput ? titleInput.value.trim() : this.note.title,
-      content: contentTextarea.value,
+      content: content,
       tags: this.selectedTags.filter((t) => t && t.id).map((t) => t.id),
     };
 
@@ -888,8 +894,15 @@ export class NoteEditor extends LitElement {
     });
   }
 
-  togglePreviewMode() {
-    this.previewMode = !this.previewMode;
+  togglePreviewMode(toPreview) {
+    // Capture textarea content before it gets destroyed by the re-render
+    if (toPreview) {
+      const textarea = this.shadowRoot?.querySelector(".content-textarea");
+      if (textarea) {
+        this._editingContent = textarea.value;
+      }
+    }
+    this.previewMode = toPreview;
     localStorage.setItem("notes-previewMode", this.previewMode);
   }
 
@@ -1064,8 +1077,7 @@ export class NoteEditor extends LitElement {
 
   getMarkdownContent() {
     const contentTextarea = this.shadowRoot?.querySelector(".content-textarea");
-    const content = contentTextarea?.value || this.note?.content || "";
-    return content;
+    return contentTextarea?.value ?? this._editingContent ?? this.note?.content ?? "";
   }
 
   renderMarkdown(content) {
@@ -1164,13 +1176,13 @@ export class NoteEditor extends LitElement {
             <div class="preview-toggle">
               <button
                 class="${!this.previewMode ? "active" : ""}"
-                @click="${() => { this.previewMode = false; localStorage.setItem('notes-previewMode', 'false'); }}"
+                @click="${() => this.togglePreviewMode(false)}"
               >
                 Edit
               </button>
               <button
                 class="${this.previewMode ? "active" : ""}"
-                @click="${() => { this.previewMode = true; localStorage.setItem('notes-previewMode', 'true'); }}"
+                @click="${() => this.togglePreviewMode(true)}"
               >
                 Preview
               </button>
@@ -1186,7 +1198,7 @@ export class NoteEditor extends LitElement {
             : html`
               <textarea
                 class="content-textarea"
-                .value="${this.note.content || ""}"
+                .value="${this._editingContent ?? this.note.content ?? ""}"
                 placeholder="Start writing your note (Markdown supported)..."
                 ?disabled="${this.loading}"
                 @focus="${this.handleInputFocus}"
