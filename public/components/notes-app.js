@@ -1013,6 +1013,7 @@ class NotesApp extends LitElement {
               <tag-manager
                 .tags="${this.tags}"
                 .selectedTags="${this.selectedTags}"
+                .offline="${this.syncStatus === "offline"}"
               ></tag-manager>
             </div>
           </div>
