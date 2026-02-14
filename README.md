@@ -190,9 +190,7 @@ deno task fmt
 
 ### Database Management
 
-The server uses two schema files:
-- **`schema-init.sql`** - Production-safe, uses `IF NOT EXISTS` (default)
-- **`schema.sql`** - Development reset, drops all tables first
+The server uses a single schema file (`schema.sql`) with `IF NOT EXISTS` for idempotent execution.
 
 ```bash
 # Normal startup (preserves data)

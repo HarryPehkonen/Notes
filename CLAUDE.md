@@ -38,9 +38,8 @@ deno task test
 
 ### Database Operations
 
-The server uses two schema files:
-- **`schema-init.sql`** - Production-safe with `IF NOT EXISTS` (default)
-- **`schema.sql`** - Development reset, drops all tables
+The server uses a single schema file:
+- **`schema.sql`** - Production-safe with `IF NOT EXISTS` (idempotent)
 
 ```bash
 # Normal startup (preserves data)

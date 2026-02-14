@@ -10,8 +10,6 @@ export function createNotesRouter() {
 
   // GET /api/notes - Get all notes for the authenticated user
   router.get("/", async (ctx) => {
-    console.log("router get /");
-    console.log(ctx.request.url);
     const { user, db } = ctx.state;
 
     // Properly extract parameters from URLSearchParams
@@ -30,7 +28,6 @@ export function createNotesRouter() {
 
       if (tags) {
         options.tags = tags.split(",").map((tag) => parseInt(tag.trim()));
-        console.log("API: Parsed tag IDs:", options.tags);
       }
 
       if (search) {

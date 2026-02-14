@@ -181,9 +181,11 @@ export class GoogleAuthHandler {
         throw new Error("Invalid JWT format");
       }
 
-      // Decode base64url payload
+      // Decode base64url payload (handle UTF-8 via TextDecoder)
       const payload = parts[1];
-      const decoded = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+      const binary = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+      const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+      const decoded = new TextDecoder().decode(bytes);
       return JSON.parse(decoded);
     } catch (error) {
       console.error("Failed to decode ID token:", error);

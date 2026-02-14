@@ -630,8 +630,7 @@ DELETE /api/images/:filename
 │   │   └── middleware.js        # requireAuth, optionalAuth, redirectIfAuthenticated
 │   ├── database/
 │   │   ├── client.js            # PostgreSQL connection pool + query wrapper
-│   │   ├── schema.sql           # Development reset schema (drops tables)
-│   │   └── schema-init.sql      # Production-safe schema (IF NOT EXISTS)
+│   │   └── schema.sql            # Database schema (IF NOT EXISTS, idempotent)
 │   └── api/
 │       ├── notes.js             # Notes CRUD + versions + restore
 │       ├── tags.js              # Tags CRUD + notes-by-tag

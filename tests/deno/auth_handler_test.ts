@@ -37,6 +37,19 @@ Deno.test("decodeIdToken: returns null for non-JSON payload", () => {
   assertEquals(result, null);
 });
 
+Deno.test("decodeIdToken: handles UTF-8 characters in payload", () => {
+  const payload = { sub: "456", name: "José García", email: "jose@example.com" };
+  // Encode with TextEncoder to handle UTF-8 properly
+  const bytes = new TextEncoder().encode(JSON.stringify(payload));
+  const binary = String.fromCharCode(...bytes);
+  const encoded = btoa(binary);
+  const fakeJwt = `header.${encoded}.signature`;
+
+  const result = handler.decodeIdToken(fakeJwt);
+  assertEquals(result.name, "José García");
+  assertEquals(result.email, "jose@example.com");
+});
+
 Deno.test("decodeIdToken: handles base64url encoding (- and _ chars)", () => {
   const payload = { url: "https://example.com/path?q=1&r=2" };
   // Create base64url encoded string

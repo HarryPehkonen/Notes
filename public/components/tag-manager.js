@@ -9,7 +9,6 @@ export class TagManager extends LitElement {
     selectedTags: { type: Array },
     showCreateForm: { type: Boolean },
     editingTag: { type: Object },
-    onTagsSelected: { type: Function },
   };
 
   static styles = css`
@@ -246,7 +245,6 @@ export class TagManager extends LitElement {
   }
 
   toggleTag(tag) {
-    console.log("  SIMPLE - toggleTag called with tag:", tag);
     const index = this.selectedTags.findIndex((t) => t.id === tag.id);
     let newSelection;
 
@@ -256,23 +254,25 @@ export class TagManager extends LitElement {
       newSelection = this.selectedTags.filter((t) => t.id !== tag.id);
     }
 
-    console.log("  SIMPLE - New tag selection:", newSelection);
     this.selectedTags = newSelection;
-
-    // Use direct callback instead of events
-    if (this.onTagsSelected) {
-      console.log("  SIMPLE - Calling onTagsSelected callback");
-      this.onTagsSelected(newSelection);
-    } else {
-      console.log("  SIMPLE - No onTagsSelected callback found");
-    }
+    this.dispatchEvent(
+      new CustomEvent("tags-selected", {
+        detail: { tags: newSelection },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   clearSelection() {
     this.selectedTags = [];
-    if (this.onTagsSelected) {
-      this.onTagsSelected([]);
-    }
+    this.dispatchEvent(
+      new CustomEvent("tags-selected", {
+        detail: { tags: [] },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   showCreateTagForm() {

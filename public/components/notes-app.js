@@ -703,12 +703,10 @@ class NotesApp extends LitElement {
     });
 
     this.addEventListener("tags-selected", async (event) => {
-      console.log("  notes-app received tags-selected event:", event.detail);
       this.selectedTags = event.detail.tags;
 
       // When tags are selected, switch to list view to show filtered results
       if (this.selectedTags.length > 0) {
-        console.log("  Switching to list view for filtering");
         // Save any pending changes before switching views
         if (this.viewMode === "edit" && this.currentNote) {
           const editor = this.shadowRoot.querySelector("note-editor");
@@ -721,7 +719,6 @@ class NotesApp extends LitElement {
         this.currentNote = null;
       }
 
-      console.log("  Calling filterNotes");
       this.filterNotes();
     });
 
@@ -781,25 +778,8 @@ class NotesApp extends LitElement {
     this.filterNotes();
   }
 
-  async handleTagsSelected(tags) {
-    console.log("  DIRECT CALLBACK - handleTagsSelected called with:", tags);
-    this.selectedTags = tags || [];
-
-    // Save any unsaved changes before switching views
-    if (this.currentView === "editor" && this.editorRef && this.editorRef.hasUnsavedChanges) {
-      console.log("  Auto-saving editor before filtering");
-      await this.editorRef.autoSave();
-    }
-
-    // Switch to notes view and filter
-    this.currentView = "notes";
-    console.log("  Switched view to notes, calling filterNotes");
-    await this.filterNotes();
-  }
-
   async filterNotes() {
     try {
-      console.log("  filterNotes called with selectedTags:", this.selectedTags, "searchQuery:", this.searchQuery);
       this.loading = true;
 
       const hasSearchQuery = this.searchQuery && this.searchQuery.trim();
@@ -824,14 +804,10 @@ class NotesApp extends LitElement {
         if (hasTagFilter) {
           options.tags = this.selectedTags.map((tag) => tag.id);
         }
-        console.log("  Filtering with options:", options);
-
         const result = await globalThis.NotesApp.getNotes(options);
-        console.log("  Filter result:", result);
         this.notes = result.data?.notes || [];
         this.viewMode = "list";
       }
-      console.log("  Updated notes:", this.notes);
       this.requestUpdate(); // Force re-render
     } catch (error) {
       console.error("Failed to filter notes:", error);
@@ -1037,7 +1013,6 @@ class NotesApp extends LitElement {
               <tag-manager
                 .tags="${this.tags}"
                 .selectedTags="${this.selectedTags}"
-                .onTagsSelected="${(tags) => this.handleTagsSelected(tags)}"
               ></tag-manager>
             </div>
           </div>
