@@ -2,12 +2,14 @@
 
 A complete, production-ready notes application built with the minimal web stack philosophy. Features secure authentication, full-text search, offline support, and a mobile-first design.
 
+> For a detailed specification of all features, screens, data model, and API contracts, see [REQUIREMENTS.md](REQUIREMENTS.md).
+
 ## ★ Features
 
 ### Core Functionality
 
 - ✓ **Secure Authentication** - Google OAuth 2.0, no local passwords
-- ✓ **Rich Note Editor** - Markdown support with live preview
+- ✓ **Rich Note Editor** - Markdown editing with Edit/Preview toggle
 - ✓ **Full-Text Search** - PostgreSQL native search with ranking
 - ✓ **Tag System** - Organize notes with colored tags
 - ✓ **Version History** - Automatic versioning with restore capability
@@ -20,6 +22,10 @@ A complete, production-ready notes application built with the minimal web stack 
 - ✓ **Offline Support** - IndexedDB persistence with automatic sync when online
 - ✓ **Crash Recovery** - Local drafts protect against browser crashes and network failures
 - ✓ **No Build Process** - Direct browser execution with ES modules
+- ✓ **Image Uploads** - Paste or pick images, validated with magic bytes
+- ✓ **Grid/List Views** - Switchable layout with sorting options
+- ✓ **Keyboard Shortcuts** - Ctrl+K search, Ctrl+N new note, Escape to close
+- ✓ **Sync Status** - Visual indicator for syncing, pending, offline, and error states
 - ✓ **Minimal Dependencies** - Clean, maintainable codebase
 
 ## Architecture
@@ -46,7 +52,8 @@ A complete, production-ready notes application built with the minimal web stack 
 │   └── api/
 │       ├── notes.js         # Notes CRUD endpoints
 │       ├── tags.js          # Tag management endpoints
-│       └── search.js        # Search endpoints
+│       ├── search.js        # Search endpoints
+│       └── images.js        # Image upload, serve, delete
 ├── public/
 │   ├── index.html           # Main app shell
 │   ├── components/
@@ -58,6 +65,8 @@ A complete, production-ready notes application built with the minimal web stack 
 │   ├── services/
 │   │   ├── persistence.js   # IndexedDB offline storage
 │   │   └── sync-manager.js  # Sync coordinator with retry
+│   ├── utils/
+│   │   └── text.js          # HTML escaping and search highlighting
 │   ├── styles/
 │   │   └── app.css          # Mobile-first CSS
 │   └── app.js               # Main application logic
@@ -241,10 +250,17 @@ The application is built mobile-first with:
 
 ### API Security
 
-- Authentication required for all endpoints
-- Input validation and sanitization
-- Rate limiting and error handling
+- Authentication required for all API endpoints
+- Input validation and sanitization (title 500 chars, content 1MB, image 5MB)
+- Rate limiting on auth endpoints (10 req/min per IP)
 - CORS configuration for browser safety
+
+### File Upload Security
+
+- Magic byte validation (JPEG, PNG, GIF, WebP, SVG verified against declared MIME type)
+- Path traversal prevention on static file serving (absolute path resolution + prefix check)
+- SVG Content Security Policy (`script-src 'none'`) prevents script execution
+- ETag caching with SHA-1 content hash for cache validation
 
 ## Database Schema
 
@@ -301,6 +317,21 @@ CREATE TABLE note_tags (
 );
 ```
 
+#### Images
+
+```sql
+CREATE TABLE images (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    filename VARCHAR(255) NOT NULL,
+    original_name VARCHAR(500),
+    mime_type VARCHAR(100) NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, filename)
+);
+```
+
 ### Key Features
 
 - **Full-Text Search**: Automatic search vector generation
@@ -348,6 +379,16 @@ PUT    /api/tags/:id          # Update tag
 DELETE /api/tags/:id          # Delete tag
 GET    /api/tags/:id/notes    # Get notes with tag
 ```
+
+### Images Endpoints
+
+```http
+POST   /api/images            # Upload image (multipart/form-data, max 5MB)
+GET    /api/images/:filename  # Serve image (immutable cache, SVG CSP)
+DELETE /api/images/:filename  # Delete image (file + DB record)
+```
+
+Supported types: JPEG, PNG, GIF, WebP, SVG. Server validates magic bytes against declared MIME type.
 
 ## → Deployment
 
@@ -477,6 +518,10 @@ deno task test
 
 Tests cover:
 
+- **Text utilities** - HTML escaping and search term highlighting
+- **Markdown stripping** - Plain text extraction from Markdown
+- **SQL parser** - Schema statement categorization and ordering
+- **Auth handler** - OAuth URL generation and token exchange
 - **Persistence layer** - IndexedDB operations for drafts and pending operations
 - **Sync manager** - Save flow, offline queueing, retry logic, event emission
 

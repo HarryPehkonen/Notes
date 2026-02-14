@@ -302,7 +302,7 @@ export function createTagsRouter() {
       const cappedOffset = Math.max(parseInt(offset) || 0, 0);
 
       const notes = await db.getNotes(user.id, {
-        tags: [tagName],
+        tags: [tagId],
         limit: cappedLimit,
         offset: cappedOffset,
       });
@@ -315,11 +315,11 @@ export function createTagsRouter() {
             name: tagName,
           },
           notes: notes,
-          meta: {
-            limit: cappedLimit,
-            offset: cappedOffset,
-            hasMore: notes.length === cappedLimit,
-          },
+        },
+        meta: {
+          limit: cappedLimit,
+          offset: cappedOffset,
+          hasMore: notes.length === cappedLimit,
         },
       };
     } catch (error) {

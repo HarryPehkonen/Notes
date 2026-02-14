@@ -319,7 +319,7 @@ export class DatabaseClient {
    * @returns {Promise<Note>}
    */
   async updateNote(noteId, updates) {
-    const { title, content, tags, is_pinned } = updates;
+    const { title, content, tags, is_pinned, is_archived } = updates;
 
     return await this.transaction(async (tx) => {
       // Build dynamic update query
@@ -340,6 +340,10 @@ export class DatabaseClient {
       if (is_pinned !== undefined) {
         updateFields.push(`is_pinned = $${paramIndex++}`);
         params.push(is_pinned);
+      }
+      if (is_archived !== undefined) {
+        updateFields.push(`is_archived = $${paramIndex++}`);
+        params.push(is_archived);
       }
 
       let note;
@@ -395,7 +399,7 @@ export class DatabaseClient {
    * @returns {Promise<Note[]>}
    */
   async getNotes(userId, options = {}) {
-    const { limit = 20, offset = 0, tags, search, pinned } = options;
+    const { limit = 20, offset = 0, tags, search, pinned, archived } = options;
 
     let query = `
             SELECT n.*,
@@ -406,8 +410,13 @@ export class DatabaseClient {
                        WHERE nt.note_id = n.id
                    ) as tags
             FROM notes n
-            WHERE n.user_id = $1 AND NOT n.is_archived
+            WHERE n.user_id = $1
         `;
+    if (archived) {
+      query += ` AND n.is_archived = true`;
+    } else {
+      query += ` AND NOT n.is_archived`;
+    }
     const params = [userId];
     let paramIndex = 2;
 
@@ -540,7 +549,6 @@ export class DatabaseClient {
     const result = await this.query(
       `INSERT INTO tags (user_id, name, color)
              VALUES ($1, $2, $3)
-             ON CONFLICT (user_id, name) DO UPDATE SET color = $3
              RETURNING *`,
       [userId, name, color],
     );
@@ -554,9 +562,10 @@ export class DatabaseClient {
    */
   async getUserTags(userId) {
     const result = await this.query(
-      `SELECT t.*, COUNT(nt.note_id)::int as note_count
+      `SELECT t.*, COUNT(nt.note_id) FILTER (WHERE NOT n.is_archived)::int as note_count
              FROM tags t
              LEFT JOIN note_tags nt ON t.id = nt.tag_id
+             LEFT JOIN notes n ON n.id = nt.note_id
              WHERE t.user_id = $1
              GROUP BY t.id
              ORDER BY t.name`,
@@ -611,8 +620,18 @@ export class DatabaseClient {
                  RETURNING *`,
         [version.title, version.content, this.stripMarkdown(version.content), noteId],
       );
+      const note = noteResult.rows[0];
 
-      return noteResult.rows[0];
+      // Get the full tag objects for the restored note
+      const tagResult = await tx.query(
+        `SELECT t.id, t.name, t.color
+                 FROM tags t
+                 JOIN note_tags nt ON t.id = nt.tag_id
+                 WHERE nt.note_id = $1`,
+        [noteId],
+      );
+
+      return { ...note, tags: tagResult.rows };
     });
   }
 

@@ -431,8 +431,7 @@ POST   /api/notes/:id/restore/:versionId # Restore version
 {
   "success": true,
   "data": {
-    "notes": [...],
-    "total": 42
+    "notes": [...]
   },
   "meta": {
     "limit": 50,
@@ -454,7 +453,7 @@ Response includes highlighted snippets and relevance ranking.
 
 ```http
 GET    /api/tags              # Get user tags with usage counts
-POST   /api/tags              # Create or update tag
+POST   /api/tags              # Create tag (409 if duplicate)
 PUT    /api/tags/:id          # Update tag color
 DELETE /api/tags/:id          # Soft delete tag
 ```

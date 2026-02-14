@@ -75,12 +75,12 @@ export function createSearchRouter() {
         data: {
           query: query,
           results: results,
-          meta: {
-            total: results.length,
-            limit: searchLimit,
-            offset: searchOffset,
-            hasMore: hasMore,
-          },
+        },
+        meta: {
+          total: results.length,
+          limit: searchLimit,
+          offset: searchOffset,
+          hasMore: hasMore,
         },
       };
     } catch (error) {
@@ -284,16 +284,18 @@ export function createSearchRouter() {
         paramIndex++;
       }
 
-      // Add tag filtering
+      // Add tag filtering (accepts tag IDs)
       if (tags.length > 0) {
         searchQuery += ` AND n.id IN (
-                    SELECT DISTINCT nt.note_id
+                    SELECT nt.note_id
                     FROM note_tags nt
-                    JOIN tags t ON t.id = nt.tag_id
-                    WHERE t.name = ANY($${paramIndex}) AND t.user_id = $1
+                    WHERE nt.tag_id = ANY($${paramIndex}::int[])
+                    GROUP BY nt.note_id
+                    HAVING COUNT(DISTINCT nt.tag_id) = $${paramIndex + 1}
                 )`;
         params.push(tags);
-        paramIndex++;
+        params.push(tags.length);
+        paramIndex += 2;
       }
 
       // Add date filtering
@@ -334,12 +336,12 @@ export function createSearchRouter() {
             isPinned,
           },
           results: results.rows,
-          meta: {
-            total: results.rows.length,
-            limit: Math.min(parseInt(limit), 100),
-            offset: parseInt(offset),
-            hasMore: results.rows.length === Math.min(parseInt(limit), 100),
-          },
+        },
+        meta: {
+          total: results.rows.length,
+          limit: Math.min(parseInt(limit), 100),
+          offset: parseInt(offset),
+          hasMore: results.rows.length === Math.min(parseInt(limit), 100),
         },
       };
     } catch (error) {

@@ -609,7 +609,7 @@ class NotesApp extends LitElement {
         globalThis.NotesApp.getTags(),
       ]);
 
-      this.notes = notesResult.data || [];
+      this.notes = notesResult.data?.notes || [];
       this.tags = tagsResult.data || [];
     } catch (error) {
       console.error("Failed to load initial data:", error);
@@ -806,10 +806,10 @@ class NotesApp extends LitElement {
       const hasTagFilter = this.selectedTags.length > 0;
 
       if (hasSearchQuery && hasTagFilter) {
-        // Both search and tags - use advanced search (expects tag names)
+        // Both search and tags - use advanced search (expects tag IDs)
         const result = await globalThis.NotesApp.advancedSearch({
           query: this.searchQuery,
-          tags: this.selectedTags.map((tag) => tag.name),
+          tags: this.selectedTags.map((tag) => tag.id),
         });
         this.notes = result.data?.results || [];
         this.viewMode = "search";
@@ -828,7 +828,7 @@ class NotesApp extends LitElement {
 
         const result = await globalThis.NotesApp.getNotes(options);
         console.log("  Filter result:", result);
-        this.notes = result.data || [];
+        this.notes = result.data?.notes || [];
         this.viewMode = "list";
       }
       console.log("  Updated notes:", this.notes);

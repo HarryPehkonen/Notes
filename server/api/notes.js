@@ -20,6 +20,7 @@ export function createNotesRouter() {
     const tags = ctx.request.url.searchParams.get("tags");
     const search = ctx.request.url.searchParams.get("search");
     const pinned = ctx.request.url.searchParams.get("pinned");
+    const archived = ctx.request.url.searchParams.get("archived");
 
     try {
       const options = {
@@ -40,11 +41,15 @@ export function createNotesRouter() {
         options.pinned = pinned === "true";
       }
 
+      if (archived === "true") {
+        options.archived = true;
+      }
+
       const notes = await db.getNotes(user.id, options);
 
       ctx.response.body = {
         success: true,
-        data: notes,
+        data: { notes },
         meta: {
           limit: options.limit,
           offset: options.offset,
@@ -79,7 +84,7 @@ export function createNotesRouter() {
       const result = await db.query(
         `SELECT n.*,
                         ARRAY(
-                            SELECT t.name
+                            SELECT json_build_object('id', t.id, 'name', t.name, 'color', t.color)
                             FROM tags t
                             JOIN note_tags nt ON t.id = nt.tag_id
                             WHERE nt.note_id = n.id
@@ -203,11 +208,11 @@ export function createNotesRouter() {
 
     try {
       const body = await ctx.request.body({ type: "json" }).value;
-      const { title, content, tags, is_pinned } = body;
+      const { title, content, tags, is_pinned, is_archived } = body;
 
       // Verify note exists and belongs to user
       const existingNote = await db.query(
-        `SELECT id FROM notes WHERE id = $1 AND user_id = $2 AND NOT is_archived`,
+        `SELECT id FROM notes WHERE id = $1 AND user_id = $2`,
         [noteId, user.id],
       );
 
@@ -225,6 +230,7 @@ export function createNotesRouter() {
       if (content !== undefined) updates.content = content.trim();
       if (tags !== undefined) updates.tags = Array.isArray(tags) ? tags : [];
       if (is_pinned !== undefined) updates.is_pinned = Boolean(is_pinned);
+      if (is_archived !== undefined) updates.is_archived = Boolean(is_archived);
 
       if (Object.keys(updates).length === 0) {
         ctx.response.status = 400;
