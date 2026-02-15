@@ -286,14 +286,15 @@ export class DatabaseClient {
       );
       const note = noteResult.rows[0];
 
-      // Add tags if provided (expecting tag IDs)
+      // Add tags if provided (expecting tag IDs, validated for ownership)
       if (tags.length > 0) {
         for (const tagId of tags) {
           await tx.query(
             `INSERT INTO note_tags (note_id, tag_id)
-                         VALUES ($1, $2)
-                         ON CONFLICT DO NOTHING`,
-            [note.id, tagId],
+             SELECT $1, id FROM tags
+             WHERE id = $2 AND user_id = $3
+             ON CONFLICT DO NOTHING`,
+            [note.id, tagId, userId],
           );
         }
       }
@@ -318,7 +319,7 @@ export class DatabaseClient {
    * @param {Object} updates
    * @returns {Promise<Note>}
    */
-  async updateNote(noteId, updates) {
+  async updateNote(noteId, updates, userId) {
     const { title, content, tags, is_pinned, is_archived } = updates;
 
     return await this.transaction(async (tx) => {
@@ -365,14 +366,15 @@ export class DatabaseClient {
         // Remove existing tags
         await tx.query(`DELETE FROM note_tags WHERE note_id = $1`, [noteId]);
 
-        // Add new tags by ID
+        // Add new tags by ID (validated for ownership)
         if (tags.length > 0) {
           for (const tagId of tags) {
             await tx.query(
               `INSERT INTO note_tags (note_id, tag_id)
-                             VALUES ($1, $2)
-                             ON CONFLICT DO NOTHING`,
-              [noteId, tagId],
+               SELECT $1, id FROM tags
+               WHERE id = $2 AND user_id = $3
+               ON CONFLICT DO NOTHING`,
+              [noteId, tagId, userId],
             );
           }
         }

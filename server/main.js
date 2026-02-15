@@ -5,6 +5,7 @@
 
 import { Application, Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { Session } from "https://deno.land/x/oak_sessions@v4.1.9/mod.ts";
+import { PostgresSessionStore } from "./session-store.js";
 import { DatabaseClient } from "./database/client.js";
 import { GoogleAuthHandler } from "./auth/auth-handler.js";
 import { optionalAuth, redirectIfAuthenticated, requireAuth } from "./auth/middleware.js";
@@ -19,7 +20,6 @@ import { createImagesRouter } from "./api/images.js";
 const config = {
   port: parseInt(Deno.env.get("PORT") || "8000"),
   host: Deno.env.get("HOST") || "localhost",
-  sessionSecret: Deno.env.get("SESSION_SECRET"),
   googleClientId: Deno.env.get("GOOGLE_CLIENT_ID"),
   googleClientSecret: Deno.env.get("GOOGLE_CLIENT_SECRET"),
   googleRedirectUri: Deno.env.get("GOOGLE_REDIRECT_URI"),
@@ -27,7 +27,6 @@ const config = {
 
 // Validate required environment variables
 const requiredEnvVars = [
-  "SESSION_SECRET",
   "GOOGLE_CLIENT_ID",
   "GOOGLE_CLIENT_SECRET",
   "GOOGLE_REDIRECT_URI",
@@ -66,7 +65,8 @@ const app = new Application({ proxy: true });
 // Session middleware with secure cookies in production
 // Note: With proxy=true, Oak checks X-Forwarded-Proto for HTTPS detection
 const isProduction = Deno.env.get("NODE_ENV") === "production";
-app.use(Session.initMiddleware(undefined, {
+const sessionStore = new PostgresSessionStore(db.pool);
+app.use(Session.initMiddleware(sessionStore, {
   cookieSetOptions: {
     httpOnly: true,
     secure: isProduction,
@@ -260,13 +260,14 @@ router.get("/auth/callback", async (ctx) => {
       await db.updateLastLogin(user.id);
     }
 
-    // Create session
+    // Create session and rotate key to prevent session fixation
     await ctx.state.session.set("user", {
       id: user.id,
       email: user.email,
       name: user.name,
       picture: user.picture,
     });
+    ctx.state.rotate_session_key = true;
 
     ctx.response.redirect("/");
   } catch (error) {

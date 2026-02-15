@@ -5,6 +5,56 @@
 
 import { Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 
+/**
+ * Extract image filenames from note content
+ */
+function extractImageFilenames(content) {
+  if (!content) return new Set();
+  const pattern = /\/api\/images\/([a-f0-9-]+\.\w+)/g;
+  const filenames = new Set();
+  let match;
+  while ((match = pattern.exec(content)) !== null) {
+    filenames.add(match[1]);
+  }
+  return filenames;
+}
+
+/**
+ * Delete orphaned images that are no longer referenced in any note
+ */
+async function cleanupOrphanedImages(db, userId, removedFilenames) {
+  for (const filename of removedFilenames) {
+    try {
+      // Check if the image is referenced in any note by this user
+      const refCheck = await db.query(
+        `SELECT COUNT(*)::int as count FROM notes
+         WHERE user_id = $1 AND NOT is_archived
+         AND content LIKE '%' || $2 || '%'`,
+        [userId, filename],
+      );
+
+      if (refCheck.rows[0].count === 0) {
+        // Delete from database
+        await db.query(
+          `DELETE FROM images WHERE user_id = $1 AND filename = $2`,
+          [userId, filename],
+        );
+
+        // Delete from disk
+        try {
+          await Deno.remove(`./uploads/user-${userId}/${filename}`);
+        } catch (err) {
+          if (!(err instanceof Deno.errors.NotFound)) {
+            console.error("Failed to delete image file:", err);
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to cleanup image ${filename}:`, error);
+    }
+  }
+}
+
 export function createNotesRouter() {
   const router = new Router();
 
@@ -207,9 +257,9 @@ export function createNotesRouter() {
       const body = await ctx.request.body({ type: "json" }).value;
       const { title, content, tags, is_pinned, is_archived } = body;
 
-      // Verify note exists and belongs to user
+      // Verify note exists and belongs to user, fetch old content for image cleanup
       const existingNote = await db.query(
-        `SELECT id FROM notes WHERE id = $1 AND user_id = $2`,
+        `SELECT id, content FROM notes WHERE id = $1 AND user_id = $2`,
         [noteId, user.id],
       );
 
@@ -221,6 +271,8 @@ export function createNotesRouter() {
         };
         return;
       }
+
+      const oldContent = existingNote.rows[0].content;
 
       const updates = {};
       if (title !== undefined) updates.title = title.trim();
@@ -238,7 +290,18 @@ export function createNotesRouter() {
         return;
       }
 
-      const note = await db.updateNote(noteId, updates);
+      const note = await db.updateNote(noteId, updates, user.id);
+
+      // Clean up images that were removed from the content
+      if (content !== undefined) {
+        const oldImages = extractImageFilenames(oldContent);
+        const newImages = extractImageFilenames(updates.content);
+        const removed = [...oldImages].filter((f) => !newImages.has(f));
+        if (removed.length > 0) {
+          // Run cleanup in background — don't block the response
+          cleanupOrphanedImages(db, user.id, removed);
+        }
+      }
 
       ctx.response.body = {
         success: true,
@@ -272,7 +335,7 @@ export function createNotesRouter() {
       const result = await db.query(
         `UPDATE notes SET is_archived = true
                  WHERE id = $1 AND user_id = $2 AND NOT is_archived
-                 RETURNING id`,
+                 RETURNING id, content`,
         [noteId, user.id],
       );
 
@@ -283,6 +346,13 @@ export function createNotesRouter() {
           error: "Note not found",
         };
         return;
+      }
+
+      // Clean up images from the archived note
+      const archivedContent = result.rows[0].content;
+      const images = extractImageFilenames(archivedContent);
+      if (images.size > 0) {
+        cleanupOrphanedImages(db, user.id, [...images]);
       }
 
       ctx.response.body = {
