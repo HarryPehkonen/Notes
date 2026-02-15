@@ -15,6 +15,9 @@ screenshots/
 # Database backups
 backup.sql
 
+# Scratch files
+notes.txt
+
 # Logs
 *.log
 npm-debug.log*
