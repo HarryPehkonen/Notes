@@ -13,7 +13,6 @@ test-results/
 screenshots/
 
 # Database backups
-*.sql
 backup.sql
 
 # Logs
