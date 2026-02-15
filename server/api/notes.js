@@ -29,7 +29,7 @@ async function cleanupOrphanedImages(db, userId, removedFilenames) {
       const refCheck = await db.query(
         `SELECT COUNT(*)::int as count FROM notes
          WHERE user_id = $1 AND NOT is_archived
-         AND content LIKE '%' || $2 || '%'`,
+         AND position($2 in content) > 0`,
         [userId, filename],
       );
 

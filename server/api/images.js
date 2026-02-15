@@ -241,6 +241,9 @@ export function createImagesRouter() {
       ctx.response.headers.set("Cache-Control", "public, max-age=31536000, immutable");
       // Prevent script execution in SVGs opened directly in browser
       ctx.response.headers.set("Content-Security-Policy", "script-src 'none'");
+      if (mimeType === "image/svg+xml") {
+        ctx.response.headers.set("Content-Disposition", "attachment");
+      }
       ctx.response.body = fileContent;
     } catch (error) {
       console.error("Error serving image:", error);

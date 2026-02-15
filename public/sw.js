@@ -2,7 +2,7 @@
  * Service Worker for Notes App
  */
 
-const CACHE_NAME = "notes-app-v29";
+const CACHE_NAME = "notes-app-v30";
 const urlsToCache = [
   "/",
   "/static/app.js",
@@ -57,8 +57,10 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
           return response;
         })
         .catch(() => caches.match(event.request)),

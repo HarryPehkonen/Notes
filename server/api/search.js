@@ -5,6 +5,11 @@
 
 import { Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 
+/** Escape LIKE/ILIKE special characters so user input is matched literally */
+function escapeLike(str) {
+  return str.replace(/[%_\\]/g, "\\$&");
+}
+
 export function createSearchRouter() {
   const router = new Router();
 
@@ -37,8 +42,8 @@ export function createSearchRouter() {
     }
 
     try {
-      const searchLimit = Math.min(parseInt(limit), 100); // Cap at 100 results
-      const searchOffset = parseInt(offset);
+      const searchLimit = Math.min(parseInt(limit) || 20, 100); // Cap at 100 results
+      const searchOffset = Math.max(parseInt(offset) || 0, 0);
 
       let results;
 
@@ -109,11 +114,11 @@ export function createSearchRouter() {
                     SELECT DISTINCT name, color
                     FROM tags
                     WHERE user_id = $1
-                      AND name ILIKE $2
+                      AND name ILIKE $2 ESCAPE '\'
                     ORDER BY name
                     LIMIT $3
                 `,
-          [user.id, `%${q.trim()}%`, Math.min(parseInt(limit), 20)],
+          [user.id, `%${escapeLike(q.trim())}%`, Math.min(parseInt(limit) || 10, 20)],
         );
 
         for (const tag of tagResults.rows) {
@@ -133,11 +138,11 @@ export function createSearchRouter() {
                 FROM notes
                 WHERE user_id = $1
                   AND NOT is_archived
-                  AND ($2 = '' OR title ILIKE $3)
+                  AND ($2 = '' OR title ILIKE $3 ESCAPE '\')
                 ORDER BY updated_at DESC
                 LIMIT $4
             `,
-        [user.id, q.trim(), `%${q.trim()}%`, Math.min(parseInt(limit), 10)],
+        [user.id, q.trim(), `%${escapeLike(q.trim())}%`, Math.min(parseInt(limit) || 10, 10)],
       );
 
       for (const note of recentResults.rows) {
