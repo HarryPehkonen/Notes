@@ -416,9 +416,18 @@ Supported types: JPEG, PNG, GIF, WebP, SVG. Server validates magic bytes against
 
 3. **Application Deployment:**
    ```bash
+   # Create a dedicated system user (no home directory, no login shell)
+   useradd --system --no-create-home --shell /usr/sbin/nologin notes
+
    # Clone application
    git clone https://github.com/HarryPehkonen/Notes.git /opt/notes-app
    cd /opt/notes-app
+
+   # Create Deno cache directory (needed since notes user has no home dir)
+   mkdir .deno-cache
+
+   # Set ownership
+   chown -R notes:notes /opt/notes-app
 
    # Configure environment
    cp .env.example .env
@@ -439,9 +448,10 @@ Supported types: JPEG, PNG, GIF, WebP, SVG. Server validates magic bytes against
    Type=simple
    User=notes
    WorkingDirectory=/opt/notes-app
-   ExecStart=/home/notes/.deno/bin/deno run --allow-net --allow-read --allow-env --allow-write server/main.js
+   ExecStart=/usr/local/bin/deno task start
    Restart=always
    Environment=NODE_ENV=production
+   Environment=DENO_DIR=/opt/notes-app/.deno-cache
 
    [Install]
    WantedBy=multi-user.target

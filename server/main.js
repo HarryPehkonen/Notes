@@ -66,10 +66,14 @@ const app = new Application({ proxy: true });
 // Note: With proxy=true, Oak checks X-Forwarded-Proto for HTTPS detection
 const isProduction = Deno.env.get("NODE_ENV") === "production";
 const sessionStore = new PostgresSessionStore(db.pool);
+// Note: secure is set to false here because Caddy terminates TLS and forwards
+// plain HTTP to Oak. Oak's SecureCookieMap rejects secure cookies over non-TLS
+// connections even with proxy:true. Caddy's Strict-Transport-Security header
+// ensures cookies are only sent over HTTPS by the browser.
 app.use(Session.initMiddleware(sessionStore, {
   cookieSetOptions: {
     httpOnly: true,
-    secure: isProduction,
+    secure: false,
     sameSite: "lax",
     maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
   },
