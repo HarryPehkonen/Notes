@@ -80,8 +80,12 @@ CREATE TABLE IF NOT EXISTS note_versions (
 -- Sessions table for server-side session storage
 CREATE TABLE IF NOT EXISTS sessions (
     id VARCHAR(21) NOT NULL PRIMARY KEY,
-    data TEXT
+    data TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Add created_at to sessions if missing (migration for existing databases)
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
 -- Images table for uploaded images
 CREATE TABLE IF NOT EXISTS images (

@@ -534,9 +534,23 @@ console.log(`→ Notes App server starting on http://${config.host}:${config.por
 console.log(`  Environment: ${Deno.env.get("NODE_ENV") || "development"}`);
 console.log(`   Database: ${Deno.env.get("DB_NAME")} on ${Deno.env.get("DB_HOST")}`);
 
+// Periodic session cleanup (every hour, removes sessions older than 7 days)
+const SESSION_CLEANUP_INTERVAL = 60 * 60 * 1000;
+const sessionCleanupTimer = setInterval(async () => {
+  try {
+    const deleted = await sessionStore.deleteExpiredSessions(7);
+    if (deleted > 0) {
+      console.log(`  Cleaned up ${deleted} expired session(s)`);
+    }
+  } catch (error) {
+    console.error("Session cleanup error:", error.message);
+  }
+}, SESSION_CLEANUP_INTERVAL);
+
 // Graceful shutdown
 const handleShutdown = async (signal) => {
   console.log(`\n  Received ${signal}, shutting down gracefully...`);
+  clearInterval(sessionCleanupTimer);
   await db.close();
   Deno.exit(0);
 };

@@ -60,4 +60,16 @@ export class PostgresSessionStore {
       [sessionId],
     );
   }
+
+  /**
+   * Delete sessions older than maxAgeDays.
+   * Returns the number of deleted sessions.
+   */
+  async deleteExpiredSessions(maxAgeDays = 7) {
+    const result = await this.#query(
+      `DELETE FROM sessions WHERE created_at < NOW() - INTERVAL '1 day' * $1 RETURNING id`,
+      [maxAgeDays],
+    );
+    return result.rows.length;
+  }
 }

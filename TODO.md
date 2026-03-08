@@ -5,7 +5,7 @@ Improvements identified from code review (March 2025).
 ## High Priority
 
 - [x] **Validate image filenames** — In `server/api/images.js`, validate that filenames match the expected UUID pattern (e.g., `/^[a-f0-9-]+\.\w+$/`) before constructing file paths. Prevents directory traversal even though `realpath` catches it on read.
-- [ ] **Session cleanup** — Sessions accumulate in the DB forever. Add a periodic cleanup job (e.g., delete sessions older than 30 days) or add an `expires_at` column and clean up on a timer.
+- [x] **Session cleanup** — Sessions accumulate in the DB forever. Add a periodic cleanup job (e.g., delete sessions older than 30 days) or add an `expires_at` column and clean up on a timer.
 - [ ] **Fix unbounded syncPromises array** — In `public/services/sync-manager.js`, resolved promises in `syncPromises` are never removed. Filter out settled promises after `waitForAll()` or use a counter instead.
 
 ## Medium Priority
