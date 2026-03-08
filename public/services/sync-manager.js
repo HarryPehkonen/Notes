@@ -35,7 +35,6 @@ class SyncManager {
     this.activeSyncs = new Map(); // noteId -> AbortController
     this.isOnline = navigator.onLine;
     this.retryTimers = new Map(); // noteId -> timer
-    this.syncPromises = []; // Array of pending sync promises
     this.initialized = false;
 
     // Bind event handlers
@@ -131,9 +130,6 @@ class SyncManager {
       resolve,
       reject,
     });
-
-    // Track this for waitForSync
-    this.syncPromises.push(promise.catch(() => {})); // Catch to prevent unhandled rejection
 
     // Start the sync
     this._startSync(noteId, updates);
