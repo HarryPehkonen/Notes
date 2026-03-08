@@ -57,6 +57,10 @@ function validateMagicBytes(content, mimeType) {
   );
 }
 
+// Validates that a filename matches the expected UUID.ext format
+// Prevents directory traversal via crafted filenames
+const SAFE_FILENAME_RE = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.\w+$/;
+
 // Base upload directory
 const UPLOADS_DIR = "./uploads";
 
@@ -194,11 +198,11 @@ export function createImagesRouter() {
     const { user, db } = ctx.state;
     const filename = ctx.params.filename;
 
-    if (!filename) {
+    if (!filename || !SAFE_FILENAME_RE.test(filename)) {
       ctx.response.status = 400;
       ctx.response.body = {
         success: false,
-        error: "Filename is required",
+        error: "Invalid filename",
       };
       return;
     }
@@ -260,11 +264,11 @@ export function createImagesRouter() {
     const { user, db } = ctx.state;
     const filename = ctx.params.filename;
 
-    if (!filename) {
+    if (!filename || !SAFE_FILENAME_RE.test(filename)) {
       ctx.response.status = 400;
       ctx.response.body = {
         success: false,
-        error: "Filename is required",
+        error: "Invalid filename",
       };
       return;
     }
