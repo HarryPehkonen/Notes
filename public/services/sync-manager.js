@@ -101,7 +101,11 @@ class SyncManager {
     this._cancelSync(noteId);
 
     // 3. Create sync promise and queue the network request
-    return this._queueSync(noteId, updates);
+    // Include updated_at for optimistic locking on the server
+    const updatesWithTimestamp = serverUpdatedAt
+      ? { ...updates, updated_at: serverUpdatedAt }
+      : updates;
+    return this._queueSync(noteId, updatesWithTimestamp);
   }
 
   /**
@@ -179,6 +183,18 @@ class SyncManager {
     } catch (error) {
       if (error.name === "AbortError") {
         // Cancelled, don't queue - a new save is coming
+        return;
+      }
+
+      // 409 Conflict: note was modified by another session.
+      // Do NOT queue for retry — it will fail again.
+      if (error.status === 409) {
+        this.state = SYNC_STATE.ERROR;
+        this._emitEvent("sync-conflict", {
+          noteId,
+          serverUpdatedAt: error.serverUpdatedAt,
+        });
+        this._rejectPending(noteId, error);
         return;
       }
 

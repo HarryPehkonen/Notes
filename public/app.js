@@ -5,6 +5,7 @@
 
 // Import services
 import { syncManager } from "./services/sync-manager.js";
+import { liveSync } from "./services/live-sync.js";
 
 // Import all components
 import "./components/notes-app.js";
@@ -20,6 +21,9 @@ globalThis.NotesApp = {
 
   // User session info
   user: null,
+
+  // Services
+  liveSync,
 
   // App state
   notes: [],
@@ -76,6 +80,7 @@ globalThis.NotesApp = {
       if (!response.ok) {
         const error = new Error(data.error || `HTTP ${response.status}`);
         error.status = response.status;
+        if (data.serverUpdatedAt) error.serverUpdatedAt = data.serverUpdatedAt;
         throw error;
       }
 
@@ -334,6 +339,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   } catch (error) {
     console.error("Failed to initialize sync manager:", error);
   }
+
+  // Connect live sync WebSocket
+  liveSync.connect();
 
   // Set up global error handling (log only — specific handlers show their own toasts)
   globalThis.addEventListener("error", (event) => {

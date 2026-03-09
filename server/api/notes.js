@@ -4,6 +4,7 @@
  */
 
 import { Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
+import { broadcastToUser } from "../services/ws-connections.js";
 
 /**
  * Extract image filenames from note content
@@ -255,11 +256,11 @@ export function createNotesRouter() {
 
     try {
       const body = await ctx.request.body({ type: "json" }).value;
-      const { title, content, tags, is_pinned, is_archived } = body;
+      const { title, content, tags, is_pinned, is_archived, updated_at } = body;
 
       // Verify note exists and belongs to user, fetch old content for image cleanup
       const existingNote = await db.query(
-        `SELECT id, content FROM notes WHERE id = $1 AND user_id = $2`,
+        `SELECT id, content, updated_at FROM notes WHERE id = $1 AND user_id = $2`,
         [noteId, user.id],
       );
 
@@ -270,6 +271,21 @@ export function createNotesRouter() {
           error: "Note not found",
         };
         return;
+      }
+
+      // Optimistic locking: reject if the note was modified since the client's version
+      if (updated_at) {
+        const clientTime = new Date(updated_at).getTime();
+        const serverTime = new Date(existingNote.rows[0].updated_at).getTime();
+        if (serverTime > clientTime) {
+          ctx.response.status = 409;
+          ctx.response.body = {
+            success: false,
+            error: "Note was modified by another session",
+            serverUpdatedAt: existingNote.rows[0].updated_at,
+          };
+          return;
+        }
       }
 
       const oldContent = existingNote.rows[0].content;
@@ -302,6 +318,13 @@ export function createNotesRouter() {
           cleanupOrphanedImages(db, user.id, removed);
         }
       }
+
+      // Broadcast update to user's other tabs/devices
+      broadcastToUser(user.id, {
+        type: "note-updated",
+        noteId,
+        updatedAt: note.updated_at,
+      });
 
       ctx.response.body = {
         success: true,

@@ -15,6 +15,7 @@ import { createNotesRouter } from "./api/notes.js";
 import { createTagsRouter } from "./api/tags.js";
 import { createSearchRouter } from "./api/search.js";
 import { createImagesRouter } from "./api/images.js";
+import { addConnection, removeConnection, closeAll as closeAllWs } from "./services/ws-connections.js";
 
 // Configuration
 const config = {
@@ -315,6 +316,22 @@ router.use("/api/tags", requireAuth, tagsRouter.routes(), tagsRouter.allowedMeth
 router.use("/api/search", requireAuth, searchRouter.routes(), searchRouter.allowedMethods());
 router.use("/api/images", requireAuth, imagesRouter.routes(), imagesRouter.allowedMethods());
 
+// WebSocket endpoint for live sync
+router.get("/ws", async (ctx) => {
+  const user = await ctx.state.session.get("user");
+  if (!user) {
+    ctx.response.status = 401;
+    ctx.response.body = { error: "Authentication required" };
+    return;
+  }
+
+  const ws = ctx.upgrade();
+  addConnection(user.id, ws);
+
+  ws.onclose = () => removeConnection(user.id, ws);
+  ws.onerror = () => removeConnection(user.id, ws);
+});
+
 // Static file serving
 router.get("/static/:path*", async (ctx) => {
   const filePath = ctx.params.path;
@@ -430,6 +447,7 @@ const sessionCleanupTimer = setInterval(async () => {
 const handleShutdown = async (signal) => {
   console.log(`\n  Received ${signal}, shutting down gracefully...`);
   clearInterval(sessionCleanupTimer);
+  closeAllWs();
   await db.close();
   Deno.exit(0);
 };

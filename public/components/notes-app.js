@@ -500,12 +500,14 @@ class NotesApp extends LitElement {
     this.setupEventListeners();
     this._setupNavigationGuards();
     this._setupSyncListeners();
+    this._setupLiveSyncListeners();
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     this._removeNavigationGuards();
     this._removeSyncListeners();
+    this._removeLiveSyncListeners();
   }
 
   /**
@@ -562,6 +564,59 @@ class NotesApp extends LitElement {
     document.removeEventListener("sync-offline", this._boundHandleSyncOffline);
     document.removeEventListener("sync-online", this._boundHandleSyncOnline);
     document.removeEventListener("sync-recovery-found", this._boundHandleRecoveryFound);
+  }
+
+  _setupLiveSyncListeners() {
+    this._boundHandleNoteUpdatedWs = this._handleNoteUpdatedWs.bind(this);
+    this._boundHandleSyncConflict = this._handleSyncConflict.bind(this);
+    globalThis.NotesApp?.liveSync?.on("note-updated", this._boundHandleNoteUpdatedWs);
+    document.addEventListener("sync-conflict", this._boundHandleSyncConflict);
+  }
+
+  _removeLiveSyncListeners() {
+    globalThis.NotesApp?.liveSync?.off("note-updated", this._boundHandleNoteUpdatedWs);
+    document.removeEventListener("sync-conflict", this._boundHandleSyncConflict);
+  }
+
+  async _handleNoteUpdatedWs(message) {
+    const { noteId, updatedAt } = message;
+
+    // Currently editing this note?
+    if (this.viewMode === "edit" && this.currentNote?.id === noteId) {
+      // Ignore our own update (timestamps match)
+      if (this.currentNote.updated_at === updatedAt) return;
+
+      const editor = this.shadowRoot?.querySelector("note-editor");
+      if (editor && editor.hasUnsavedChanges) {
+        this.showToast("This note was updated on another device. Save to overwrite, or reload the page.", "warning");
+        return;
+      }
+
+      // No unsaved changes — auto-reload
+      try {
+        const result = await globalThis.NotesApp.getNote(noteId);
+        this.currentNote = result.data;
+        const idx = this.notes.findIndex((n) => n.id === noteId);
+        if (idx !== -1) {
+          this.notes[idx] = result.data;
+          this.notes = [...this.notes];
+        }
+        this.showToast("Note updated from another device", "info");
+      } catch (e) {
+        console.error("Failed to reload note:", e);
+      }
+      return;
+    }
+
+    // Not editing this note — refresh list
+    this.filterNotes();
+  }
+
+  _handleSyncConflict(event) {
+    const { noteId } = event.detail;
+    if (this.currentNote?.id === noteId) {
+      this.showToast("Save conflict — this note was updated elsewhere. Reload to get the latest version.", "warning");
+    }
   }
 
   _handleSyncPending(event) {
