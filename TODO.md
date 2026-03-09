@@ -12,8 +12,8 @@ Improvements identified from code review (March 2025).
 
 - [ ] **Break up large components** — `notes-app.js` (~1100 lines) and `note-editor.js` (~1260 lines) do too much. Extract sub-components: image upload, tag selector, markdown preview, editor toolbar.
 - [ ] **Add note list pagination** — Currently loads up to 50 notes with no infinite scroll or "load more". Will degrade with hundreds of notes.
-- [ ] **Use error codes for constraint detection** — In `server/api/tags.js`, replace `error.message.includes("duplicate key")` with PostgreSQL error code `23505` check.
-- [ ] **Deduplicate `stripMarkdown()`** — Exists in both `public/app.js` and `public/utils/text.js`. Import from one place.
+- [x] **Use error codes for constraint detection** — In `server/api/tags.js`, replace `error.message.includes("duplicate key")` with PostgreSQL error code `23505` check.
+- [x] **Remove dead `stripMarkdown()`** — Was in `public/app.js` but never called. Removed. Canonical version lives in `server/database/client.js`.
 - [ ] **Offline tag operations** — Tag create/edit/delete fails immediately when offline. Notes queue via IndexedDB but tags don't. Add similar queueing or at minimum show a clear error.
 
 ## Low Priority

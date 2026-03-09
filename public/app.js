@@ -298,20 +298,6 @@ globalThis.NotesApp = {
     }
   },
 
-  stripMarkdown(text) {
-    return text
-      .replace(/#{1,6}\s/g, "") // Headers
-      .replace(/[*_~`]/g, "") // Formatting
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Links
-      .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1") // Images
-      .replace(/```[\s\S]*?```/g, "") // Code blocks
-      .replace(/`[^`]+`/g, "") // Inline code
-      .replace(/^\s*[-*+]\s/gm, "") // Lists
-      .replace(/^\s*\d+\.\s/gm, "") // Numbered lists
-      .replace(/\n{2,}/g, "\n") // Multiple newlines
-      .trim();
-  },
-
   truncateText(text, maxLength = 100) {
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength).trim() + "...";

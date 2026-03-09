@@ -76,8 +76,8 @@ export function createTagsRouter() {
     } catch (error) {
       console.error("Error creating tag:", error);
 
-      // Handle unique constraint violation
-      if (error.message.includes("duplicate key")) {
+      // Handle unique constraint violation (PostgreSQL error code 23505)
+      if (error.fields?.code === "23505" || error.message.includes("duplicate key")) {
         ctx.response.status = 409;
         ctx.response.body = {
           success: false,
@@ -184,8 +184,8 @@ export function createTagsRouter() {
     } catch (error) {
       console.error("Error updating tag:", error);
 
-      // Handle unique constraint violation
-      if (error.message.includes("duplicate key")) {
+      // Handle unique constraint violation (PostgreSQL error code 23505)
+      if (error.fields?.code === "23505" || error.message.includes("duplicate key")) {
         ctx.response.status = 409;
         ctx.response.body = {
           success: false,
