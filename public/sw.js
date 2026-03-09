@@ -1,31 +1,22 @@
 /**
  * Service Worker for Notes App
+ *
+ * Strategy:
+ * - API/auth routes: network-only (never cached)
+ * - Root path (/): network-first (fresh auth state, fallback to cache offline)
+ * - Static assets: stale-while-revalidate (instant from cache, background
+ *   refresh keeps assets fresh without manual cache version bumping)
  */
 
-const CACHE_NAME = "notes-app-v31";
-const urlsToCache = [
-  "/",
-  "/static/app.js",
-  "/static/styles/app.css",
-  "/static/components/notes-app.js",
-  "/static/components/note-editor.js",
-  "/static/components/note-list.js",
-  "/static/components/search-bar.js",
-  "/static/components/tag-manager.js",
-  "/static/utils/text.js",
-  "/static/services/persistence.js",
-  "/static/services/sync-manager.js",
-];
+const CACHE_NAME = "notes-app-v1";
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(urlsToCache))
-      .then(() => self.skipWaiting()),
-  );
+  // Skip waiting so the new SW activates immediately
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("activate", (event) => {
+  // Clean up old versioned caches from previous SW strategy
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -68,11 +59,22 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // For static assets, use cache-first strategy
+  // Static assets: stale-while-revalidate
+  // Serve instantly from cache, then fetch in the background to update the
+  // cache for next load. No manual version bumping needed — the server's
+  // ETag ensures the background fetch is cheap (304) when nothing changed.
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        return response || fetch(event.request);
-      }),
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.match(event.request).then((cached) => {
+        const fetched = fetch(event.request).then((response) => {
+          if (response.ok) {
+            cache.put(event.request, response.clone());
+          }
+          return response;
+        });
+
+        return cached || fetched;
+      });
+    }),
   );
 });

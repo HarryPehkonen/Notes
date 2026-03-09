@@ -19,5 +19,5 @@ Improvements identified from code review (March 2025).
 
 - [x] **Remove dead `clearOldDrafts()`** — Removed from `public/services/persistence.js`.
 - [x] **Extract login page HTML** — Moved to `public/login.html`, served via `Deno.readTextFile`.
-- [ ] **Automate service worker cache versioning** — Currently manual bump (`v30`). Consider generating the version from a file hash or build timestamp.
+- [x] **Automate service worker cache versioning** — Replaced cache-first with stale-while-revalidate strategy. No manual version bumping needed; sw.js served with `no-cache` so browser always checks for updates.
 - [x] **DELETE response codes** — Return 204 No Content instead of 200 for DELETE endpoints.

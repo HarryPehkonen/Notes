@@ -347,9 +347,15 @@ router.get("/static/:path*", async (ctx) => {
     // Set caching headers for static assets
     // Cache for 1 hour in development, 1 day in production
     const maxAge = Deno.env.get("ENVIRONMENT") === "production" ? 86400 : 3600;
-    ctx.response.headers.set("Cache-Control", `public, max-age=${maxAge}`);
+    // Service worker must always revalidate so the browser detects updates quickly.
+    // ETag makes this cheap (304 Not Modified when unchanged).
+    if (filePath === "sw.js") {
+      ctx.response.headers.set("Cache-Control", "no-cache");
+    } else {
+      ctx.response.headers.set("Cache-Control", `public, max-age=${maxAge}`);
+    }
 
-    // ETag based on file size + content hash for stable cache validation
+    // ETag based on content hash for stable cache validation
     const hashBuffer = await crypto.subtle.digest("SHA-1", file);
     const hashHex = Array.from(new Uint8Array(hashBuffer)).map((b) =>
       b.toString(16).padStart(2, "0")
