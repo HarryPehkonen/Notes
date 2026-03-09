@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notes App - Login</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .login-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .login-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+        }
+        @media (max-width: 375px) {
+            .login-card {
+                padding: 1.5rem;
+                margin: 1rem;
+                max-width: calc(100% - 2rem);
+            }
+            h1 {
+                font-size: 1.5rem;
+            }
+            p {
+                font-size: 0.9rem;
+            }
+        }
+        .login-btn {
+            background: #4285f4;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 1rem;
+            font-size: 16px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s ease;
+            min-width: 200px;
+        }
+        .login-btn:hover {
+            background: #3367d6;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(66, 133, 244, 0.3);
+        }
+        .login-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(66, 133, 244, 0.2);
+        }
+        .login-btn.loading {
+            pointer-events: none;
+            background: #93b4f7;
+            padding-right: 48px;
+        }
+        .login-btn.loading::after {
+            content: "";
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            border: 2px solid white;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: translateY(-50%) rotate(360deg); }
+        }
+        .feedback-message {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: #666;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .feedback-message.show {
+            opacity: 1;
+        }
+        h1 { color: #333; margin-bottom: 0.5rem; }
+        p { color: #666; line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h1>※ Notes App</h1>
+        <p>Secure, searchable notes with full-text search and offline support.</p>
+        <a href="/auth/login" class="login-btn" id="loginBtn">Login with Google</a>
+        <div class="feedback-message" id="feedbackMsg">Redirecting to Google...</div>
+    </div>
+
+    <script>
+        document.getElementById('loginBtn').addEventListener('click', function(e) {
+            this.classList.add('loading');
+            this.textContent = 'Signing in...';
+            document.getElementById('feedbackMsg').classList.add('show');
+        });
+    </script>
+</body>
+</html>

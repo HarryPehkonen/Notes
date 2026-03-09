@@ -216,13 +216,13 @@ export function createTagsRouter() {
     }
 
     try {
-      // Check if tag exists and belongs to user
-      const tagCheck = await db.query(
-        `SELECT id, name FROM tags WHERE id = $1 AND user_id = $2`,
+      // Delete the tag (CASCADE will remove note_tags relationships)
+      const result = await db.query(
+        `DELETE FROM tags WHERE id = $1 AND user_id = $2 RETURNING id`,
         [tagId, user.id],
       );
 
-      if (tagCheck.rows.length === 0) {
+      if (result.rows.length === 0) {
         ctx.response.status = 404;
         ctx.response.body = {
           success: false,
@@ -231,28 +231,8 @@ export function createTagsRouter() {
         return;
       }
 
-      // Get count of notes using this tag
-      const usageCheck = await db.query(
-        `SELECT COUNT(*) as count FROM note_tags WHERE tag_id = $1`,
-        [tagId],
-      );
-
-      const notesCount = parseInt(usageCheck.rows[0].count);
-
-      // Delete the tag (CASCADE will remove note_tags relationships)
-      await db.query(
-        `DELETE FROM tags WHERE id = $1 AND user_id = $2`,
-        [tagId, user.id],
-      );
-
-      ctx.response.body = {
-        success: true,
-        data: {
-          id: tagId,
-          name: tagCheck.rows[0].name,
-          notesAffected: notesCount,
-        },
-      };
+      ctx.response.status = 204;
+      ctx.response.body = "";
     } catch (error) {
       console.error("Error deleting tag:", error);
       ctx.response.status = 500;

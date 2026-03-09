@@ -66,6 +66,11 @@ globalThis.NotesApp = {
         return;
       }
 
+      // 204 No Content has no body
+      if (response.status === 204) {
+        return { success: true };
+      }
+
       const data = await response.json();
 
       if (!response.ok) {

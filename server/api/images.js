@@ -300,10 +300,8 @@ export function createImagesRouter() {
         }
       }
 
-      ctx.response.body = {
-        success: true,
-        data: { filename, deleted: true },
-      };
+      ctx.response.status = 204;
+      ctx.response.body = "";
     } catch (error) {
       console.error("Error deleting image:", error);
       ctx.response.status = 500;

@@ -10,7 +10,6 @@ Improvements identified from code review (March 2025).
 
 ## Medium Priority
 
-- [ ] **Break up large components** — `notes-app.js` (~1100 lines) and `note-editor.js` (~1260 lines) do too much. Extract sub-components: image upload, tag selector, markdown preview, editor toolbar.
 - [x] **Add note list pagination** — Currently loads up to 50 notes with no infinite scroll or "load more". Will degrade with hundreds of notes.
 - [x] **Use error codes for constraint detection** — In `server/api/tags.js`, replace `error.message.includes("duplicate key")` with PostgreSQL error code `23505` check.
 - [x] **Remove dead `stripMarkdown()`** — Was in `public/app.js` but never called. Removed. Canonical version lives in `server/database/client.js`.
@@ -18,7 +17,7 @@ Improvements identified from code review (March 2025).
 
 ## Low Priority
 
-- [ ] **Wire up `clearOldDrafts()`** — Defined in `public/services/persistence.js` but never called. Either call it on startup or remove the dead code.
-- [ ] **Extract login page HTML** — Move the ~130-line login page template literal out of `server/main.js` into a separate HTML file.
+- [x] **Remove dead `clearOldDrafts()`** — Removed from `public/services/persistence.js`.
+- [x] **Extract login page HTML** — Moved to `public/login.html`, served via `Deno.readTextFile`.
 - [ ] **Automate service worker cache versioning** — Currently manual bump (`v30`). Consider generating the version from a file hash or build timestamp.
-- [ ] **DELETE response codes** — Return 204 No Content instead of 200 for DELETE endpoints (REST convention).
+- [x] **DELETE response codes** — Return 204 No Content instead of 200 for DELETE endpoints.

@@ -355,10 +355,8 @@ export function createNotesRouter() {
         cleanupOrphanedImages(db, user.id, [...images]);
       }
 
-      ctx.response.body = {
-        success: true,
-        data: { id: noteId, archived: true },
-      };
+      ctx.response.status = 204;
+      ctx.response.body = "";
     } catch (error) {
       console.error("Error deleting note:", error);
       ctx.response.status = 500;

@@ -327,36 +327,6 @@ class PersistenceService {
     });
   }
 
-  /**
-   * Clear old drafts (older than maxAge in milliseconds)
-   * @param {number} maxAge - Maximum age in milliseconds (default: 7 days)
-   */
-  async clearOldDrafts(maxAge = 7 * 24 * 60 * 60 * 1000) {
-    const db = await this.getDb();
-    const cutoff = Date.now() - maxAge;
-
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([DRAFTS_STORE], "readwrite");
-      const store = transaction.objectStore(DRAFTS_STORE);
-      const index = store.index("updatedAt");
-      const range = IDBKeyRange.upperBound(cutoff);
-
-      const request = index.openCursor(range);
-      const deleted = [];
-
-      request.onsuccess = (event) => {
-        const cursor = event.target.result;
-        if (cursor) {
-          deleted.push(cursor.value.noteId);
-          cursor.delete();
-          cursor.continue();
-        } else {
-          resolve(deleted);
-        }
-      };
-      request.onerror = () => reject(request.error);
-    });
-  }
 }
 
 // Export singleton instance
