@@ -15,6 +15,8 @@ class NotesApp extends LitElement {
     loading: { type: Boolean },
     viewMode: { type: String }, // 'list', 'edit', 'search'
     sidebarOpen: { type: Boolean },
+    hasMore: { type: Boolean },
+    loadingMore: { type: Boolean },
     pendingSyncCount: { type: Number },
     syncStatus: { type: String }, // 'idle', 'syncing', 'pending', 'offline', 'error'
   };
@@ -474,6 +476,8 @@ class NotesApp extends LitElement {
     this.viewMode = "list";
     this.sidebarOpen = false;
     this.toasts = [];
+    this.hasMore = false;
+    this.loadingMore = false;
     this.pendingSyncCount = 0;
     this.syncStatus = "idle";
 
@@ -689,6 +693,10 @@ class NotesApp extends LitElement {
       await this.loadTags();
     });
 
+    this.addEventListener("load-more", () => {
+      this.loadMoreNotes();
+    });
+
     this.addEventListener("note-deleted", (event) => {
       this.notes = this.notes.filter((n) => n.id !== event.detail.noteId);
       if (this.currentNote?.id === event.detail.noteId) {
@@ -781,6 +789,7 @@ class NotesApp extends LitElement {
   async filterNotes() {
     try {
       this.loading = true;
+      this.hasMore = false;
 
       const hasSearchQuery = this.searchQuery && this.searchQuery.trim();
       const hasTagFilter = this.selectedTags.length > 0;
@@ -792,11 +801,13 @@ class NotesApp extends LitElement {
           tags: this.selectedTags.map((tag) => tag.id),
         });
         this.notes = result.data?.results || [];
+        this.hasMore = result.meta?.hasMore || false;
         this.viewMode = "search";
       } else if (hasSearchQuery) {
         // Just search query
         const result = await globalThis.NotesApp.searchNotes(this.searchQuery);
         this.notes = result.data?.results || [];
+        this.hasMore = result.meta?.hasMore || false;
         this.viewMode = "search";
       } else {
         // No search query, just filter by tags (or show all)
@@ -806,6 +817,7 @@ class NotesApp extends LitElement {
         }
         const result = await globalThis.NotesApp.getNotes(options);
         this.notes = result.data?.notes || [];
+        this.hasMore = result.meta?.hasMore || false;
         this.viewMode = "list";
       }
       this.requestUpdate(); // Force re-render
@@ -814,6 +826,45 @@ class NotesApp extends LitElement {
       this.showToast("Failed to filter notes", "error");
     } finally {
       this.loading = false;
+    }
+  }
+
+  async loadMoreNotes() {
+    if (this.loadingMore || !this.hasMore) return;
+
+    try {
+      this.loadingMore = true;
+      const offset = this.notes.length;
+
+      const hasSearchQuery = this.searchQuery && this.searchQuery.trim();
+      const hasTagFilter = this.selectedTags.length > 0;
+
+      let result;
+      if (hasSearchQuery && hasTagFilter) {
+        result = await globalThis.NotesApp.advancedSearch({
+          query: this.searchQuery,
+          tags: this.selectedTags.map((tag) => tag.id),
+          offset,
+        });
+        this.notes = [...this.notes, ...(result.data?.results || [])];
+      } else if (hasSearchQuery) {
+        result = await globalThis.NotesApp.searchNotes(this.searchQuery, { offset });
+        this.notes = [...this.notes, ...(result.data?.results || [])];
+      } else {
+        const options = { offset };
+        if (hasTagFilter) {
+          options.tags = this.selectedTags.map((tag) => tag.id);
+        }
+        result = await globalThis.NotesApp.getNotes(options);
+        this.notes = [...this.notes, ...(result.data?.notes || [])];
+      }
+
+      this.hasMore = result.meta?.hasMore || false;
+    } catch (error) {
+      console.error("Failed to load more notes:", error);
+      this.showToast("Failed to load more notes", "error");
+    } finally {
+      this.loadingMore = false;
     }
   }
 
@@ -1081,6 +1132,8 @@ class NotesApp extends LitElement {
                   .notes="${this.notes}"
                   .searchQuery="${this.searchQuery}"
                   .selectedTags="${this.selectedTags}"
+                  .hasMore="${this.hasMore}"
+                  .loadingMore="${this.loadingMore}"
                 ></note-list>
               `}
           </div>

@@ -10,6 +10,8 @@ export class NoteList extends LitElement {
     notes: { type: Array },
     searchQuery: { type: String },
     selectedTags: { type: Array },
+    hasMore: { type: Boolean },
+    loadingMore: { type: Boolean },
     viewType: { type: String }, // 'grid' or 'list'
     sortField: { type: String }, // 'modified', 'created', 'title'
     sortDirection: { type: String }, // 'asc' or 'desc'
@@ -297,6 +299,33 @@ export class NoteList extends LitElement {
       margin-bottom: 1.5rem;
     }
 
+    .load-more {
+      display: flex;
+      justify-content: center;
+      padding: 1.5rem 0;
+    }
+
+    .load-more button {
+      padding: 0.625rem 1.5rem;
+      background: var(--gray-100);
+      border: 1px solid var(--gray-300);
+      border-radius: 0.5rem;
+      cursor: pointer;
+      font-size: 0.875rem;
+      color: var(--gray-700);
+      transition: all 0.2s;
+    }
+
+    .load-more button:hover:not(:disabled) {
+      background: var(--gray-200);
+      border-color: var(--gray-400);
+    }
+
+    .load-more button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
     .highlight {
       background: yellow;
       padding: 0.125rem 0.25rem;
@@ -340,6 +369,8 @@ export class NoteList extends LitElement {
     this.notes = [];
     this.searchQuery = "";
     this.selectedTags = [];
+    this.hasMore = false;
+    this.loadingMore = false;
     // Load preferences from localStorage
     this.viewType = localStorage.getItem("notes-viewType") || "grid";
     this.sortField = localStorage.getItem("notes-sortField") || "modified";
@@ -418,6 +449,15 @@ export class NoteList extends LitElement {
   handleSortFieldChange(e) {
     this.sortField = e.target.value;
     localStorage.setItem("notes-sortField", this.sortField);
+  }
+
+  handleLoadMore() {
+    this.dispatchEvent(
+      new CustomEvent("load-more", {
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   toggleSortDirection() {
@@ -622,6 +662,16 @@ export class NoteList extends LitElement {
           <div class="${this.viewType === "grid" ? "notes-grid" : "notes-list"}">
             ${filteredNotes.map((note) => this.renderNoteCard(note))}
           </div>
+          ${this.hasMore ? html`
+            <div class="load-more">
+              <button
+                @click="${this.handleLoadMore}"
+                ?disabled="${this.loadingMore}"
+              >
+                ${this.loadingMore ? "Loading..." : "Load more"}
+              </button>
+            </div>
+          ` : ""}
         `}
       </div>
     `;
