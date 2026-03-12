@@ -25,6 +25,7 @@ class NotesApp extends LitElement {
     :host {
       display: block;
       height: 100vh;
+      height: 100dvh;
       overflow: hidden;
     }
 
