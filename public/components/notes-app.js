@@ -388,6 +388,10 @@ class NotesApp extends LitElement {
         display: flex;
       }
 
+      .mobile-header.editing {
+        display: none;
+      }
+
       .sidebar-close {
         display: block;
       }
@@ -717,6 +721,10 @@ class NotesApp extends LitElement {
     });
 
     // Listen for component events
+    this.addEventListener("toggle-sidebar", () => {
+      this.toggleSidebar();
+    });
+
     this.addEventListener("note-selected", async (event) => {
       // Save any pending changes before switching notes
       if (this.viewMode === "edit" && this.currentNote) {
@@ -1066,7 +1074,7 @@ class NotesApp extends LitElement {
   render() {
     return html`
       <div class="app-layout">
-        <div class="mobile-header">
+        <div class="mobile-header ${this.viewMode === "edit" ? "editing" : ""}">
           <div class="mobile-header-left">
             <button class="menu-toggle" @click="${this.toggleSidebar}">
               ☰

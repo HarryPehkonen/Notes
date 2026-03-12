@@ -51,11 +51,20 @@ export class NoteEditor extends LitElement {
 
     .editor-header.collapsed {
       padding: 0.75rem 1rem;
-      cursor: pointer;
       display: flex;
       align-items: center;
-      justify-content: space-between;
       gap: 0.5rem;
+    }
+
+    .menu-toggle {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.25rem;
+      font-size: 1.25rem;
+      line-height: 1;
+      color: var(--gray-700);
+      flex-shrink: 0;
     }
 
     .collapsed-title {
@@ -66,6 +75,7 @@ export class NoteEditor extends LitElement {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      cursor: pointer;
     }
 
     .header-toggle {
@@ -906,6 +916,15 @@ export class NoteEditor extends LitElement {
     localStorage.setItem("notes-previewMode", this.previewMode);
   }
 
+  _handleMenuToggle() {
+    this.dispatchEvent(
+      new CustomEvent("toggle-sidebar", {
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
   toggleHeader() {
     this.headerCollapsed = !this.headerCollapsed;
     localStorage.setItem("notes-headerCollapsed", this.headerCollapsed);
@@ -1103,9 +1122,10 @@ export class NoteEditor extends LitElement {
       <div class="editor-container">
         ${this.headerCollapsed
           ? html`
-            <div class="editor-header collapsed" @click="${this.toggleHeader}">
-              <span class="collapsed-title">${this.note.title || "Untitled"}</span>
-              <button class="header-toggle" title="Expand header">
+            <div class="editor-header collapsed">
+              <button class="menu-toggle" @click="${this._handleMenuToggle}" title="Menu">☰</button>
+              <span class="collapsed-title" @click="${this.toggleHeader}">${this.note.title || "Untitled"}</span>
+              <button class="header-toggle" @click="${this.toggleHeader}" title="Expand header">
                 <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                   <path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
                 </svg>
