@@ -14,6 +14,7 @@ class LiveSync {
     this.baseDelay = 1000;
     this.reconnectTimer = null;
     this._handlers = new Map();
+    this._hasConnectedBefore = false;
   }
 
   connect() {
@@ -25,13 +26,19 @@ class LiveSync {
     this.ws = new WebSocket(url);
 
     this.ws.onopen = () => {
+      const isReconnect = this._hasConnectedBefore;
+      this._hasConnectedBefore = true;
       this.reconnectAttempt = 0;
       this._emit("connected");
+      if (isReconnect) {
+        this._emit("reconnected");
+      }
     };
 
     this.ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
+        if (message.type === "ping") return; // ignore keepalive
         this._emit(message.type, message);
       } catch (e) {
         console.error("LiveSync: invalid message", e);

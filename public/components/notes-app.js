@@ -574,12 +574,15 @@ class NotesApp extends LitElement {
   _setupLiveSyncListeners() {
     this._boundHandleNoteUpdatedWs = this._handleNoteUpdatedWs.bind(this);
     this._boundHandleSyncConflict = this._handleSyncConflict.bind(this);
+    this._boundHandleReconnected = this._handleReconnected.bind(this);
     globalThis.NotesApp?.liveSync?.on("note-updated", this._boundHandleNoteUpdatedWs);
+    globalThis.NotesApp?.liveSync?.on("reconnected", this._boundHandleReconnected);
     document.addEventListener("sync-conflict", this._boundHandleSyncConflict);
   }
 
   _removeLiveSyncListeners() {
     globalThis.NotesApp?.liveSync?.off("note-updated", this._boundHandleNoteUpdatedWs);
+    globalThis.NotesApp?.liveSync?.off("reconnected", this._boundHandleReconnected);
     document.removeEventListener("sync-conflict", this._boundHandleSyncConflict);
   }
 
@@ -614,6 +617,29 @@ class NotesApp extends LitElement {
     }
 
     // Not editing this note — refresh list
+    this.filterNotes();
+  }
+
+  async _handleReconnected() {
+    // Re-fetch current note if editing (may have been updated while disconnected)
+    if (this.viewMode === "edit" && this.currentNote) {
+      const editor = this.shadowRoot?.querySelector("note-editor");
+      if (editor && editor.hasUnsavedChanges) {
+        this.showToast("Reconnected. You have unsaved changes — save to keep them.", "warning");
+      } else {
+        try {
+          const result = await globalThis.NotesApp.getNote(this.currentNote.id);
+          if (result.data.updated_at !== this.currentNote.updated_at) {
+            this.currentNote = result.data;
+            this.showToast("Note refreshed after reconnect", "info");
+          }
+        } catch (e) {
+          console.error("Failed to refresh note after reconnect:", e);
+        }
+      }
+    }
+
+    // Refresh the note list to catch any changes
     this.filterNotes();
   }
 

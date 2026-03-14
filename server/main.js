@@ -328,8 +328,21 @@ router.get("/ws", async (ctx) => {
   const ws = ctx.upgrade();
   addConnection(user.id, ws);
 
-  ws.onclose = () => removeConnection(user.id, ws);
-  ws.onerror = () => removeConnection(user.id, ws);
+  // Keep connection alive through proxies (Caddy, etc.)
+  const pingInterval = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "ping" }));
+    }
+  }, 30000);
+
+  ws.onclose = () => {
+    clearInterval(pingInterval);
+    removeConnection(user.id, ws);
+  };
+  ws.onerror = () => {
+    clearInterval(pingInterval);
+    removeConnection(user.id, ws);
+  };
 });
 
 // Static file serving
