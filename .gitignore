@@ -17,6 +17,7 @@ backup.sql
 
 # Scratch files
 notes.txt
+TODO.md
 
 # Logs
 *.log
