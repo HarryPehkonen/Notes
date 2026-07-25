@@ -1,35 +1,38 @@
 /* Notes App - Mobile-First CSS */
 
 :root {
-  /* Color palette */
-  --primary: #667eea;
-  --primary-dark: #5a6fd8;
-  --primary-light: #a5b2f5;
-  --secondary: #764ba2;
-  --accent: #f093fb;
+  /* Color palette - paper & ink, one reserved accent */
+  --primary: #2b6e63;
+  --primary-rgb: 43, 110, 99;
+  --primary-dark: #1e4f47;
+  --primary-light: #a9cec4;
+  --secondary: #3a6ea5;
+  --accent: #b8752a;
+  --accent-rgb: 184, 117, 42;
 
-  /* Neutral colors */
+  /* Neutral colors - paper (bg) through ink (text), tinted toward the accent */
   --white: #ffffff;
-  --gray-50: #f9fafb;
-  --gray-100: #f3f4f6;
-  --gray-200: #e5e7eb;
-  --gray-300: #d1d5db;
-  --gray-400: #9ca3af;
-  --gray-500: #6b7280;
-  --gray-600: #4b5563;
-  --gray-700: #374151;
-  --gray-800: #1f2937;
-  --gray-900: #111827;
+  --gray-50: #eef1ee;
+  --gray-100: #e3e7e2;
+  --gray-200: #dbe1dd;
+  --gray-300: #c3ccc6;
+  --gray-400: #96a29b;
+  --gray-500: #78857e;
+  --gray-600: #5b6560;
+  --gray-700: #414944;
+  --gray-800: #2a302c;
+  --gray-900: #1b1f1d;
 
   /* Semantic colors */
-  --success: #10b981;
-  --warning: #f59e0b;
-  --error: #ef4444;
-  --info: #3b82f6;
+  --success: #3f7a4e;
+  --warning: #b8752a;
+  --error: #a63f2b;
+  --info: #3a6ea5;
 
   /* Typography */
   --font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
   --font-mono:
     "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
 
@@ -217,7 +220,7 @@ body {
 .form-input:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgb(102 126 234 / 0.1);
+  box-shadow: 0 0 0 3px rgb(var(--primary-rgb) / 0.15);
 }
 
 .form-input::placeholder {
@@ -611,16 +614,30 @@ body {
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
   :root {
-    --gray-50: #1f2937;
-    --gray-100: #374151;
-    --gray-200: #4b5563;
-    --gray-300: #6b7280;
-    --gray-400: #9ca3af;
-    --gray-500: #d1d5db;
-    --gray-600: #e5e7eb;
-    --gray-700: #f3f4f6;
-    --gray-800: #f9fafb;
-    --gray-900: #ffffff;
+    --primary: #6fbfae;
+    --primary-rgb: 111, 191, 174;
+    --primary-dark: #8fd2c3;
+    --primary-light: #1c3833;
+    --secondary: #7ea8cf;
+    --accent: #e0a05c;
+    --accent-rgb: 224, 160, 92;
+
+    --white: #1a201e;
+    --gray-50: #121615;
+    --gray-100: #1f2521;
+    --gray-200: #2a322e;
+    --gray-300: #3a443e;
+    --gray-400: #56625b;
+    --gray-500: #7c8983;
+    --gray-600: #9aa69f;
+    --gray-700: #b7c1bc;
+    --gray-800: #d3dbd6;
+    --gray-900: #e8ede9;
+
+    --success: #5fae74;
+    --warning: #e0a05c;
+    --error: #d98269;
+    --info: #7ea8cf;
   }
 
   body {

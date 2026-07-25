@@ -4,6 +4,7 @@
  */
 
 import { css, html, LitElement } from "lit";
+import { icons } from "../utils/icons.js";
 
 class NotesApp extends LitElement {
   static properties = {
@@ -12,9 +13,12 @@ class NotesApp extends LitElement {
     currentNote: { type: Object },
     searchQuery: { type: String },
     selectedTags: { type: Array },
+    pinnedOnly: { type: Boolean },
     loading: { type: Boolean },
     viewMode: { type: String }, // 'list', 'edit', 'search'
-    sidebarOpen: { type: Boolean },
+    sidebarOpen: { type: Boolean }, // mobile nav drawer
+    flyoutOpen: { type: Boolean }, // desktop tags flyout
+    userMenuOpen: { type: Boolean },
     hasMore: { type: Boolean },
     loadingMore: { type: Boolean },
     pendingSyncCount: { type: Number },
@@ -33,202 +37,475 @@ class NotesApp extends LitElement {
       display: flex;
       height: 100%;
       background: var(--gray-50);
+      position: relative;
     }
 
-    .sidebar {
-      width: 280px;
+    .logo-mark {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: var(--primary);
+      color: var(--white);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-serif);
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+
+    /* ---------- Desktop rail ---------- */
+    .rail {
+      display: none;
+      width: 68px;
+      flex-shrink: 0;
       background: var(--white);
       border-right: 1px solid var(--gray-200);
+      flex-direction: column;
+      align-items: center;
+      padding: 0.9rem 0;
+      gap: 0.35rem;
+      position: relative;
+    }
+
+    .rail .logo-mark {
+      margin-bottom: 0.6rem;
+    }
+
+    .rail-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      border: none;
+      background: transparent;
+      color: var(--gray-500);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .rail-btn svg {
+      width: 19px;
+      height: 19px;
+    }
+
+    .rail-btn:hover {
+      background: var(--gray-100);
+      color: var(--gray-800);
+    }
+
+    .rail-btn.active {
+      background: var(--primary-light);
+      color: var(--primary-dark);
+    }
+
+    .rail-btn.accent {
+      color: var(--primary);
+    }
+
+    .rail-btn.accent:hover {
+      background: var(--primary-light);
+      color: var(--primary-dark);
+    }
+
+    .rail-spacer {
+      flex: 1;
+    }
+
+    .rail-footer {
       display: flex;
       flex-direction: column;
-      transition: transform 0.3s ease;
+      align-items: center;
+      gap: 0.6rem;
     }
 
-    .sidebar-header {
+    .sync-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--gray-300);
+    }
+
+    .sync-dot.syncing,
+    .sync-dot.pending {
+      background: var(--info);
+      animation: syncPulse 1.5s infinite;
+    }
+
+    .sync-dot.offline {
+      background: var(--gray-400);
+    }
+
+    .sync-dot.error {
+      background: var(--error);
+    }
+
+    @keyframes syncPulse {
+      0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.5;
+        transform: scale(0.8);
+      }
+    }
+
+    .avatar-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      overflow: hidden;
+      background: var(--primary-light);
+      flex-shrink: 0;
+    }
+
+    .avatar-btn img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .avatar-btn.sm {
+      width: 26px;
+      height: 26px;
+    }
+
+    .user-popover {
+      position: absolute;
+      left: 60px;
+      bottom: 0.75rem;
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: 0.6rem;
+      box-shadow: var(--shadow-lg);
+      padding: 0.6rem;
+      min-width: 170px;
+      z-index: 25;
+    }
+
+    .user-popover-name {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--gray-800);
+      padding: 0.3rem 0.5rem 0.6rem;
+      border-bottom: 1px solid var(--gray-200);
+      margin-bottom: 0.4rem;
+    }
+
+    .user-popover-logout {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      width: 100%;
+      padding: 0.4rem 0.5rem;
+      background: transparent;
+      border: none;
+      border-radius: 0.4rem;
+      font-size: 0.85rem;
+      color: var(--gray-700);
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .user-popover-logout svg {
+      width: 16px;
+      height: 16px;
+      color: var(--gray-500);
+    }
+
+    .user-popover-logout:hover {
+      background: var(--gray-100);
+    }
+
+    .popover-scrim {
+      position: fixed;
+      inset: 0;
+      z-index: 24;
+      background: transparent;
+    }
+
+    /* ---------- Desktop tags flyout ---------- */
+    .flyout-scrim {
+      position: fixed;
+      inset: 0;
+      z-index: 18;
+      background: transparent;
+    }
+
+    .flyout {
+      width: 240px;
+      flex-shrink: 0;
+      background: var(--white);
+      border-right: 1px solid var(--gray-200);
+      padding: 1.1rem 1rem;
+      overflow-y: auto;
+      z-index: 19;
       position: relative;
+    }
+
+    .flyout-header {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--gray-500);
+      margin-bottom: 0.8rem;
+    }
+
+    /* ---------- Mobile top strip ---------- */
+    .mobile-topbar {
+      display: none;
+      padding: 0.85rem 1rem;
+      background: var(--white);
+      border-bottom: 1px solid var(--gray-200);
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .mobile-logo {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-family: var(--font-serif);
+      font-size: 1.15rem;
+      color: var(--gray-900);
+    }
+
+    .icon-btn {
+      width: 34px;
+      height: 34px;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      color: var(--gray-600);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .icon-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .icon-btn:hover {
+      background: var(--gray-100);
+      color: var(--gray-900);
+    }
+
+    .mobile-topbar-spacer {
+      flex: 1;
+    }
+
+    /* ---------- Mobile-only nav drawer ---------- */
+    .drawer {
+      display: none;
+    }
+
+    .drawer-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 20, 18, 0.45);
+      z-index: 19;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      pointer-events: none;
+    }
+
+    .drawer-overlay.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .drawer-header {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
       padding: 1rem;
       border-bottom: 1px solid var(--gray-200);
-      background: var(--primary);
-      color: white;
     }
 
-    .app-title {
-      font-size: 1.25rem;
-      font-weight: 600;
-      margin: 0;
+    .drawer-title {
+      font-family: var(--font-serif);
+      font-size: 1.2rem;
+      color: var(--gray-900);
+      flex: 1;
     }
 
-    .sidebar-content {
+    .drawer-content {
       flex: 1;
       overflow-y: auto;
       padding: 1rem;
     }
 
-    .mobile-search {
-      display: none;
-      margin-bottom: 1rem;
-    }
-
-    .sidebar-section {
-      margin-bottom: 1.5rem;
-    }
-
-    .section-title {
-      font-size: 0.875rem;
-      font-weight: 600;
-      color: var(--gray-700);
-      margin-bottom: 0.5rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .main-content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    .top-bar {
-      height: 64px;
-      background: var(--white);
-      border-bottom: 1px solid var(--gray-200);
-      display: flex;
-      align-items: center;
-      padding: 0 1rem;
-      gap: 1rem;
-    }
-
-    .content-area {
-      flex: 1;
-      overflow: hidden;
-      position: relative;
-    }
-
-    .active-filters {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.5rem 1rem;
-      background: var(--gray-50);
-      border-radius: 0.5rem;
-    }
-
-    .filter-info {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-size: 0.875rem;
-      color: var(--gray-600);
-    }
-
-    .filter-tag {
-      padding: 0.25rem 0.5rem;
-      background: var(--white);
-      border: 1px solid var(--gray-300);
-      border-radius: 0.25rem;
-      font-size: 0.75rem;
-    }
-
-    .clear-filters-btn {
-      padding: 0.25rem 0.75rem;
-      background: var(--primary);
-      color: white;
-      border: none;
-      border-radius: 0.25rem;
-      font-size: 0.75rem;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .clear-filters-btn:hover {
-      background: var(--primary-dark);
-    }
-
     .new-note-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
       width: 100%;
-      padding: 0.75rem;
+      padding: 0.65rem;
       background: var(--primary);
-      color: white;
+      color: var(--white);
       border: none;
       border-radius: 0.5rem;
       font-weight: 500;
+      font-size: 0.9rem;
       cursor: pointer;
-      transition: background 0.2s;
-      margin-bottom: 1rem;
+      margin-bottom: 1.1rem;
+    }
+
+    .new-note-btn svg {
+      width: 16px;
+      height: 16px;
     }
 
     .new-note-btn:hover {
       background: var(--primary-dark);
     }
 
-    .stats {
+    .nav-list {
       display: flex;
-      gap: 1rem;
-      margin-bottom: 1rem;
+      flex-direction: column;
+      gap: 0.2rem;
+      margin-bottom: 1.3rem;
     }
 
-    .stat {
-      text-align: center;
-      padding: 0.75rem;
-      background: var(--gray-50);
-      border-radius: 0.5rem;
-      flex: 1;
-    }
-
-    .stat.clickable {
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .stat.clickable:hover {
-      background: var(--gray-100);
-      transform: translateY(-1px);
-    }
-
-    .stat-number {
-      display: block;
-      font-size: 1.25rem;
-      font-weight: 600;
-      color: var(--primary);
-    }
-
-    .stat-label {
-      font-size: 0.75rem;
-      color: var(--gray-600);
-    }
-
-    .user-menu {
+    .nav-row {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      margin-left: auto;
-    }
-
-    .user-avatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      object-fit: cover;
-    }
-
-    .user-name {
-      font-size: 0.875rem;
-      color: var(--gray-700);
-    }
-
-    .logout-btn {
-      padding: 0.25rem 0.5rem;
+      gap: 0.65rem;
+      padding: 0.55rem 0.6rem;
+      border: none;
       background: transparent;
-      border: 1px solid var(--gray-300);
-      border-radius: 0.25rem;
+      border-radius: 0.5rem;
+      font-size: 0.9rem;
+      color: var(--gray-700);
+      cursor: pointer;
+      text-align: left;
+      width: 100%;
+    }
+
+    .nav-row svg {
+      width: 17px;
+      height: 17px;
+      color: var(--gray-500);
+      flex-shrink: 0;
+    }
+
+    .nav-row:hover {
+      background: var(--gray-100);
+    }
+
+    .nav-row.active {
+      background: var(--primary-light);
+      color: var(--primary-dark);
+    }
+
+    .nav-row.active svg {
+      color: var(--primary-dark);
+    }
+
+    .nav-row .cnt {
+      margin-left: auto;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--gray-400);
+    }
+
+    .nav-section-title {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--gray-500);
+      margin-bottom: 0.6rem;
+    }
+
+    .drawer-footer {
+      border-top: 1px solid var(--gray-200);
+      padding: 0.85rem 1rem;
+    }
+
+    .drawer-user {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .drawer-user .user-name {
+      flex: 1;
+      font-size: 0.85rem;
+      color: var(--gray-700);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* ---------- Library bar (always visible, mobile + desktop) ---------- */
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .libbar {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      padding: 0.75rem 1.25rem;
+      border-bottom: 1px solid var(--gray-200);
+      background: var(--white);
+      flex-wrap: wrap;
+    }
+
+    .crumb {
+      font-family: var(--font-mono);
       font-size: 0.75rem;
+      color: var(--gray-500);
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .clear-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.3rem 0.65rem;
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      border-radius: 999px;
+      font-size: 0.78rem;
       color: var(--gray-600);
       cursor: pointer;
+      white-space: nowrap;
     }
 
-    .logout-btn:hover {
-      background: var(--gray-50);
+    .clear-btn svg {
+      width: 13px;
+      height: 13px;
+    }
+
+    .clear-btn:hover {
+      background: var(--gray-200);
+      color: var(--gray-900);
+    }
+
+    .libbar-spacer {
+      flex: 1;
     }
 
     .sync-status {
@@ -239,6 +516,7 @@ class NotesApp extends LitElement {
       border-radius: 1rem;
       font-size: 0.75rem;
       font-weight: 500;
+      white-space: nowrap;
     }
 
     .sync-status.idle {
@@ -247,12 +525,12 @@ class NotesApp extends LitElement {
 
     .sync-status.syncing {
       background: var(--info-light, #e0f2fe);
-      color: var(--info, #0284c7);
+      color: var(--info);
     }
 
     .sync-status.pending {
-      background: var(--warning-light, #fef3c7);
-      color: var(--warning, #d97706);
+      background: var(--gray-100);
+      color: var(--gray-600);
     }
 
     .sync-status.offline {
@@ -262,7 +540,7 @@ class NotesApp extends LitElement {
 
     .sync-status.error {
       background: var(--error-light, #fee2e2);
-      color: var(--error, #dc2626);
+      color: var(--error);
     }
 
     .sync-indicator {
@@ -277,41 +555,10 @@ class NotesApp extends LitElement {
       animation: syncPulse 1.5s infinite;
     }
 
-    @keyframes syncPulse {
-      0%, 100% {
-        opacity: 1;
-        transform: scale(1);
-      }
-      50% {
-        opacity: 0.5;
-        transform: scale(0.8);
-      }
-    }
-
-    .mobile-header {
-      display: none;
-      padding: 1rem;
-      background: var(--white);
-      border-bottom: 1px solid var(--gray-200);
-      align-items: center;
-      gap: 1rem;
-    }
-
-    .mobile-header-left {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-
-    .mobile-header .sync-status {
-      margin-left: auto;
-    }
-
-    .menu-toggle {
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 0.25rem;
+    .content-area {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
     }
 
     .loading-overlay {
@@ -327,97 +574,51 @@ class NotesApp extends LitElement {
       z-index: 10;
     }
 
-    .sidebar-overlay {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 19;
-      opacity: 0;
-      transition: opacity 0.3s ease;
-    }
-
-    .sidebar-overlay.visible {
-      display: block;
-      opacity: 1;
-    }
-
-    .sidebar-close {
-      display: none;
-      position: absolute;
-      top: 1rem;
-      right: 1rem;
-      background: transparent;
-      border: none;
-      color: white;
-      font-size: 1.5rem;
-      cursor: pointer;
-      padding: 0.25rem;
-      line-height: 1;
-      transition: transform 0.2s ease;
-    }
-
-    .sidebar-close:hover {
-      transform: scale(1.1);
-    }
-
-    /* Mobile styles */
+    /* ---------- Mobile ---------- */
     @media (max-width: 768px) {
-      .app-layout {
-        flex-direction: column;
+      .rail {
+        display: none !important;
       }
 
-      .sidebar {
+      .mobile-topbar {
+        display: flex;
+      }
+
+      .mobile-topbar.editing {
+        display: none;
+      }
+
+      .drawer {
+        display: flex;
         position: absolute;
         top: 0;
         left: 0;
         bottom: 0;
-        width: 240px;
+        width: 250px;
         z-index: 20;
+        background: var(--white);
+        flex-direction: column;
         transform: translateX(-100%);
+        transition: transform 0.25s ease;
       }
 
-      .sidebar.open {
+      .drawer.open {
         transform: translateX(0);
       }
 
-      .mobile-header {
+      .drawer-overlay {
+        display: block;
+      }
+
+      .libbar {
+        padding: 0.65rem 1rem;
+      }
+    }
+
+    /* ---------- Desktop ---------- */
+    @media (min-width: 769px) {
+      .rail {
         display: flex;
-      }
-
-      .mobile-header.editing {
-        display: none;
-      }
-
-      .sidebar-close {
-        display: block;
-      }
-
-      .sidebar-overlay {
-        display: block;
-        opacity: 0;
-        pointer-events: none;
-      }
-
-      .sidebar-overlay.visible {
-        opacity: 1;
-        pointer-events: auto;
-      }
-
-      .top-bar {
-        display: none;
-      }
-
-      .main-content {
-        flex: 1;
-        min-height: 0;
-      }
-
-      .mobile-search {
-        display: block;
       }
     }
 
@@ -477,9 +678,12 @@ class NotesApp extends LitElement {
     this.currentNote = null;
     this.searchQuery = "";
     this.selectedTags = [];
+    this.pinnedOnly = false;
     this.loading = false;
     this.viewMode = "list";
     this.sidebarOpen = false;
+    this.flyoutOpen = false;
+    this.userMenuOpen = false;
     this.toasts = [];
     this.hasMore = false;
     this.loadingMore = false;
@@ -596,7 +800,10 @@ class NotesApp extends LitElement {
 
       const editor = this.shadowRoot?.querySelector("note-editor");
       if (editor && editor.hasUnsavedChanges) {
-        this.showToast("This note was updated on another device. Save to overwrite, or reload the page.", "warning");
+        this.showToast(
+          "This note was updated on another device. Save to overwrite, or reload the page.",
+          "warning",
+        );
         return;
       }
 
@@ -646,7 +853,10 @@ class NotesApp extends LitElement {
   _handleSyncConflict(event) {
     const { noteId } = event.detail;
     if (this.currentNote?.id === noteId) {
-      this.showToast("Save conflict — this note was updated elsewhere. Reload to get the latest version.", "warning");
+      this.showToast(
+        "Save conflict — this note was updated elsewhere. Reload to get the latest version.",
+        "warning",
+      );
     }
   }
 
@@ -740,6 +950,8 @@ class NotesApp extends LitElement {
         this.currentNote = null;
       }
       this.sidebarOpen = false;
+      this.flyoutOpen = false;
+      this.userMenuOpen = false;
     });
 
     document.addEventListener("show-toast", (event) => {
@@ -747,10 +959,6 @@ class NotesApp extends LitElement {
     });
 
     // Listen for component events
-    this.addEventListener("toggle-sidebar", () => {
-      this.toggleSidebar();
-    });
-
     this.addEventListener("note-selected", async (event) => {
       // Save any pending changes before switching notes
       if (this.viewMode === "edit" && this.currentNote) {
@@ -762,7 +970,7 @@ class NotesApp extends LitElement {
 
       this.currentNote = event.detail.note;
       this.viewMode = "edit";
-      this.sidebarOpen = false; // Close sidebar on mobile
+      this.sidebarOpen = false; // Close drawer on mobile
     });
 
     this.addEventListener("note-created", (event) => {
@@ -867,15 +1075,22 @@ class NotesApp extends LitElement {
 
   performSearch() {
     if (!this.searchQuery.trim()) {
-      // If no search query, filter by tags only (or show all)
+      // If no search query, filter by tags/pinned only (or show all)
       this.filterNotes();
       return;
     }
 
-    // Use filterNotes which handles both search and tag filtering
+    // Use filterNotes which handles search, tag, and pinned filtering
     this.filterNotes();
   }
 
+  /**
+   * Re-fetch notes for the current combination of search text, tag
+   * selection, and pinned-only filter. Routes to whichever endpoint
+   * supports that combination: advancedSearch when a query is paired with
+   * tags and/or pinned, plain searchNotes for query-only, and getNotes for
+   * tag/pinned filtering with no search text.
+   */
   async filterNotes() {
     try {
       this.loading = true;
@@ -883,12 +1098,14 @@ class NotesApp extends LitElement {
 
       const hasSearchQuery = this.searchQuery && this.searchQuery.trim();
       const hasTagFilter = this.selectedTags.length > 0;
+      const hasPinnedFilter = this.pinnedOnly;
 
-      if (hasSearchQuery && hasTagFilter) {
-        // Both search and tags - use advanced search (expects tag IDs)
+      if (hasSearchQuery && (hasTagFilter || hasPinnedFilter)) {
+        // Search combined with tags and/or pinned - use advanced search
         const result = await globalThis.NotesApp.advancedSearch({
           query: this.searchQuery,
           tags: this.selectedTags.map((tag) => tag.id),
+          isPinned: hasPinnedFilter || undefined,
         });
         this.notes = result.data?.results || [];
         this.hasMore = result.meta?.hasMore || false;
@@ -900,10 +1117,13 @@ class NotesApp extends LitElement {
         this.hasMore = result.meta?.hasMore || false;
         this.viewMode = "search";
       } else {
-        // No search query, just filter by tags (or show all)
+        // No search query, filter by tags/pinned (or show all)
         const options = {};
         if (hasTagFilter) {
           options.tags = this.selectedTags.map((tag) => tag.id);
+        }
+        if (hasPinnedFilter) {
+          options.pinned = true;
         }
         const result = await globalThis.NotesApp.getNotes(options);
         this.notes = result.data?.notes || [];
@@ -919,6 +1139,7 @@ class NotesApp extends LitElement {
     }
   }
 
+  /** Pagination for the "Load more" button - mirrors filterNotes()'s routing logic with an offset. */
   async loadMoreNotes() {
     if (this.loadingMore || !this.hasMore) return;
 
@@ -928,12 +1149,14 @@ class NotesApp extends LitElement {
 
       const hasSearchQuery = this.searchQuery && this.searchQuery.trim();
       const hasTagFilter = this.selectedTags.length > 0;
+      const hasPinnedFilter = this.pinnedOnly;
 
       let result;
-      if (hasSearchQuery && hasTagFilter) {
+      if (hasSearchQuery && (hasTagFilter || hasPinnedFilter)) {
         result = await globalThis.NotesApp.advancedSearch({
           query: this.searchQuery,
           tags: this.selectedTags.map((tag) => tag.id),
+          isPinned: hasPinnedFilter || undefined,
           offset,
         });
         this.notes = [...this.notes, ...(result.data?.results || [])];
@@ -944,6 +1167,9 @@ class NotesApp extends LitElement {
         const options = { offset };
         if (hasTagFilter) {
           options.tags = this.selectedTags.map((tag) => tag.id);
+        }
+        if (hasPinnedFilter) {
+          options.pinned = true;
         }
         result = await globalThis.NotesApp.getNotes(options);
         this.notes = [...this.notes, ...(result.data?.notes || [])];
@@ -958,6 +1184,45 @@ class NotesApp extends LitElement {
     }
   }
 
+  /**
+   * Toggle the "Pinned" quick filter from the rail/drawer nav.
+   * Mirrors the tag-filter flow: saves any in-progress edit first, then
+   * switches to list view and re-queries with the pinned flag applied.
+   */
+  async togglePinnedFilter() {
+    // Save any pending changes before switching views
+    if (this.viewMode === "edit" && this.currentNote) {
+      const editor = this.shadowRoot.querySelector("note-editor");
+      if (editor && editor.hasUnsavedChanges) {
+        await editor.autoSave();
+      }
+    }
+
+    this.pinnedOnly = !this.pinnedOnly;
+    this.flyoutOpen = false;
+    this.viewMode = "list";
+    this.currentNote = null;
+    this.sidebarOpen = false;
+    this.filterNotes();
+  }
+
+  /**
+   * Open or close a desktop-only flyout panel by name (currently just "tags").
+   * Passing the same name again closes it; opening one closes the user menu
+   * so only one popover is ever visible at a time.
+   */
+  toggleFlyout(name) {
+    this.flyoutOpen = this.flyoutOpen === name ? false : name;
+    this.userMenuOpen = false;
+  }
+
+  /** Toggle the small account popover anchored to the rail avatar. */
+  toggleUserMenu() {
+    this.userMenuOpen = !this.userMenuOpen;
+    this.flyoutOpen = false;
+  }
+
+  /** Open/close the mobile-only nav drawer (hamburger menu). */
   toggleSidebar() {
     this.sidebarOpen = !this.sidebarOpen;
   }
@@ -966,15 +1231,21 @@ class NotesApp extends LitElement {
     this.sidebarOpen = false;
   }
 
-  handleOverlayClick(e) {
-    if (e.target.classList.contains("sidebar-overlay")) {
-      this.closeSidebar();
-    }
+  /** Clicking the dimmed backdrop behind the mobile drawer closes it. */
+  handleOverlayClick() {
+    this.closeSidebar();
   }
 
+  /**
+   * Reset every active filter (search text, tag selection, pinned-only) and
+   * reload the unfiltered note list. Also resets both <tag-manager> instances
+   * (one lives in the desktop flyout, one in the mobile drawer) since either
+   * could hold a stale selection.
+   */
   clearAllFilters() {
     this.searchQuery = "";
     this.selectedTags = [];
+    this.pinnedOnly = false;
     this.viewMode = "list";
 
     // Clear search bar
@@ -983,19 +1254,40 @@ class NotesApp extends LitElement {
       searchBar.query = "";
     }
 
-    // Clear tag manager selection
-    const tagManager = this.shadowRoot.querySelector("tag-manager");
-    if (tagManager) {
+    // Clear tag manager selection (rendered in both the flyout and the drawer)
+    this.shadowRoot.querySelectorAll("tag-manager").forEach((tagManager) => {
       tagManager.selectedTags = [];
-    }
+    });
 
     // Reload all notes
     this.loadInitialData();
   }
 
+  /** Whether any of search text, tag selection, or the pinned filter is active. */
   hasActiveFilters() {
-    return (this.searchQuery && this.searchQuery.trim()) ||
-      (this.selectedTags && this.selectedTags.length > 0);
+    return !!(
+      (this.searchQuery && this.searchQuery.trim()) ||
+      (this.selectedTags && this.selectedTags.length > 0) ||
+      this.pinnedOnly
+    );
+  }
+
+  /**
+   * Build the short breadcrumb-style label shown in the libbar
+   * (e.g. "Pinned · Recipes · "shakshuka"", or "All notes" when nothing is filtered).
+   */
+  _libraryLabel() {
+    const parts = [];
+    if (this.pinnedOnly) parts.push("Pinned");
+    if (this.selectedTags.length === 1) {
+      parts.push(this.selectedTags[0].name);
+    } else if (this.selectedTags.length > 1) {
+      parts.push(`${this.selectedTags.length} tags`);
+    }
+    if (this.searchQuery && this.searchQuery.trim()) {
+      parts.push(`"${this.searchQuery.trim()}"`);
+    }
+    return parts.length > 0 ? parts.join(" · ") : "All notes";
   }
 
   async showAllNotes() {
@@ -1010,13 +1302,15 @@ class NotesApp extends LitElement {
     // Clear any active filters and show all notes
     this.selectedTags = [];
     this.searchQuery = "";
+    this.pinnedOnly = false;
     this.viewMode = "list";
     this.currentNote = null;
+    this.flyoutOpen = false;
 
     // Load fresh data to make sure we have all notes
     this.loadInitialData();
 
-    // Close sidebar on mobile
+    // Close drawer on mobile
     if (globalThis.innerWidth <= 768) {
       this.sidebarOpen = false;
     }
@@ -1054,7 +1348,7 @@ class NotesApp extends LitElement {
   }
 
   /**
-   * Render sync status indicator
+   * Render sync status indicator (libbar)
    */
   _renderSyncStatus() {
     if (this.syncStatus === "idle" && this.pendingSyncCount === 0) {
@@ -1093,112 +1387,186 @@ class NotesApp extends LitElement {
       case "error":
         return "Some changes failed to sync. Will retry automatically.";
       default:
-        return "";
+        return "Synced";
     }
+  }
+
+  /**
+   * Render the user's avatar button (opens the account popover on click).
+   * Used in three places: the rail footer, the mobile top strip, and the
+   * drawer footer - pass size="sm" for the two smaller mobile contexts.
+   */
+  _renderAvatar(size) {
+    if (!this.user) return "";
+    return html`
+      <button
+        class="avatar-btn ${size === "sm" ? "sm" : ""}"
+        @click="${this.toggleUserMenu}"
+        title="${this.user.name}"
+      >
+        <img src="${this.user.picture}" alt="${this.user.name}">
+      </button>
+    `;
   }
 
   render() {
     return html`
       <div class="app-layout">
-        <div class="mobile-header ${this.viewMode === "edit" ? "editing" : ""}">
-          <div class="mobile-header-left">
-            <button class="menu-toggle" @click="${this.toggleSidebar}">
-              ☰
-            </button>
-            <h1 class="app-title">Notes</h1>
-          </div>
-          ${this._renderSyncStatus()}
+        <div class="mobile-topbar ${this.viewMode === "edit" ? "editing" : ""}">
+          <button class="icon-btn" @click="${this.toggleSidebar}" aria-label="Open menu">
+            ${icons.menu}
+          </button>
+          <span class="mobile-logo">
+            <span class="logo-mark">n</span>
+            Notes
+          </span>
+          <div class="mobile-topbar-spacer"></div>
+          ${this._renderAvatar("sm")}
         </div>
 
-        <div class="sidebar-overlay ${this.sidebarOpen ? "visible" : ""}" @click="${this
-          .handleOverlayClick}"></div>
+        <div
+          class="drawer-overlay ${this.sidebarOpen ? "visible" : ""}"
+          @click="${this.handleOverlayClick}"
+        >
+        </div>
 
-        <aside class="sidebar ${this.sidebarOpen ? "open" : ""}">
-          <div class="sidebar-header">
-            <h1 class="app-title">※ Notes</h1>
-            <button class="sidebar-close" @click="${this.closeSidebar}" aria-label="Close sidebar">
-              ✕
+        <aside class="drawer ${this.sidebarOpen ? "open" : ""}">
+          <div class="drawer-header">
+            <span class="logo-mark">n</span>
+            <span class="drawer-title">Notes</span>
+            <button class="icon-btn" @click="${this.closeSidebar}" aria-label="Close menu">
+              ${icons.close}
             </button>
           </div>
 
-          <div class="sidebar-content">
-            <div class="mobile-search">
-              <search-bar
-                .query="${this.searchQuery}"
-                @search-query="${(e) => {
-                  this.searchQuery = e.detail.query;
-                  this.performSearch();
-                  this.sidebarOpen = false;
-                }}"
-              ></search-bar>
-            </div>
-
+          <div class="drawer-content">
             <button class="new-note-btn" @click="${this.createNewNote}">
-              New Note
+              ${icons.plus} New note
             </button>
 
-            <div class="stats">
-              <div class="stat clickable" @click="${this
-                .showAllNotes}" title="Click to view all notes">
-                <span class="stat-number">${this.notes.length}</span>
-                <span class="stat-label">Notes</span>
-              </div>
-              <div class="stat">
-                <span class="stat-number">${this.tags.length}</span>
-                <span class="stat-label">Tags</span>
-              </div>
-            </div>
+            <nav class="nav-list">
+              <button
+                class="nav-row ${!this.hasActiveFilters() ? "active" : ""}"
+                @click="${this.showAllNotes}"
+              >
+                ${icons.home}<span>Home</span><span class="cnt">${this.notes.length}</span>
+              </button>
+              <button
+                class="nav-row ${this.pinnedOnly ? "active" : ""}"
+                @click="${this.togglePinnedFilter}"
+              >
+                ${icons.pin}<span>Pinned</span>
+              </button>
+            </nav>
 
-            <div class="sidebar-section">
-              <div class="section-title">Tags</div>
+            <div class="nav-section-title">Tags</div>
+            <tag-manager
+              .tags="${this.tags}"
+              .selectedTags="${this.selectedTags}"
+              .offline="${this.syncStatus === "offline"}"
+            ></tag-manager>
+          </div>
+
+          <div class="drawer-footer">
+            ${this.user
+              ? html`
+                <div class="drawer-user">
+                  ${this._renderAvatar("sm")}
+                  <span class="user-name">${this.user.name}</span>
+                  <button class="icon-btn" @click="${this.logout}" title="Log out">
+                    ${icons.logout}
+                  </button>
+                </div>
+              `
+              : ""}
+          </div>
+        </aside>
+
+        <nav class="rail">
+          <span class="logo-mark">n</span>
+          <button
+            class="rail-btn ${!this.hasActiveFilters() ? "active" : ""}"
+            @click="${this.showAllNotes}"
+            title="Home"
+          >
+            ${icons.home}
+          </button>
+          <button
+            class="rail-btn ${this.pinnedOnly ? "active" : ""}"
+            @click="${this.togglePinnedFilter}"
+            title="Pinned"
+          >
+            ${icons.pin}
+          </button>
+          <button
+            class="rail-btn ${this.flyoutOpen === "tags" ? "active" : ""}"
+            @click="${() => this.toggleFlyout("tags")}"
+            title="Tags"
+          >
+            ${icons.hash}
+          </button>
+
+          <div class="rail-spacer"></div>
+
+          <button class="rail-btn accent" @click="${this.createNewNote}" title="New note">
+            ${icons.plus}
+          </button>
+
+          <div class="rail-footer">
+            <span
+              class="sync-dot ${this.syncStatus}"
+              title="${this._getSyncStatusTitle()}"
+            ></span>
+            ${this._renderAvatar()}
+          </div>
+
+          ${this.userMenuOpen
+            ? html`
+              <div class="popover-scrim" @click="${() => this.userMenuOpen = false}"></div>
+              <div class="user-popover">
+                <div class="user-popover-name">${this.user?.name}</div>
+                <button class="user-popover-logout" @click="${this.logout}">
+                  ${icons.logout} Log out
+                </button>
+              </div>
+            `
+            : ""}
+        </nav>
+
+        ${this.flyoutOpen === "tags"
+          ? html`
+            <div class="flyout-scrim" @click="${() => this.flyoutOpen = false}"></div>
+            <div class="flyout">
+              <div class="flyout-header">Tags</div>
               <tag-manager
                 .tags="${this.tags}"
                 .selectedTags="${this.selectedTags}"
                 .offline="${this.syncStatus === "offline"}"
               ></tag-manager>
             </div>
-          </div>
-        </aside>
+          `
+          : ""}
 
         <main class="main-content">
-          <div class="top-bar">
+          <div class="libbar">
+            <span class="crumb">${this._libraryLabel()}</span>
             <search-bar
               .query="${this.searchQuery}"
-              @search-query="${(e) => this.searchQuery = e.detail.query}"
+              @search-query="${(e) => {
+                this.searchQuery = e.detail.query;
+                this.performSearch();
+              }}"
             ></search-bar>
-
             ${this.hasActiveFilters()
               ? html`
-                <div class="active-filters">
-                  <span class="filter-info">
-                    ${this.searchQuery
-                      ? html`
-                        <span class="filter-tag">Search: "${this.searchQuery}"</span>
-                      `
-                      : ""} ${this.selectedTags.length > 0
-                      ? html`
-                        <span class="filter-tag">${this.selectedTags
-                          .length} tag${this.selectedTags.length > 1 ? "s" : ""}</span>
-                      `
-                      : ""}
-                  </span>
-                  <button class="clear-filters-btn" @click="${this
-                    .clearAllFilters}" title="Clear all filters">
-                    Clear all
-                  </button>
-                </div>
+                <button class="clear-btn" @click="${this
+                  .clearAllFilters}" title="Clear all filters">
+                  ${icons.close} Clear
+                </button>
               `
-              : ""} ${this._renderSyncStatus()}
-
-            <div class="user-menu">
-              ${this.user
-                ? html`
-                  <img class="user-avatar" src="${this.user.picture}" alt="${this.user.name}">
-                  <span class="user-name">${this.user.name}</span>
-                  <button class="logout-btn" @click="${this.logout}">Logout</button>
-                `
-                : ""}
-            </div>
+              : ""}
+            <div class="libbar-spacer"></div>
+            ${this._renderSyncStatus()}
           </div>
 
           <div class="content-area">

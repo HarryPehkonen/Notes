@@ -1,12 +1,13 @@
 /**
  * Note Editor Component
- * Now uses SyncManager for reliable saves with offline support
- * Supports Markdown preview
+ * Uses SyncManager for reliable saves with offline support
+ * Supports Markdown preview and version history
  */
 import { css, html, LitElement } from "lit";
 import { unsafeHTML } from "https://cdn.jsdelivr.net/npm/lit@3.1.0/directives/unsafe-html.js/+esm";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
+import { icons } from "../utils/icons.js";
 
 // Configure marked for safe rendering
 marked.use({
@@ -24,10 +25,11 @@ export class NoteEditor extends LitElement {
     hasUnsavedChanges: { type: Boolean },
     pendingCount: { type: Number },
     previewMode: { type: Boolean },
-    headerCollapsed: { type: Boolean },
-    isInputFocused: { type: Boolean },
-    keyboardVisible: { type: Boolean },
     uploadingImage: { type: Boolean },
+    historyOpen: { type: Boolean },
+    versions: { type: Array },
+    loadingVersions: { type: Boolean },
+    restoringVersionId: { type: Number },
   };
 
   static styles = css`
@@ -43,247 +45,114 @@ export class NoteEditor extends LitElement {
       height: 100%;
     }
 
-    .editor-header {
-      padding: 1.5rem;
+    /* ---------- Sticky top bar ---------- */
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1rem;
       border-bottom: 1px solid var(--gray-200);
-      background: var(--gray-50);
-    }
-
-    .editor-header.collapsed {
-      padding: 0.75rem 1rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .menu-toggle {
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 0.25rem;
-      font-size: 1.25rem;
-      line-height: 1;
-      color: var(--gray-700);
+      background: var(--white);
       flex-shrink: 0;
+      position: relative;
     }
 
-    .collapsed-title {
-      flex: 1;
-      font-size: 1rem;
-      font-weight: 600;
-      color: var(--gray-800);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      cursor: pointer;
-    }
-
-    .header-toggle {
-      background: none;
+    .icon-btn {
+      width: 32px;
+      height: 32px;
       border: none;
-      padding: 0.25rem;
-      cursor: pointer;
-      color: var(--gray-500);
-      display: flex;
-      align-items: center;
-      transition: transform 0.2s;
-    }
-
-    .header-toggle:hover {
-      color: var(--gray-700);
-    }
-
-    .header-toggle.expanded {
-      transform: rotate(180deg);
-    }
-
-    .collapse-btn {
-      background: none;
-      border: none;
-      padding: 0.25rem 0.5rem;
-      cursor: pointer;
-      color: var(--gray-500);
-      font-size: 0.75rem;
-      display: flex;
-      align-items: center;
-      gap: 0.25rem;
-      margin-left: auto;
-    }
-
-    .collapse-btn:hover {
-      color: var(--gray-700);
-    }
-
-    .title-input {
-      width: 100%;
-      font-size: 1.5rem;
-      font-weight: 600;
-      padding: 0.75rem;
-      border: 1px solid var(--gray-300);
-      border-radius: 0.5rem;
-      margin-bottom: 1rem;
-      font-family: var(--font-family);
-    }
-
-    .title-input:focus {
-      outline: none;
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
-    .tags-section {
-      margin-bottom: 1rem;
-    }
-
-    .tags-label {
-      display: block;
-      font-size: 0.875rem;
-      font-weight: 500;
-      color: var(--gray-700);
-      margin-bottom: 0.5rem;
-    }
-
-    .tags-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
-
-    .tag-chip {
-      display: inline-flex;
-      align-items: center;
-      padding: 0.25rem 0.75rem;
-      background: var(--gray-100);
-      border: 1px solid var(--gray-300);
-      border-radius: 1rem;
-      font-size: 0.875rem;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .tag-chip:hover {
-      background: var(--gray-200);
-    }
-
-    .tag-chip.selected {
-      background: var(--primary);
-      color: white;
-      border-color: var(--primary);
-    }
-
-    .tag-color-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      margin-right: 0.5rem;
-    }
-
-    .editor-content {
-      flex: 1;
-      padding: 1.5rem;
-      overflow-y: auto;
-    }
-
-    .content-textarea {
-      width: 100%;
-      height: 100%;
-      min-height: 400px;
-      padding: 1rem;
-      border: 1px solid var(--gray-300);
-      border-radius: 0.5rem;
-      font-family: var(--font-family);
-      font-size: 1rem;
-      line-height: 1.6;
-      resize: vertical;
-    }
-
-    .content-textarea:focus {
-      outline: none;
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
-    .editor-footer {
-      padding: 1.5rem;
-      border-top: 1px solid var(--gray-200);
-      background: var(--gray-50);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      transition: transform 0.2s ease, opacity 0.2s ease;
-    }
-
-    .editor-footer.hidden {
-      transform: translateY(100%);
-      opacity: 0;
-      pointer-events: none;
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-    }
-
-    .metadata {
-      font-size: 0.875rem;
+      background: transparent;
+      border-radius: 8px;
       color: var(--gray-600);
       display: flex;
       align-items: center;
-      gap: 1rem;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
     }
 
-    .save-status {
+    .icon-btn svg {
+      width: 17px;
+      height: 17px;
+    }
+
+    .icon-btn:hover:not(:disabled) {
+      background: var(--gray-100);
+      color: var(--gray-900);
+    }
+
+    .icon-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .icon-btn.active {
+      background: var(--primary-light);
+      color: var(--primary-dark);
+    }
+
+    .icon-btn.uploading {
+      color: var(--info);
+    }
+
+    .crumb {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--gray-500);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .topbar-spacer {
+      flex: 1;
+    }
+
+    .save-pill {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      font-size: 0.75rem;
+      gap: 0.4rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-family: var(--font-mono);
+      white-space: nowrap;
+      background: var(--gray-100);
+      color: var(--gray-600);
     }
 
-    .save-status.saved {
-      color: var(--success);
-    }
-
-    .save-status.saving {
-      color: var(--info);
-    }
-
-    .save-status.unsaved {
-      color: var(--warning);
-    }
-
-    .save-status.pending {
-      color: var(--info);
-    }
-
-    .save-status.error {
-      color: var(--error);
-    }
-
-    .save-indicator {
-      width: 8px;
-      height: 8px;
+    .save-pill .dot {
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
+      background: currentColor;
     }
 
-    .save-indicator.saved {
-      background: var(--success);
+    .save-pill.saved {
+      background: var(--primary-light);
+      color: var(--primary-dark);
     }
 
-    .save-indicator.saving {
-      background: var(--info);
+    .save-pill.saving,
+    .save-pill.pending {
+      background: var(--gray-100);
+      color: var(--info);
+    }
+
+    .save-pill.saving .dot,
+    .save-pill.pending .dot {
       animation: pulse 1.5s infinite;
     }
 
-    .save-indicator.unsaved {
-      background: var(--warning);
+    .save-pill.unsaved {
+      color: var(--warning);
     }
 
-    .save-indicator.pending {
-      background: var(--info);
-      animation: pulse 2s infinite;
-    }
-
-    .save-indicator.error {
-      background: var(--error);
+    .save-pill.error {
+      background: var(--error-light, #fee2e2);
+      color: var(--error);
     }
 
     @keyframes pulse {
@@ -295,147 +164,229 @@ export class NoteEditor extends LitElement {
       }
     }
 
-    .actions {
-      display: flex;
-      gap: 0.75rem;
-    }
-
-    .btn {
-      padding: 0.5rem 1.25rem;
-      border-radius: 0.5rem;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-      border: none;
-      font-size: 0.875rem;
-    }
-
-    .btn-primary {
-      background: var(--primary);
-      color: white;
-    }
-
-    .btn-primary:hover:not(:disabled) {
-      background: var(--primary-dark);
-    }
-
-    .btn-secondary {
-      background: white;
-      color: var(--gray-700);
-      border: 1px solid var(--gray-300);
-    }
-
-    .btn-secondary:hover:not(:disabled) {
-      background: var(--gray-50);
-    }
-
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .editor-toolbar {
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
-      gap: 0.5rem;
-      margin-bottom: 0.5rem;
-    }
-
-    .preview-toggle {
-      display: flex;
-      background: var(--gray-100);
-      border-radius: 0.375rem;
-      padding: 0.25rem;
-    }
-
-    .preview-toggle button {
-      padding: 0.375rem 0.75rem;
-      border: none;
-      background: transparent;
-      border-radius: 0.25rem;
-      font-size: 0.875rem;
-      cursor: pointer;
-      color: var(--gray-600);
-      transition: all 0.2s;
-    }
-
-    .preview-toggle button:hover {
-      color: var(--gray-800);
-    }
-
-    .preview-toggle button.active {
-      background: white;
-      color: var(--primary);
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-    }
-
-    .toolbar-btn {
-      padding: 0.375rem 0.75rem;
-      border: 1px solid var(--gray-300);
-      background: white;
-      border-radius: 0.375rem;
-      font-size: 0.875rem;
-      cursor: pointer;
-      color: var(--gray-600);
-      transition: all 0.2s;
-      display: flex;
-      align-items: center;
-      gap: 0.375rem;
-    }
-
-    .toolbar-btn:hover:not(:disabled) {
-      background: var(--gray-50);
-      border-color: var(--gray-400);
-      color: var(--gray-800);
-    }
-
-    .toolbar-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .toolbar-btn.uploading {
-      color: var(--info);
-    }
-
-    .toolbar-btn svg {
-      width: 16px;
-      height: 16px;
-    }
-
     .hidden-file-input {
       display: none;
     }
 
-    .markdown-preview {
-      width: 100%;
-      min-height: 400px;
-      padding: 1rem;
-      border: 1px solid var(--gray-300);
-      border-radius: 0.5rem;
-      background: var(--white);
+    /* ---------- Version history panel ---------- */
+    .history-scrim {
+      position: fixed;
+      inset: 0;
+      z-index: 14;
+      background: transparent;
+    }
+
+    .history-panel {
+      position: absolute;
+      top: calc(100% + 0.4rem);
+      right: 1rem;
+      width: 300px;
+      max-height: 360px;
       overflow-y: auto;
-      line-height: 1.6;
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: 0.6rem;
+      box-shadow: var(--shadow-lg);
+      z-index: 15;
+      padding: 0.5rem;
+    }
+
+    .history-title {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--gray-500);
+      padding: 0.4rem 0.5rem 0.6rem;
+    }
+
+    .history-empty {
+      padding: 1rem 0.5rem;
+      font-size: 0.85rem;
+      color: var(--gray-500);
+      text-align: center;
+    }
+
+    .history-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.5rem;
+      border-radius: 0.4rem;
+    }
+
+    .history-row:hover {
+      background: var(--gray-50);
+    }
+
+    .history-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .history-version {
+      font-size: 0.85rem;
+      color: var(--gray-800);
+      font-weight: 500;
+    }
+
+    .history-date {
+      font-size: 0.72rem;
+      color: var(--gray-500);
+      font-family: var(--font-mono);
+    }
+
+    .history-restore-btn {
+      padding: 0.3rem 0.6rem;
+      background: var(--gray-100);
+      border: 1px solid var(--gray-300);
+      border-radius: 0.4rem;
+      font-size: 0.75rem;
+      color: var(--gray-700);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .history-restore-btn:hover:not(:disabled) {
+      background: var(--gray-200);
+    }
+
+    .history-restore-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* ---------- Canvas ---------- */
+    .canvas {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      justify-content: center;
+      padding: 2rem 1.25rem 3rem;
+    }
+
+    .canvas-col {
+      width: 100%;
+      max-width: 680px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .doc-title {
+      width: 100%;
+      border: none;
+      background: transparent;
+      font-family: var(--font-serif);
+      font-size: 1.9rem;
+      color: var(--gray-900);
+      padding: 0;
+      margin-bottom: 0.6rem;
+    }
+
+    .doc-title:focus {
+      outline: none;
+    }
+
+    .doc-title::placeholder {
+      color: var(--gray-400);
+    }
+
+    .doc-meta {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--gray-400);
+      margin-bottom: 1rem;
+    }
+
+    .doc-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .tag-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.25rem 0.7rem;
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      border-radius: 1rem;
+      font-size: 0.8rem;
+      color: var(--gray-700);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .tag-chip:hover {
+      border-color: var(--gray-400);
+    }
+
+    .tag-chip.selected {
+      background: var(--primary);
+      color: var(--white);
+      border-color: var(--primary);
+    }
+
+    .tag-color-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      margin-right: 0.45rem;
+    }
+
+    .doc-body {
+      flex: 1;
+    }
+
+    .content-textarea {
+      width: 100%;
+      height: 100%;
+      min-height: 45vh;
+      border: none;
+      background: transparent;
+      font-family: var(--font-family);
+      font-size: 1rem;
+      line-height: 1.75;
+      color: var(--gray-900);
+      resize: none;
+      padding: 0;
+    }
+
+    .content-textarea:focus {
+      outline: none;
+    }
+
+    .content-textarea::placeholder {
+      color: var(--gray-400);
+    }
+
+    .markdown-preview {
+      min-height: 45vh;
+      line-height: 1.75;
+      color: var(--gray-900);
     }
 
     .markdown-preview h1 {
-      font-size: 1.75rem;
-      font-weight: 600;
+      font-family: var(--font-serif);
+      font-size: 1.6rem;
+      font-weight: 400;
       margin: 1.5rem 0 1rem 0;
       padding-bottom: 0.5rem;
       border-bottom: 1px solid var(--gray-200);
     }
 
     .markdown-preview h2 {
-      font-size: 1.5rem;
-      font-weight: 600;
+      font-family: var(--font-serif);
+      font-size: 1.35rem;
+      font-weight: 400;
       margin: 1.25rem 0 0.75rem 0;
     }
 
     .markdown-preview h3 {
-      font-size: 1.25rem;
-      font-weight: 600;
+      font-family: var(--font-serif);
+      font-size: 1.15rem;
+      font-weight: 400;
       margin: 1rem 0 0.5rem 0;
     }
 
@@ -456,7 +407,7 @@ export class NoteEditor extends LitElement {
       background: var(--gray-100);
       padding: 0.125rem 0.375rem;
       border-radius: 0.25rem;
-      font-family: monospace;
+      font-family: var(--font-mono);
       font-size: 0.875em;
     }
 
@@ -474,9 +425,9 @@ export class NoteEditor extends LitElement {
     }
 
     .markdown-preview blockquote {
-      border-left: 4px solid var(--primary);
+      border-left: 3px solid var(--primary);
       margin: 1rem 0;
-      padding: 0.5rem 1rem;
+      padding: 0.4rem 1rem;
       background: var(--gray-50);
       color: var(--gray-700);
     }
@@ -521,35 +472,26 @@ export class NoteEditor extends LitElement {
     }
 
     @media (max-width: 768px) {
-      .editor-header,
-      .editor-content,
-      .editor-footer {
-        padding: 1rem;
+      .topbar {
+        padding: 0.55rem 0.75rem;
       }
 
-      .title-input {
-        font-size: 1.25rem;
+      .crumb {
+        display: none;
       }
 
-      .content-textarea {
-        min-height: 300px;
+      .canvas {
+        padding: 1.25rem 1rem 2rem;
       }
 
-      .editor-footer {
-        flex-direction: column;
-        gap: 1rem;
+      .doc-title {
+        font-size: 1.5rem;
       }
 
-      .metadata {
-        text-align: center;
-      }
-
-      .actions {
-        width: 100%;
-      }
-
-      .btn {
-        flex: 1;
+      .history-panel {
+        right: 0.75rem;
+        left: 0.75rem;
+        width: auto;
       }
     }
   `;
@@ -564,14 +506,13 @@ export class NoteEditor extends LitElement {
     this.originalNote = null;
     this.pendingCount = 0;
     this.previewMode = localStorage.getItem("notes-previewMode") === "true";
-    this.headerCollapsed = localStorage.getItem("notes-headerCollapsed") !== "false";
-    this.isInputFocused = false;
-    this.keyboardVisible = false;
     this.uploadingImage = false;
+    this.historyOpen = false;
+    this.versions = [];
+    this.loadingVersions = false;
+    this.restoringVersionId = null;
     this._editingContent = null; // Track textarea content across preview toggles
     this._isSaving = false; // Non-reactive guard against concurrent saves
-    this._boundHandleViewportResize = this._handleViewportResize.bind(this);
-    this._initialViewportHeight = null;
 
     // Store bound handlers to fix memory leak
     this._boundHandleInput = this.handleInputChange.bind(this);
@@ -592,7 +533,6 @@ export class NoteEditor extends LitElement {
     this.setupAutoSave();
     this._setupSyncListeners();
     this._checkForDraft();
-    this._setupViewportListener();
     this._setupPasteListener();
   }
 
@@ -600,7 +540,6 @@ export class NoteEditor extends LitElement {
     super.disconnectedCallback();
     this.clearAutoSaveTimer();
     this._removeSyncListeners();
-    this._removeViewportListener();
     this._removePasteListener();
   }
 
@@ -678,7 +617,7 @@ export class NoteEditor extends LitElement {
    */
   _offerDraftRecovery(draft) {
     // For now, auto-recover. Could add a UI prompt later.
-    const titleInput = this.shadowRoot?.querySelector(".title-input");
+    const titleInput = this.shadowRoot?.querySelector(".doc-title");
     const contentTextarea = this.shadowRoot?.querySelector(".content-textarea");
 
     if (titleInput && contentTextarea) {
@@ -707,6 +646,8 @@ export class NoteEditor extends LitElement {
         this.originalNote = this.deepCopy(this.note);
         this.saveStatus = "saved";
         this.hasUnsavedChanges = false;
+        this.historyOpen = false;
+        this.versions = [];
       }
     }
   }
@@ -770,7 +711,7 @@ export class NoteEditor extends LitElement {
   hasChanges() {
     if (!this.originalNote) return true;
 
-    const titleInput = this.shadowRoot.querySelector(".title-input");
+    const titleInput = this.shadowRoot.querySelector(".doc-title");
     const contentTextarea = this.shadowRoot.querySelector(".content-textarea");
 
     if (!contentTextarea) return false;
@@ -788,7 +729,7 @@ export class NoteEditor extends LitElement {
   async autoSave() {
     if (!this.note || this._isSaving || !this.hasUnsavedChanges) return;
 
-    const titleInput = this.shadowRoot.querySelector(".title-input");
+    const titleInput = this.shadowRoot.querySelector(".doc-title");
     const contentTextarea = this.shadowRoot.querySelector(".content-textarea");
 
     const content = contentTextarea?.value ?? this._editingContent;
@@ -916,66 +857,102 @@ export class NoteEditor extends LitElement {
     localStorage.setItem("notes-previewMode", this.previewMode);
   }
 
-  _handleMenuToggle() {
-    this.dispatchEvent(
-      new CustomEvent("toggle-sidebar", {
-        bubbles: true,
-        composed: true,
-      }),
-    );
-  }
-
-  toggleHeader() {
-    this.headerCollapsed = !this.headerCollapsed;
-    localStorage.setItem("notes-headerCollapsed", this.headerCollapsed);
-  }
-
-  getCurrentTitle() {
-    const titleInput = this.shadowRoot?.querySelector(".title-input");
-    return titleInput?.value || this.note?.title || "Untitled";
-  }
-
-  handleInputFocus() {
-    this.isInputFocused = true;
-  }
-
-  handleInputBlur() {
-    // Small delay to prevent flicker when switching between inputs
-    setTimeout(() => {
-      const activeEl = this.shadowRoot?.activeElement;
-      const isStillFocused = activeEl?.classList?.contains("content-textarea") ||
-                             activeEl?.classList?.contains("title-input");
-      if (!isStillFocused) {
-        this.isInputFocused = false;
-      }
-    }, 100);
-  }
-
-  _setupViewportListener() {
-    if (globalThis.visualViewport) {
-      this._initialViewportHeight = globalThis.visualViewport.height;
-      globalThis.visualViewport.addEventListener("resize", this._boundHandleViewportResize);
+  /**
+   * Toggle the version history panel, loading versions on first open
+   */
+  async toggleHistory() {
+    this.historyOpen = !this.historyOpen;
+    if (this.historyOpen && this.versions.length === 0) {
+      await this.loadVersions();
     }
   }
 
-  _removeViewportListener() {
-    if (globalThis.visualViewport) {
-      globalThis.visualViewport.removeEventListener("resize", this._boundHandleViewportResize);
+  /**
+   * Fetch the version history list for the current note from
+   * GET /api/notes/:id/versions. Populates `this.versions`, newest first
+   * (the server already orders by version_number DESC).
+   */
+  async loadVersions() {
+    if (!this.note) return;
+    this.loadingVersions = true;
+    try {
+      const result = await globalThis.NotesApp.getNoteVersions(this.note.id);
+      this.versions = result.data || [];
+    } catch (error) {
+      console.error("Failed to load version history:", error);
+      this.showToast("Failed to load version history", "error");
+    } finally {
+      this.loadingVersions = false;
     }
   }
 
-  _handleViewportResize() {
-    if (!this._initialViewportHeight) {
-      this._initialViewportHeight = globalThis.visualViewport.height;
+  /**
+   * Restore a prior version's title/content via POST /notes/:id/restore/:versionId,
+   * after an explicit confirm since this overwrites the current draft.
+   * On success we treat the restored note exactly like a normal autosave result
+   * (dispatch note-updated, refresh our change-tracking snapshot) so the rest
+   * of the editor doesn't need to know a restore happened.
+   */
+  async restoreVersion(version) {
+    if (
+      !confirm(
+        `Restore version ${version.version_number}? This replaces the current title and content.`,
+      )
+    ) {
+      return;
     }
 
-    const currentHeight = globalThis.visualViewport.height;
-    const heightDiff = this._initialViewportHeight - currentHeight;
+    this.restoringVersionId = version.id;
+    try {
+      const result = await globalThis.NotesApp.restoreNoteVersion(this.note.id, version.id);
+      const updatedNote = {
+        ...result.data,
+        tags: result.data.tags || this.selectedTags,
+      };
 
-    // If viewport shrunk significantly (>150px), keyboard is probably visible
-    // If viewport is back to near original, keyboard is hidden
-    const keyboardThreshold = 150;
-    this.keyboardVisible = heightDiff > keyboardThreshold;
+      this._editingContent = null;
+      this.selectedTags = updatedNote.tags || [];
+
+      this.dispatchEvent(
+        new CustomEvent("note-updated", {
+          detail: { note: updatedNote },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+
+      this.originalNote = this.deepCopy(updatedNote);
+      this.hasUnsavedChanges = false;
+      this.saveStatus = "saved";
+      this.historyOpen = false;
+      this.versions = [];
+      this.showToast(`Restored version ${version.version_number}`, "success");
+    } catch (error) {
+      console.error("Failed to restore version:", error);
+      this.showToast("Failed to restore version", "error");
+    } finally {
+      this.restoringVersionId = null;
+    }
+  }
+
+  /**
+   * Trigger file input click
+   */
+  _triggerFileInput() {
+    const fileInput = this.shadowRoot?.querySelector(".hidden-file-input");
+    fileInput?.click();
+  }
+
+  /**
+   * Handle file input change
+   */
+  async _handleFileInputChange(event) {
+    const file = event.target.files?.[0];
+    if (file) {
+      await this._uploadImage(file);
+    }
+    // Reset the input so the same file can be selected again
+    event.target.value = "";
   }
 
   _setupPasteListener() {
@@ -1006,26 +983,6 @@ export class NoteEditor extends LitElement {
         return;
       }
     }
-  }
-
-  /**
-   * Trigger file input click
-   */
-  _triggerFileInput() {
-    const fileInput = this.shadowRoot?.querySelector(".hidden-file-input");
-    fileInput?.click();
-  }
-
-  /**
-   * Handle file input change
-   */
-  async _handleFileInputChange(event) {
-    const file = event.target.files?.[0];
-    if (file) {
-      await this._uploadImage(file);
-    }
-    // Reset the input so the same file can be selected again
-    event.target.value = "";
   }
 
   /**
@@ -1101,7 +1058,7 @@ export class NoteEditor extends LitElement {
 
   renderMarkdown(content) {
     if (!content || !content.trim()) {
-      return "<p class=\"empty-preview\">Nothing to preview. Start writing in Edit mode.</p>";
+      return '<p class="empty-preview">Nothing to preview. Start writing in Edit mode.</p>';
     }
     try {
       return DOMPurify.sanitize(marked.parse(content));
@@ -1111,6 +1068,64 @@ export class NoteEditor extends LitElement {
     }
   }
 
+  /** Short label shown in the sticky save-status pill for the current saveStatus. */
+  _saveStatusLabel() {
+    switch (this.saveStatus) {
+      case "saving":
+        return "Saving";
+      case "saved":
+        return "Saved";
+      case "pending":
+        return "Saved locally";
+      case "error":
+        return "Save failed";
+      default:
+        return "Unsaved";
+    }
+  }
+
+  /**
+   * Render the version-history dropdown anchored under the clock icon in the
+   * top bar, plus a full-screen transparent scrim so clicking anywhere
+   * outside the panel closes it. Returns "" when closed so it costs nothing
+   * in the normal render path.
+   */
+  _renderHistoryPanel() {
+    if (!this.historyOpen) return "";
+
+    return html`
+      <div class="history-scrim" @click="${() => this.historyOpen = false}"></div>
+      <div class="history-panel">
+        <div class="history-title">Version history</div>
+        ${this.loadingVersions
+          ? html`
+            <div class="history-empty">Loading…</div>
+          `
+          : this.versions.length === 0
+          ? html`
+            <div class="history-empty">No earlier versions yet</div>
+          `
+          : this.versions.map((version) =>
+            html`
+              <div class="history-row">
+                <div class="history-info">
+                  <div class="history-version">Version ${version.version_number}</div>
+                  <div class="history-date">${this.formatDate(version.created_at)}</div>
+                </div>
+                <button
+                  class="history-restore-btn"
+                  ?disabled="${this.restoringVersionId === version.id}"
+                  @click="${() => this.restoreVersion(version)}"
+                >
+                  ${this.restoringVersionId === version.id ? "Restoring…" : "Restore"}
+                </button>
+              </div>
+            `
+          )}
+      </div>
+    `;
+  }
+
   render() {
     if (!this.note) {
       return html`
@@ -1118,159 +1133,120 @@ export class NoteEditor extends LitElement {
       `;
     }
 
+    const primaryTag = this.selectedTags?.[0];
+
     return html`
       <div class="editor-container">
-        ${this.headerCollapsed
-          ? html`
-            <div class="editor-header collapsed">
-              <button class="menu-toggle" @click="${this._handleMenuToggle}" title="Menu">☰</button>
-              <span class="collapsed-title" @click="${this.toggleHeader}">${this.note.title || "Untitled"}</span>
-              <button class="header-toggle" @click="${this.toggleHeader}" title="Expand header">
-                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                  <path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
-                </svg>
-              </button>
-            </div>
-          `
-          : html`
-            <div class="editor-header">
-              <input
-                type="text"
-                class="title-input"
-                .value="${this.note.title || ""}"
-                placeholder="Note title..."
-                ?disabled="${this.loading}"
-                @focus="${this.handleInputFocus}"
-                @blur="${this.handleInputBlur}"
-              />
+        <div class="topbar">
+          <button class="icon-btn" @click="${this.handleClose}" title="Back to notes">
+            ${icons.chevronLeft}
+          </button>
+          ${primaryTag
+            ? html`
+              <span class="crumb">${primaryTag.name}</span>
+            `
+            : ""}
 
-              <div class="tags-section">
-                <div class="tags-container">
-                  ${this.tags?.map((tag) => {
-                    const isSelected = this.selectedTags.some((t) => t.id === tag.id);
-                    return html`
-                      <div
-                        class="tag-chip ${isSelected ? "selected" : ""}"
-                        @click="${() => this.toggleTag(tag.id)}"
-                      >
-                        <span
-                          class="tag-color-dot"
-                          style="background-color: ${tag.color}"
-                        ></span>
-                        ${tag.name}
-                      </div>
-                    `;
-                  })}
-                  <button class="collapse-btn" @click="${this.toggleHeader}" title="Collapse header">
-                    <svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
-                      <path fill-rule="evenodd" d="M7.646 4.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1-.708.708L8 5.707l-5.646 5.647a.5.5 0 0 1-.708-.708l6-6z"/>
-                    </svg>
-                    Collapse
-                  </button>
-                </div>
-              </div>
-            </div>
-          `
-        }
+          <div class="topbar-spacer"></div>
 
-        <div class="editor-content">
-          <div class="editor-toolbar">
-            <input
-              type="file"
-              class="hidden-file-input"
-              accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
-              @change="${this._handleFileInputChange}"
-            />
-            <button
-              class="toolbar-btn ${this.uploadingImage ? "uploading" : ""}"
-              @click="${this._triggerFileInput}"
-              ?disabled="${this.uploadingImage || this.previewMode}"
-              title="Upload image (or paste from clipboard)"
-            >
-              <svg viewBox="0 0 16 16" fill="currentColor">
-                <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
-                <path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/>
-              </svg>
-              ${this.uploadingImage ? "Uploading..." : "Image"}
-            </button>
-            <div class="preview-toggle">
-              <button
-                class="${!this.previewMode ? "active" : ""}"
-                @click="${() => this.togglePreviewMode(false)}"
-              >
-                Edit
-              </button>
-              <button
-                class="${this.previewMode ? "active" : ""}"
-                @click="${() => this.togglePreviewMode(true)}"
-              >
-                Preview
-              </button>
-            </div>
+          <div class="save-pill ${this.saveStatus}">
+            <span class="dot"></span>
+            ${this._saveStatusLabel()}
           </div>
 
-          ${this.previewMode
-            ? html`
-              <div class="markdown-preview">
-                ${unsafeHTML(this.renderMarkdown(this.getMarkdownContent()))}
-              </div>
-            `
-            : html`
-              <textarea
-                class="content-textarea"
-                .value="${this._editingContent ?? this.note.content ?? ""}"
-                placeholder="Start writing your note (Markdown supported)..."
-                ?disabled="${this.loading}"
-                @focus="${this.handleInputFocus}"
-                @blur="${this.handleInputBlur}"
-              ></textarea>
-            `
-          }
+          <input
+            type="file"
+            class="hidden-file-input"
+            accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
+            @change="${this._handleFileInputChange}"
+          />
+          <button
+            class="icon-btn ${this.uploadingImage ? "uploading" : ""}"
+            @click="${this._triggerFileInput}"
+            ?disabled="${this.uploadingImage || this.previewMode}"
+            title="Upload image (or paste from clipboard)"
+          >
+            ${icons.image}
+          </button>
+          <button
+            class="icon-btn ${this.historyOpen ? "active" : ""}"
+            @click="${this.toggleHistory}"
+            title="Version history"
+          >
+            ${icons.clock}
+          </button>
+          <button
+            class="icon-btn ${!this.previewMode ? "active" : ""}"
+            @click="${() => this.togglePreviewMode(false)}"
+            title="Edit"
+          >
+            ${icons.edit}
+          </button>
+          <button
+            class="icon-btn ${this.previewMode ? "active" : ""}"
+            @click="${() => this.togglePreviewMode(true)}"
+            title="Preview"
+          >
+            ${icons.eye}
+          </button>
+
+          ${this._renderHistoryPanel()}
         </div>
 
-        <div class="editor-footer ${this.keyboardVisible ? "hidden" : ""}">
-          <div class="metadata">
-            <div>
+        <div class="canvas">
+          <div class="canvas-col">
+            <input
+              type="text"
+              class="doc-title"
+              .value="${this.note.title || ""}"
+              placeholder="Note title..."
+              ?disabled="${this.loading}"
+            />
+
+            <div class="doc-meta">
               ${this.note.updated_at
                 ? html`
-                  Last updated: ${this.formatDate(this.note.updated_at)}
+                  Updated ${this.formatDate(this.note.updated_at)}
                 `
                 : html`
-                  Created: ${this.formatDate(this.note.created_at)}
+                  Created ${this.formatDate(this.note.created_at)}
                 `}
             </div>
-            <div class="save-status ${this.saveStatus}">
-              <span class="save-indicator ${this.saveStatus}"></span>
-              ${this.saveStatus === "saving"
-                ? "Saving..."
-                : this.saveStatus === "saved"
-                ? "Saved"
-                : this.saveStatus === "pending"
-                ? "Saved locally"
-                : this.saveStatus === "error"
-                ? "Save failed"
-                : "Unsaved changes"}
+
+            <div class="doc-tags">
+              ${this.tags?.map((tag) => {
+                const isSelected = this.selectedTags.some((t) => t.id === tag.id);
+                return html`
+                  <div
+                    class="tag-chip ${isSelected ? "selected" : ""}"
+                    @click="${() => this.toggleTag(tag.id)}"
+                  >
+                    <span
+                      class="tag-color-dot"
+                      style="background-color: ${tag.color}"
+                    ></span>
+                    ${tag.name}
+                  </div>
+                `;
+              })}
             </div>
-          </div>
-          <div class="actions">
-            <button
-              class="btn btn-secondary"
-              @click="${this.handleClose}"
-              ?disabled="${this.loading}"
-            >
-              <svg
-                width="16"
-                height="16"
-                fill="currentColor"
-                viewBox="0 0 16 16"
-                style="margin-right: 0.5rem;"
-              >
-                <path
-                  d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"
-                />
-              </svg>
-              Close
-            </button>
+
+            <div class="doc-body">
+              ${this.previewMode
+                ? html`
+                  <div class="markdown-preview">
+                    ${unsafeHTML(this.renderMarkdown(this.getMarkdownContent()))}
+                  </div>
+                `
+                : html`
+                  <textarea
+                    class="content-textarea"
+                    .value="${this._editingContent ?? this.note.content ?? ""}"
+                    placeholder="Start writing your note (Markdown supported)..."
+                    ?disabled="${this.loading}"
+                  ></textarea>
+                `}
+            </div>
           </div>
         </div>
       </div>

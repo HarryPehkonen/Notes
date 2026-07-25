@@ -4,6 +4,7 @@
 import { css, html, LitElement } from "lit";
 import { unsafeHTML } from "https://cdn.jsdelivr.net/npm/lit@3.1.0/directives/unsafe-html.js/+esm";
 import { highlightText } from "../utils/text.js";
+import { icons } from "../utils/icons.js";
 
 export class NoteList extends LitElement {
   static properties = {
@@ -59,6 +60,12 @@ export class NoteList extends LitElement {
       cursor: pointer;
       color: var(--gray-600);
       transition: all 0.2s;
+      display: flex;
+    }
+
+    .view-toggle button svg {
+      width: 16px;
+      height: 16px;
     }
 
     .view-toggle button:hover {
@@ -66,7 +73,7 @@ export class NoteList extends LitElement {
     }
 
     .view-toggle button.active {
-      background: white;
+      background: var(--white);
       color: var(--primary);
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     }
@@ -81,7 +88,7 @@ export class NoteList extends LitElement {
       padding: 0.375rem 0.75rem;
       border: 1px solid var(--gray-300);
       border-radius: 0.375rem;
-      background: white;
+      background: var(--white);
       font-size: 0.875rem;
       color: var(--gray-700);
       cursor: pointer;
@@ -108,6 +115,18 @@ export class NoteList extends LitElement {
     .sort-direction:hover {
       background: var(--gray-200);
       color: var(--gray-800);
+    }
+
+    .sort-direction svg {
+      width: 15px;
+      height: 15px;
+    }
+
+    /* We only have one chevron icon, so ascending order is just the same
+    * icon flipped upside down rather than a second dedicated asset. */
+    .sort-direction .flip {
+      display: flex;
+      transform: rotate(180deg);
     }
 
     .header-controls {
@@ -184,12 +203,13 @@ export class NoteList extends LitElement {
 
     .notes-list .pin-indicator {
       position: static;
-      margin-right: 0.5rem;
-      font-size: 1rem;
+      display: inline-flex;
+      vertical-align: -3px;
+      margin-right: 0.4rem;
     }
 
     .note-card {
-      background: white;
+      background: var(--white);
       border: 1px solid var(--gray-200);
       border-radius: 0.75rem;
       padding: 1.25rem;
@@ -206,23 +226,33 @@ export class NoteList extends LitElement {
     }
 
     .note-card.pinned {
-      border-color: var(--primary-light);
-      background: linear-gradient(135deg, var(--white) 0%, rgba(102, 126, 234, 0.05) 100%);
+      border-color: var(--accent);
+      background: linear-gradient(135deg, var(--white) 0%, rgb(var(--accent-rgb) / 0.06) 100%);
     }
 
+    /* Renders the actual pin icon passed in from renderNoteCard() - previously
+    * this was a styled but empty element, so pinned notes had no visible mark. */
     .pin-indicator {
       position: absolute;
       top: 0.75rem;
       right: 0.75rem;
-      color: var(--primary);
-      font-size: 1.125rem;
+      color: var(--accent);
+      width: 16px;
+      height: 16px;
+    }
+
+    .pin-indicator svg {
+      width: 100%;
+      height: 100%;
     }
 
     .note-title {
-      font-size: 1.125rem;
-      font-weight: 600;
+      font-family: var(--font-serif);
+      font-size: 1.15rem;
+      font-weight: 400;
       color: var(--gray-900);
       margin-bottom: 0.5rem;
+      padding-right: 1.25rem;
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
@@ -282,9 +312,10 @@ export class NoteList extends LitElement {
     }
 
     .empty-icon {
-      font-size: 3rem;
-      margin-bottom: 1rem;
-      opacity: 0.5;
+      width: 44px;
+      height: 44px;
+      margin: 0 auto 1rem;
+      color: var(--gray-400);
     }
 
     .empty-title {
@@ -393,7 +424,6 @@ export class NoteList extends LitElement {
     );
   }
 
-
   formatDate(dateString) {
     if (!dateString) return "";
 
@@ -436,7 +466,8 @@ export class NoteList extends LitElement {
           break;
         case "modified":
         default:
-          comparison = new Date(a.updated_at || a.created_at) - new Date(b.updated_at || b.created_at);
+          comparison = new Date(a.updated_at || a.created_at) -
+            new Date(b.updated_at || b.created_at);
           break;
       }
 
@@ -479,7 +510,7 @@ export class NoteList extends LitElement {
 
     return html`
       <div class="empty-state">
-        <div class="empty-icon">※</div>
+        <div class="empty-icon">${icons.doc}</div>
         <div class="empty-title">${message}</div>
         <div class="empty-message">${submessage}</div>
       </div>
@@ -497,7 +528,11 @@ export class NoteList extends LitElement {
         >
           <div class="note-main">
             <div class="note-title">
-              ${note.is_pinned ? "  " : ""}${this.searchQuery
+              ${note.is_pinned
+                ? html`
+                  <span class="pin-indicator">${icons.pin}</span>
+                `
+                : ""} ${this.searchQuery
                 ? unsafeHTML(highlightText(note.title, this.searchQuery))
                 : note.title}
             </div>
@@ -540,14 +575,12 @@ export class NoteList extends LitElement {
       >
         ${note.is_pinned
           ? html`
-            <div class="pin-indicator"></div>
+            <div class="pin-indicator">${icons.pin}</div>
           `
           : ""}
 
         <div class="note-title">
-          ${this.searchQuery
-            ? unsafeHTML(highlightText(note.title, this.searchQuery))
-            : note.title}
+          ${this.searchQuery ? unsafeHTML(highlightText(note.title, this.searchQuery)) : note.title}
         </div>
 
         <div class="note-content">
@@ -619,14 +652,8 @@ export class NoteList extends LitElement {
                 @click="${this.toggleSortDirection}"
                 title="${this.sortDirection === "asc" ? "Ascending" : "Descending"}"
               >
-                ${this.sortDirection === "asc"
-                  ? html`<svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                      <path fill-rule="evenodd" d="M8 15a.5.5 0 0 0 .5-.5V2.707l3.146 3.147a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 1 0 .708.708L7.5 2.707V14.5a.5.5 0 0 0 .5.5z"/>
-                    </svg>`
-                  : html`<svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                      <path fill-rule="evenodd" d="M8 1a.5.5 0 0 1 .5.5v11.793l3.146-3.147a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 .708-.708L7.5 13.293V1.5A.5.5 0 0 1 8 1z"/>
-                    </svg>`
-                }
+                <span class="${this.sortDirection === "asc" ? "flip" : ""}">${icons
+                  .chevronDown}</span>
               </button>
             </div>
 
@@ -636,23 +663,14 @@ export class NoteList extends LitElement {
                 @click="${() => this.toggleView("grid")}"
                 title="Grid view"
               >
-                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                  <path
-                    d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3z"
-                  />
-                </svg>
+                ${icons.grid}
               </button>
               <button
                 class="${this.viewType === "list" ? "active" : ""}"
                 @click="${() => this.toggleView("list")}"
                 title="List view"
               >
-                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                  <path
-                    fill-rule="evenodd"
-                    d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"
-                  />
-                </svg>
+                ${icons.list}
               </button>
             </div>
           </div>
@@ -662,16 +680,18 @@ export class NoteList extends LitElement {
           <div class="${this.viewType === "grid" ? "notes-grid" : "notes-list"}">
             ${filteredNotes.map((note) => this.renderNoteCard(note))}
           </div>
-          ${this.hasMore ? html`
-            <div class="load-more">
-              <button
-                @click="${this.handleLoadMore}"
-                ?disabled="${this.loadingMore}"
-              >
-                ${this.loadingMore ? "Loading..." : "Load more"}
-              </button>
-            </div>
-          ` : ""}
+          ${this.hasMore
+            ? html`
+              <div class="load-more">
+                <button
+                  @click="${this.handleLoadMore}"
+                  ?disabled="${this.loadingMore}"
+                >
+                  ${this.loadingMore ? "Loading..." : "Load more"}
+                </button>
+              </div>
+            `
+            : ""}
         `}
       </div>
     `;
