@@ -576,6 +576,10 @@ class NotesApp extends LitElement {
 
     /* ---------- Mobile ---------- */
     @media (max-width: 768px) {
+      .app-layout {
+        flex-direction: column;
+      }
+
       .rail {
         display: none !important;
       }
@@ -1548,26 +1552,30 @@ class NotesApp extends LitElement {
           : ""}
 
         <main class="main-content">
-          <div class="libbar">
-            <span class="crumb">${this._libraryLabel()}</span>
-            <search-bar
-              .query="${this.searchQuery}"
-              @search-query="${(e) => {
-                this.searchQuery = e.detail.query;
-                this.performSearch();
-              }}"
-            ></search-bar>
-            ${this.hasActiveFilters()
-              ? html`
-                <button class="clear-btn" @click="${this
-                  .clearAllFilters}" title="Clear all filters">
-                  ${icons.close} Clear
-                </button>
-              `
-              : ""}
-            <div class="libbar-spacer"></div>
-            ${this._renderSyncStatus()}
-          </div>
+          ${this.viewMode !== "edit"
+            ? html`
+              <div class="libbar">
+                <span class="crumb">${this._libraryLabel()}</span>
+                <search-bar
+                  .query="${this.searchQuery}"
+                  @search-query="${(e) => {
+                    this.searchQuery = e.detail.query;
+                    this.performSearch();
+                  }}"
+                ></search-bar>
+                ${this.hasActiveFilters()
+                  ? html`
+                    <button class="clear-btn" @click="${this
+                      .clearAllFilters}" title="Clear all filters">
+                      ${icons.close} Clear
+                    </button>
+                  `
+                  : ""}
+                <div class="libbar-spacer"></div>
+                ${this._renderSyncStatus()}
+              </div>
+            `
+            : ""}
 
           <div class="content-area">
             ${this.loading
