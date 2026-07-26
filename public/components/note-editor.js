@@ -1284,18 +1284,12 @@ export class NoteEditor extends LitElement {
             ${icons.clock}
           </button>
           <button
-            class="icon-btn ${!this.previewMode ? "active" : ""}"
-            @click="${() => this.togglePreviewMode(false)}"
-            title="Edit"
+            class="icon-btn"
+            @click="${() => this.togglePreviewMode(!this.previewMode)}"
+            title="${this.previewMode ? "Back to editing" : "Preview"}"
+            aria-label="${this.previewMode ? "Back to editing" : "Preview"}"
           >
-            ${icons.edit}
-          </button>
-          <button
-            class="icon-btn ${this.previewMode ? "active" : ""}"
-            @click="${() => this.togglePreviewMode(true)}"
-            title="Preview"
-          >
-            ${icons.eye}
+            ${this.previewMode ? icons.edit : icons.eye}
           </button>
 
           ${this._renderHistoryPanel()}
