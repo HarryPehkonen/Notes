@@ -58,10 +58,13 @@ export class SearchBar extends LitElement {
 
     .search-input {
       width: 100%;
+      min-width: 0;
       padding: 0.75rem 2.5rem;
       border: none;
       background: transparent;
-      font-size: 0.875rem;
+      /* Must stay >= 16px: iOS Safari zooms the page in on focus for anything
+        smaller, and never zooms back out. */
+      font-size: 1rem;
       font-family: var(--font-family);
       color: var(--gray-900);
     }
@@ -76,15 +79,20 @@ export class SearchBar extends LitElement {
 
     .clear-button {
       position: absolute;
-      right: 0.75rem;
-      padding: 0.25rem;
+      right: 0.25rem;
+      width: 40px;
+      height: 40px;
+      padding: 0;
       background: transparent;
       border: none;
       color: var(--gray-500);
       cursor: pointer;
-      border-radius: 0.25rem;
+      border-radius: 0.375rem;
       display: flex;
+      align-items: center;
+      justify-content: center;
       transition: all 0.2s;
+      -webkit-tap-highlight-color: transparent;
     }
 
     .clear-button svg {
@@ -92,9 +100,11 @@ export class SearchBar extends LitElement {
       height: 15px;
     }
 
-    .clear-button:hover {
-      background: var(--gray-100);
-      color: var(--gray-700);
+    @media (hover: hover) {
+      .clear-button:hover {
+        background: var(--gray-100);
+        color: var(--gray-700);
+      }
     }
 
     .keyboard-hint {
@@ -125,11 +135,13 @@ export class SearchBar extends LitElement {
 
     .suggestion-item {
       padding: 0.75rem 1rem;
+      min-height: 44px;
       cursor: pointer;
       transition: background-color 0.1s;
       display: flex;
       align-items: center;
       gap: 0.75rem;
+      -webkit-tap-highlight-color: transparent;
     }
 
     .suggestion-item:hover,
@@ -200,6 +212,25 @@ export class SearchBar extends LitElement {
     @media (max-width: 768px) {
       :host {
         max-width: 100%;
+      }
+
+      /* No Ctrl+K on a phone, and the chip steals room from a narrow field. */
+      .keyboard-hint {
+        display: none;
+      }
+
+      .search-input {
+        padding: 0.6rem 2.25rem;
+        min-height: 44px;
+      }
+
+      .clear-button {
+        width: 44px;
+        height: 44px;
+      }
+
+      .search-icon {
+        left: 0.75rem;
       }
     }
   `;

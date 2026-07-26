@@ -42,6 +42,10 @@ export class NoteList extends LitElement {
       font-size: 1.25rem;
       font-weight: 600;
       color: var(--gray-800);
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .view-toggle {
@@ -54,6 +58,8 @@ export class NoteList extends LitElement {
 
     .view-toggle button {
       padding: 0.5rem;
+      min-width: 40px;
+      min-height: 40px;
       background: transparent;
       border: none;
       border-radius: 0.375rem;
@@ -61,6 +67,9 @@ export class NoteList extends LitElement {
       color: var(--gray-600);
       transition: all 0.2s;
       display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
     }
 
     .view-toggle button svg {
@@ -68,8 +77,10 @@ export class NoteList extends LitElement {
       height: 16px;
     }
 
-    .view-toggle button:hover {
-      color: var(--gray-800);
+    @media (hover: hover) {
+      .view-toggle button:hover {
+        color: var(--gray-800);
+      }
     }
 
     .view-toggle button.active {
@@ -85,7 +96,9 @@ export class NoteList extends LitElement {
     }
 
     .sort-select {
-      padding: 0.375rem 0.75rem;
+      padding: 0.375rem 0.5rem;
+      min-height: 40px;
+      max-width: 100%;
       border: 1px solid var(--gray-300);
       border-radius: 0.375rem;
       background: var(--white);
@@ -101,6 +114,8 @@ export class NoteList extends LitElement {
 
     .sort-direction {
       padding: 0.375rem;
+      min-width: 40px;
+      min-height: 40px;
       background: var(--gray-100);
       border: none;
       border-radius: 0.375rem;
@@ -110,11 +125,15 @@ export class NoteList extends LitElement {
       display: flex;
       align-items: center;
       justify-content: center;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
     }
 
-    .sort-direction:hover {
-      background: var(--gray-200);
-      color: var(--gray-800);
+    @media (hover: hover) {
+      .sort-direction:hover {
+        background: var(--gray-200);
+        color: var(--gray-800);
+      }
     }
 
     .sort-direction svg {
@@ -217,12 +236,28 @@ export class NoteList extends LitElement {
       transition: all 0.2s;
       position: relative;
       overflow: hidden;
+      /* A pasted URL is one unbreakable "word" - without this it pushes the
+        card wider than the phone screen. */
+      overflow-wrap: anywhere;
+      -webkit-tap-highlight-color: transparent;
     }
 
-    .note-card:hover {
+    /*
+    * Hover-only: on a touch screen the lift "sticks" after a tap because
+    * the browser keeps :hover on the last-tapped element, leaving a card
+    * raised and outlined until you tap elsewhere.
+    */
+    @media (hover: hover) {
+      .note-card:hover {
+        border-color: var(--primary);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        transform: translateY(-2px);
+      }
+    }
+
+    .note-card:active {
       border-color: var(--primary);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      transform: translateY(-2px);
+      background: var(--gray-50);
     }
 
     .note-card.pinned {
@@ -357,40 +392,85 @@ export class NoteList extends LitElement {
       cursor: not-allowed;
     }
 
+    /* Explicit dark ink: the inherited body colour is near-white in dark mode,
+      which was invisible on the yellow highlight. */
     .highlight {
-      background: yellow;
+      background: #ffe27a;
+      color: #1b1f1d;
       padding: 0.125rem 0.25rem;
       border-radius: 0.125rem;
     }
 
+    .load-more button {
+      min-height: 44px;
+    }
+
     @media (max-width: 768px) {
       :host {
-        padding: 1rem;
+        padding: 0.75rem;
       }
 
+      /*
+      * Single row instead of two stacked ones. The count text shrinks and
+      * ellipsises; the controls keep their full tap targets.
+      */
       .notes-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.75rem;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+      }
+
+      .notes-title {
+        font-size: 1rem;
+        flex: 1 1 auto;
       }
 
       .header-controls {
-        width: 100%;
-        justify-content: space-between;
+        gap: 0.5rem;
+        flex-shrink: 0;
       }
 
+      .sort-controls {
+        gap: 0.25rem;
+      }
+
+      /* 16px minimum, otherwise iOS Safari zooms the whole page in when the
+        select is tapped and never zooms back out. */
       .sort-select {
-        flex: 1;
-        min-width: 0;
+        font-size: 1rem;
+        padding: 0.375rem 0.25rem;
+        max-width: 6.5rem;
       }
 
       .notes-grid {
         grid-template-columns: 1fr;
-        gap: 1rem;
+        gap: 0.75rem;
       }
 
       .note-card {
         padding: 1rem;
+      }
+
+      .note-content {
+        margin-bottom: 0.75rem;
+      }
+
+      .view-toggle button,
+      .sort-direction,
+      .sort-select {
+        min-width: 44px;
+        min-height: 44px;
+      }
+    }
+
+    @media (pointer: coarse) {
+      .view-toggle button,
+      .sort-direction {
+        min-width: 44px;
+        min-height: 44px;
+      }
+
+      .sort-select {
+        min-height: 44px;
       }
     }
   `;

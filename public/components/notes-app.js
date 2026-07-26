@@ -177,6 +177,11 @@ class NotesApp extends LitElement {
       height: 26px;
     }
 
+    .avatar-btn.static {
+      display: block;
+      cursor: default;
+    }
+
     .user-popover {
       position: absolute;
       left: 60px;
@@ -259,28 +264,9 @@ class NotesApp extends LitElement {
       margin-bottom: 0.8rem;
     }
 
-    /* ---------- Mobile top strip ---------- */
-    .mobile-topbar {
-      display: none;
-      padding: 0.85rem 1rem;
-      background: var(--white);
-      border-bottom: 1px solid var(--gray-200);
-      align-items: center;
-      gap: 0.75rem;
-    }
-
-    .mobile-logo {
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-      font-family: var(--font-serif);
-      font-size: 1.15rem;
-      color: var(--gray-900);
-    }
-
     .icon-btn {
-      width: 34px;
-      height: 34px;
+      width: 40px;
+      height: 40px;
       border: none;
       background: transparent;
       border-radius: 8px;
@@ -290,6 +276,7 @@ class NotesApp extends LitElement {
       justify-content: center;
       cursor: pointer;
       flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
     }
 
     .icon-btn svg {
@@ -297,13 +284,22 @@ class NotesApp extends LitElement {
       height: 18px;
     }
 
-    .icon-btn:hover {
-      background: var(--gray-100);
+    @media (hover: hover) {
+      .icon-btn:hover {
+        background: var(--gray-100);
+        color: var(--gray-900);
+      }
+    }
+
+    .icon-btn:active {
+      background: var(--gray-200);
       color: var(--gray-900);
     }
 
-    .mobile-topbar-spacer {
-      flex: 1;
+    /* The hamburger and "new note" buttons live in the libbar but are only
+      shown on mobile - on desktop the rail already provides both. */
+    .libbar-mobile-only {
+      display: none;
     }
 
     /* ---------- Mobile-only nav drawer ---------- */
@@ -355,6 +351,7 @@ class NotesApp extends LitElement {
       gap: 0.5rem;
       width: 100%;
       padding: 0.65rem;
+      min-height: 44px;
       background: var(--primary);
       color: var(--white);
       border: none;
@@ -386,6 +383,7 @@ class NotesApp extends LitElement {
       align-items: center;
       gap: 0.65rem;
       padding: 0.55rem 0.6rem;
+      min-height: 44px;
       border: none;
       background: transparent;
       border-radius: 0.5rem;
@@ -394,6 +392,7 @@ class NotesApp extends LitElement {
       cursor: pointer;
       text-align: left;
       width: 100%;
+      -webkit-tap-highlight-color: transparent;
     }
 
     .nav-row svg {
@@ -504,6 +503,10 @@ class NotesApp extends LitElement {
       color: var(--gray-900);
     }
 
+    .clear-btn-label {
+      display: inline;
+    }
+
     .libbar-spacer {
       flex: 1;
     }
@@ -584,14 +587,6 @@ class NotesApp extends LitElement {
         display: none !important;
       }
 
-      .mobile-topbar {
-        display: flex;
-      }
-
-      .mobile-topbar.editing {
-        display: none;
-      }
-
       .drawer {
         display: flex;
         position: absolute;
@@ -599,6 +594,7 @@ class NotesApp extends LitElement {
         left: 0;
         bottom: 0;
         width: 250px;
+        max-width: 80vw;
         z-index: 20;
         background: var(--white);
         flex-direction: column;
@@ -614,8 +610,67 @@ class NotesApp extends LitElement {
         display: block;
       }
 
+      /*
+      * The mobile header used to be two stacked bars - a logo strip and then
+      * a wrapped libbar - which ate ~160px before a single note was visible.
+      * On mobile it collapses into one row: [menu] [search] [clear] [new note].
+      * The breadcrumb is dropped because <note-list>'s own header already
+      * states the active filter ("5 Notes matching ... with 2 tags").
+      */
       .libbar {
-        padding: 0.65rem 1rem;
+        padding: 0.5rem 0.75rem;
+        gap: 0.5rem;
+      }
+
+      .libbar-mobile-only {
+        display: flex;
+      }
+
+      /* Phone-width screens are touch in practice, so meet the 44px minimum
+        here as well as under (pointer: coarse) below. */
+      .icon-btn {
+        width: 44px;
+        height: 44px;
+      }
+
+      .avatar-btn.sm {
+        width: 34px;
+        height: 34px;
+      }
+
+      .crumb,
+      .libbar-spacer {
+        display: none;
+      }
+
+      search-bar {
+        flex: 1 1 120px;
+        min-width: 0;
+      }
+
+      .clear-btn {
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        justify-content: center;
+        border-radius: 8px;
+      }
+
+      .clear-btn-label {
+        display: none;
+      }
+
+      .clear-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+    }
+
+    /* Touch devices: meet the 44px minimum tap target regardless of width. */
+    @media (pointer: coarse) {
+      .icon-btn {
+        width: 44px;
+        height: 44px;
       }
     }
 
@@ -1396,15 +1451,14 @@ class NotesApp extends LitElement {
   }
 
   /**
-   * Render the user's avatar button (opens the account popover on click).
-   * Used in three places: the rail footer, the mobile top strip, and the
-   * drawer footer - pass size="sm" for the two smaller mobile contexts.
+   * Render the user's avatar button for the desktop rail footer. Clicking it
+   * opens the account popover, which is rendered inside the rail.
    */
-  _renderAvatar(size) {
+  _renderAvatar() {
     if (!this.user) return "";
     return html`
       <button
-        class="avatar-btn ${size === "sm" ? "sm" : ""}"
+        class="avatar-btn"
         @click="${this.toggleUserMenu}"
         title="${this.user.name}"
       >
@@ -1413,21 +1467,24 @@ class NotesApp extends LitElement {
     `;
   }
 
+  /**
+   * Avatar for the mobile drawer footer. Deliberately not a button: the
+   * account popover it used to open lives inside the rail, which is
+   * display:none on mobile, so tapping it did nothing at all. Log out sits
+   * next to it in the same footer, so this is just identification.
+   */
+  _renderDrawerAvatar() {
+    if (!this.user) return "";
+    return html`
+      <span class="avatar-btn sm static">
+        <img src="${this.user.picture}" alt="">
+      </span>
+    `;
+  }
+
   render() {
     return html`
       <div class="app-layout">
-        <div class="mobile-topbar ${this.viewMode === "edit" ? "editing" : ""}">
-          <button class="icon-btn" @click="${this.toggleSidebar}" aria-label="Open menu">
-            ${icons.menu}
-          </button>
-          <span class="mobile-logo">
-            <span class="logo-mark">n</span>
-            Notes
-          </span>
-          <div class="mobile-topbar-spacer"></div>
-          ${this._renderAvatar("sm")}
-        </div>
-
         <div
           class="drawer-overlay ${this.sidebarOpen ? "visible" : ""}"
           @click="${this.handleOverlayClick}"
@@ -1475,7 +1532,7 @@ class NotesApp extends LitElement {
             ${this.user
               ? html`
                 <div class="drawer-user">
-                  ${this._renderAvatar("sm")}
+                  ${this._renderDrawerAvatar()}
                   <span class="user-name">${this.user.name}</span>
                   <button class="icon-btn" @click="${this.logout}" title="Log out">
                     ${icons.logout}
@@ -1555,6 +1612,13 @@ class NotesApp extends LitElement {
           ${this.viewMode !== "edit"
             ? html`
               <div class="libbar">
+                <button
+                  class="icon-btn libbar-mobile-only"
+                  @click="${this.toggleSidebar}"
+                  aria-label="Open menu"
+                >
+                  ${icons.menu}
+                </button>
                 <span class="crumb">${this._libraryLabel()}</span>
                 <search-bar
                   .query="${this.searchQuery}"
@@ -1565,14 +1629,25 @@ class NotesApp extends LitElement {
                 ></search-bar>
                 ${this.hasActiveFilters()
                   ? html`
-                    <button class="clear-btn" @click="${this
-                      .clearAllFilters}" title="Clear all filters">
-                      ${icons.close} Clear
+                    <button
+                      class="clear-btn"
+                      @click="${this.clearAllFilters}"
+                      title="Clear all filters"
+                      aria-label="Clear all filters"
+                    >
+                      ${icons.close}<span class="clear-btn-label">Clear</span>
                     </button>
                   `
                   : ""}
                 <div class="libbar-spacer"></div>
                 ${this._renderSyncStatus()}
+                <button
+                  class="icon-btn libbar-mobile-only"
+                  @click="${this.createNewNote}"
+                  aria-label="New note"
+                >
+                  ${icons.plus}
+                </button>
               </div>
             `
             : ""}

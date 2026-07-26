@@ -27,18 +27,22 @@ export class TagManager extends LitElement {
     .tag-item {
       display: flex;
       align-items: center;
-      padding: 0.5rem 0.75rem;
+      padding: 0.375rem 0.5rem 0.375rem 0.75rem;
+      min-height: 44px;
       background: var(--white);
       border: 1px solid var(--gray-200);
       border-radius: 0.5rem;
       cursor: pointer;
       transition: all 0.2s;
       position: relative;
+      -webkit-tap-highlight-color: transparent;
     }
 
-    .tag-item:hover {
-      background: var(--gray-50);
-      border-color: var(--gray-300);
+    @media (hover: hover) {
+      .tag-item:hover {
+        background: var(--gray-50);
+        border-color: var(--gray-300);
+      }
     }
 
     .tag-item.selected {
@@ -62,15 +66,20 @@ export class TagManager extends LitElement {
 
     .tag-name {
       flex: 1;
+      min-width: 0;
       font-size: 0.875rem;
       font-weight: 500;
       color: var(--gray-700);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .tag-count {
       font-size: 0.75rem;
       color: var(--gray-500);
       margin-left: 0.5rem;
+      flex-shrink: 0;
     }
 
     /*
@@ -80,10 +89,11 @@ export class TagManager extends LitElement {
     */
     .tag-actions {
       display: flex;
-      gap: 0.25rem;
-      margin-left: 0.5rem;
+      gap: 0.125rem;
+      margin-left: 0.25rem;
       opacity: 0.55;
       transition: opacity 0.15s;
+      flex-shrink: 0;
     }
 
     .tag-item:hover .tag-actions,
@@ -92,22 +102,35 @@ export class TagManager extends LitElement {
     }
 
     .tag-action-btn {
-      padding: 0.3rem;
+      padding: 0;
+      width: 36px;
+      height: 36px;
       background: transparent;
       border: none;
       cursor: pointer;
       color: var(--gray-500);
-      border-radius: 0.25rem;
+      border-radius: 0.375rem;
       transition: all 0.2s;
       display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
     }
 
     .tag-action-btn svg {
-      width: 14px;
-      height: 14px;
+      width: 15px;
+      height: 15px;
     }
 
-    .tag-action-btn:hover {
+    @media (hover: hover) {
+      .tag-action-btn:hover {
+        background: var(--gray-200);
+        color: var(--gray-700);
+      }
+    }
+
+    .tag-action-btn:active {
       background: var(--gray-200);
       color: var(--gray-700);
     }
@@ -255,6 +278,45 @@ export class TagManager extends LitElement {
       padding: 1.5rem;
       color: var(--gray-500);
       font-size: 0.875rem;
+    }
+
+    @media (max-width: 768px) {
+      /* 16px minimum, or iOS Safari zooms the page in when these are tapped
+        and leaves it zoomed. */
+      .form-input,
+      .color-preview {
+        font-size: 1rem;
+      }
+
+      .form-input,
+      .color-input {
+        min-height: 44px;
+      }
+
+      .btn {
+        min-height: 44px;
+        padding: 0.375rem 1rem;
+      }
+
+      .add-tag-btn {
+        min-height: 44px;
+      }
+
+      .tag-action-btn {
+        width: 40px;
+        height: 40px;
+      }
+    }
+
+    @media (pointer: coarse) {
+      .tag-action-btn {
+        width: 40px;
+        height: 40px;
+      }
+
+      .add-tag-btn {
+        min-height: 44px;
+      }
     }
   `;
 

@@ -58,8 +58,8 @@ export class NoteEditor extends LitElement {
     }
 
     .icon-btn {
-      width: 32px;
-      height: 32px;
+      width: 40px;
+      height: 40px;
       border: none;
       background: transparent;
       border-radius: 8px;
@@ -69,15 +69,23 @@ export class NoteEditor extends LitElement {
       justify-content: center;
       cursor: pointer;
       flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
     }
 
     .icon-btn svg {
-      width: 17px;
-      height: 17px;
+      width: 18px;
+      height: 18px;
     }
 
-    .icon-btn:hover:not(:disabled) {
-      background: var(--gray-100);
+    @media (hover: hover) {
+      .icon-btn:hover:not(:disabled) {
+        background: var(--gray-100);
+        color: var(--gray-900);
+      }
+    }
+
+    .icon-btn:active:not(:disabled) {
+      background: var(--gray-200);
       color: var(--gray-900);
     }
 
@@ -121,6 +129,8 @@ export class NoteEditor extends LitElement {
       white-space: nowrap;
       background: var(--gray-100);
       color: var(--gray-600);
+      min-width: 0;
+      overflow: hidden;
     }
 
     .save-pill .dot {
@@ -128,6 +138,12 @@ export class NoteEditor extends LitElement {
       height: 6px;
       border-radius: 50%;
       background: currentColor;
+      flex-shrink: 0;
+    }
+
+    .save-pill .save-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .save-pill.saved {
@@ -337,15 +353,29 @@ export class NoteEditor extends LitElement {
 
     .doc-body {
       flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
     }
 
+    /*
+    * The textarea used to be height:100% with its own scrollbar, which made
+    * the editor a scroller inside a scroller - on a phone you could not
+    * flick-scroll a long note reliably, and the caret regularly ended up
+    * under the on-screen keyboard because the browser can only auto-scroll
+    * the outer document. It now grows to fit its content (see
+    * _autoGrowTextarea) so .canvas is the single scroller and the caret
+    * stays in normal document flow.
+    */
     .content-textarea {
       width: 100%;
-      height: 100%;
+      flex: 1 0 auto;
       min-height: 45vh;
+      overflow-y: hidden;
       border: none;
       background: transparent;
       font-family: var(--font-family);
+      /* >= 16px, or iOS Safari zooms in on focus */
       font-size: 1rem;
       line-height: 1.75;
       color: var(--gray-900);
@@ -365,6 +395,8 @@ export class NoteEditor extends LitElement {
       min-height: 45vh;
       line-height: 1.75;
       color: var(--gray-900);
+      /* Long URLs and code spans must not push the page wider than the phone */
+      overflow-wrap: anywhere;
     }
 
     .markdown-preview h1 {
@@ -449,8 +481,13 @@ export class NoteEditor extends LitElement {
       margin: 1.5rem 0;
     }
 
+    /* A table with more than two or three columns cannot fit a phone; let it
+      scroll sideways on its own rather than widening the whole document. */
     .markdown-preview table {
-      width: 100%;
+      display: block;
+      width: fit-content;
+      max-width: 100%;
+      overflow-x: auto;
       border-collapse: collapse;
       margin: 1rem 0;
     }
@@ -473,25 +510,77 @@ export class NoteEditor extends LitElement {
 
     @media (max-width: 768px) {
       .topbar {
-        padding: 0.55rem 0.75rem;
+        padding: 0.35rem 0.4rem;
+        gap: 0.1rem;
       }
 
       .crumb {
         display: none;
       }
 
+      /*
+      * "Saved" is the boring steady state and it was crowding five buttons
+      * off a 320px screen, so on mobile it collapses to just its dot. Any
+      * status that actually wants attention (unsaved / saving / failed)
+      * keeps its words.
+      */
+      .save-pill {
+        margin-right: 0.15rem;
+      }
+
+      .save-pill.saved .save-label {
+        display: none;
+      }
+
       .canvas {
-        padding: 1.25rem 1rem 2rem;
+        padding: 1rem 1rem 2rem;
       }
 
       .doc-title {
         font-size: 1.5rem;
+        min-height: 44px;
+      }
+
+      .doc-tags {
+        margin-bottom: 1rem;
       }
 
       .history-panel {
-        right: 0.75rem;
-        left: 0.75rem;
+        right: 0.5rem;
+        left: 0.5rem;
         width: auto;
+      }
+
+      .history-row {
+        min-height: 44px;
+      }
+
+      /* The save pill is the only flexible item in the toolbar, so the five
+        buttons keep their full 44px even at 320px and the pill absorbs it. */
+      .icon-btn {
+        width: 44px;
+        height: 44px;
+      }
+
+      .tag-chip {
+        min-height: 36px;
+        padding: 0.35rem 0.8rem;
+      }
+    }
+
+    @media (pointer: coarse) {
+      .icon-btn {
+        width: 44px;
+        height: 44px;
+      }
+
+      .tag-chip {
+        min-height: 36px;
+        padding: 0.35rem 0.8rem;
+      }
+
+      .history-restore-btn {
+        min-height: 40px;
       }
     }
   `;
@@ -626,11 +715,17 @@ export class NoteEditor extends LitElement {
       this.selectedTags = draft.tags || [];
       this.hasUnsavedChanges = true;
       this.saveStatus = "unsaved";
+      this._autoGrowTextarea();
       this.showToast("Recovered unsaved changes", "info");
     }
   }
 
   updated(changedProperties) {
+    // Re-fit whenever a different note loads or we come back from preview.
+    if (changedProperties.has("note") || changedProperties.has("previewMode")) {
+      this._autoGrowTextarea();
+    }
+
     if (changedProperties.has("note") && this.note) {
       const prevNote = changedProperties.get("note");
       const isSameNote = prevNote && prevNote.id === this.note.id;
@@ -678,8 +773,21 @@ export class NoteEditor extends LitElement {
   handleInputChange(e) {
     if (e?.target?.classList?.contains("content-textarea")) {
       this._editingContent = e.target.value;
+      this._autoGrowTextarea();
     }
     this.markAsChanged();
+  }
+
+  /**
+   * Size the textarea to its content so .canvas stays the only scroller.
+   * Cheap enough to run per keystroke: one forced reflow on a single element.
+   */
+  _autoGrowTextarea() {
+    if (this.previewMode) return;
+    const textarea = this.shadowRoot?.querySelector(".content-textarea");
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${textarea.scrollHeight}px`;
   }
 
   markAsChanged() {
@@ -1149,9 +1257,9 @@ export class NoteEditor extends LitElement {
 
           <div class="topbar-spacer"></div>
 
-          <div class="save-pill ${this.saveStatus}">
+          <div class="save-pill ${this.saveStatus}" title="${this._saveStatusLabel()}">
             <span class="dot"></span>
-            ${this._saveStatusLabel()}
+            <span class="save-label">${this._saveStatusLabel()}</span>
           </div>
 
           <input
