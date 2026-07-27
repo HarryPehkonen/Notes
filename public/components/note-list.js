@@ -294,6 +294,11 @@ export class NoteList extends LitElement {
       overflow: hidden;
     }
 
+    .untitled {
+      color: var(--gray-400);
+      font-style: italic;
+    }
+
     .note-content {
       font-size: 0.875rem;
       color: var(--gray-600);
@@ -597,6 +602,19 @@ export class NoteList extends LitElement {
     `;
   }
 
+  /**
+   * Notes can be saved without a title, so fall back to a muted stand-in
+   * rather than rendering a blank line where the title should be.
+   */
+  renderTitle(note) {
+    if (!note.title || !note.title.trim()) {
+      return html`
+        <span class="untitled">Untitled</span>
+      `;
+    }
+    return this.searchQuery ? unsafeHTML(highlightText(note.title, this.searchQuery)) : note.title;
+  }
+
   renderNoteCard(note) {
     const isListView = this.viewType === "list";
 
@@ -612,9 +630,7 @@ export class NoteList extends LitElement {
                 ? html`
                   <span class="pin-indicator">${icons.pin}</span>
                 `
-                : ""} ${this.searchQuery
-                ? unsafeHTML(highlightText(note.title, this.searchQuery))
-                : note.title}
+                : ""} ${this.renderTitle(note)}
             </div>
             <div class="note-content">
               ${this.searchQuery
@@ -660,7 +676,7 @@ export class NoteList extends LitElement {
           : ""}
 
         <div class="note-title">
-          ${this.searchQuery ? unsafeHTML(highlightText(note.title, this.searchQuery)) : note.title}
+          ${this.renderTitle(note)}
         </div>
 
         <div class="note-content">

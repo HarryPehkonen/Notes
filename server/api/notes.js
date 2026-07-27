@@ -182,7 +182,10 @@ export function createNotesRouter() {
       const body = await ctx.request.body({ type: "json" }).value;
       const { title, content, tags = [] } = body;
 
-      if (!title || !content) {
+      // Both fields must be present, but may be empty: a note created from the
+      // "new note" button starts blank so the editor shows its placeholders
+      // rather than boilerplate the user has to delete.
+      if (typeof title !== "string" || typeof content !== "string") {
         ctx.response.status = 400;
         ctx.response.body = {
           success: false,

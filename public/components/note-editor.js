@@ -849,11 +849,6 @@ export class NoteEditor extends LitElement {
       tags: this.selectedTags.filter((t) => t && t.id).map((t) => t.id),
     };
 
-    if (!updates.title) {
-      this.showToast("Title is required", "error");
-      return;
-    }
-
     this.saveStatus = "saving";
     this._isSaving = true;
 

@@ -1114,9 +1114,11 @@ class NotesApp extends LitElement {
         }
       }
 
+      // Blank on purpose - the editor's placeholders prompt the user instead
+      // of real text they would have to select and delete first.
       const newNote = {
-        title: "Untitled Note",
-        content: "Start writing your note...",
+        title: "",
+        content: "",
         tags: [],
       };
 
