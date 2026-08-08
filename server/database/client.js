@@ -496,12 +496,18 @@ export class DatabaseClient {
 
   /**
    * Search notes with full-text search
+   *
+   * Hybrid matching: every bare token must match the note's title/content OR
+   * one of its tag names. `tagIds` holds strict '#tag' filters, which are
+   * ANDed with each other and with the token matching.
+   *
    * @param {number} userId
-   * @param {string} query
+   * @param {string} query - Bare search tokens (no '#tag' filters)
    * @param {number} limit
+   * @param {number[]} [tagIds] - Tag ids every result must carry
    * @returns {Promise<Note[]>}
    */
-  async searchNotes(userId, query, limit = 20) {
+  async searchNotes(userId, query, limit = 20, tagIds = []) {
     // Sanitize query for PostgreSQL full-text search
     // Remove special characters that break tsquery and normalize spaces
     const sanitizedQuery = query
@@ -511,6 +517,15 @@ export class DatabaseClient {
 
     // Per-token prefix tsquery - a multi-word query cannot just get ':*' appended
     const prefixQuery = buildPrefixTsQuery(sanitizedQuery);
+
+    // Bare tokens for the per-token ILIKE checks; metacharacters are escaped
+    // so a literal '%' or '_' in a query cannot turn into a wildcard
+    const tokens = sanitizedQuery
+      .split(" ")
+      .filter((token) => token.length > 0)
+      .map((token) => token.replace(/[%_\\]/g, "\\$&"));
+
+    const filterTagIds = tagIds || [];
 
     const result = await this.query(
       `WITH fts_results AS (
@@ -539,8 +554,20 @@ export class DatabaseClient {
                 FROM notes n
                 WHERE n.user_id = $1
                     AND (
-                        n.title ILIKE $4 OR n.content ILIKE $4 OR
-                        ($5 != '' AND n.search_vector @@ to_tsquery('english', $5))  -- Stem matching with prefix
+                        -- Every bare token must match the text or a tag name
+                        (
+                            SELECT count(*) FROM unnest($4::text[]) tok
+                            WHERE n.title ILIKE '%' || tok || '%'
+                               OR n.content ILIKE '%' || tok || '%'
+                               OR EXISTS (
+                                      SELECT 1
+                                      FROM note_tags nt2
+                                      JOIN tags t2 ON t2.id = nt2.tag_id
+                                      WHERE nt2.note_id = n.id
+                                        AND t2.name ILIKE '%' || tok || '%'
+                                  )
+                        ) = cardinality($4::text[])
+                        OR ($5 != '' AND n.search_vector @@ to_tsquery('english', $5))  -- Stem matching with prefix
                     )
                     AND NOT n.is_archived
                     AND n.id NOT IN (SELECT id FROM fts_results)
@@ -559,9 +586,17 @@ export class DatabaseClient {
                     WHERE nt.note_id = ar.id
                 ) as tags
             FROM all_results ar
+            WHERE cardinality($6::int[]) = 0
+               OR ar.id IN (
+                      SELECT nt.note_id
+                      FROM note_tags nt
+                      WHERE nt.tag_id = ANY($6::int[])
+                      GROUP BY nt.note_id
+                      HAVING COUNT(DISTINCT nt.tag_id) = cardinality($6::int[])
+                  )
             ORDER BY ar.rank DESC, ar.updated_at DESC
             LIMIT $3`,
-      [userId, sanitizedQuery, limit, `%${query}%`, prefixQuery],
+      [userId, sanitizedQuery, limit, tokens, prefixQuery, filterTagIds],
     );
     return result.rows;
   }

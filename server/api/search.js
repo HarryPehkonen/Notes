@@ -4,6 +4,7 @@
  */
 
 import { Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
+import { parseSearchQuery } from "./search-query.js";
 
 /** Escape LIKE/ILIKE special characters so user input is matched literally */
 function escapeLike(str) {
@@ -45,16 +46,21 @@ export function createSearchRouter() {
       const searchLimit = Math.min(parseInt(limit) || 20, 100); // Cap at 100 results
       const searchOffset = Math.max(parseInt(offset) || 0, 0);
 
+      // Split into bare words (matched against text OR tag names) and '#tag'
+      // tokens (strict tag filters)
+      const { tokens, tagTokens } = parseSearchQuery(query);
+      const tagNames = [...new Set(tagTokens.map((name) => name.toLowerCase()))];
+
       let results;
 
-      // Check if this is a tag search (starts with #)
-      if (query.startsWith("#")) {
-        const tagName = query.substring(1).toLowerCase(); // Remove the # prefix
-
-        // First, get the tag ID for this tag name
+      if (tokens.length === 0 && tagNames.length === 0) {
+        // Nothing searchable in the query (e.g. a bare "#")
+        results = [];
+      } else if (tokens.length === 0 && tagNames.length === 1) {
+        // A lone "#tag" keeps the original tag-filter path
         const tagResult = await db.query(
-          `SELECT id FROM tags WHERE user_id = $1 AND name = $2`,
-          [user.id, tagName],
+          `SELECT id FROM tags WHERE user_id = $1 AND lower(name) = ANY($2::text[])`,
+          [user.id, tagNames],
         );
 
         if (tagResult.rows.length > 0) {
@@ -69,7 +75,22 @@ export function createSearchRouter() {
           results = [];
         }
       } else {
-        results = await db.searchNotes(user.id, query, searchLimit);
+        // Resolve every '#tag' to an id; an unknown tag can never match
+        let tagIds = [];
+
+        if (tagNames.length > 0) {
+          const tagResult = await db.query(
+            `SELECT id FROM tags WHERE user_id = $1 AND lower(name) = ANY($2::text[])`,
+            [user.id, tagNames],
+          );
+          tagIds = tagResult.rows.map((row) => row.id);
+        }
+
+        if (tagIds.length < tagNames.length) {
+          results = [];
+        } else {
+          results = await db.searchNotes(user.id, tokens.join(" "), searchLimit, tagIds);
+        }
       }
 
       // Calculate if there are more results
