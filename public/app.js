@@ -278,6 +278,12 @@ globalThis.NotesApp = {
     }
   },
 
+  // Log out everywhere: revokes every session this account owns, including
+  // this one. Used by the "Log out from all devices" menu item.
+  async logoutAll() {
+    return await this.request("/auth/logout-all", { method: "POST" });
+  },
+
   // Utility methods
   showToast(message, type = "info") {
     const event = new CustomEvent("show-toast", {

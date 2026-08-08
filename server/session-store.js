@@ -62,6 +62,31 @@ export class PostgresSessionStore {
   }
 
   /**
+   * Delete every session belonging to one user ("log out from all devices").
+   *
+   * `sessions.data` is TEXT holding JSON like `{"user":{"id":7,...},...}`, so
+   * the match is a JSONB containment test. The MATERIALIZED CTE is load-bearing:
+   * it forces the cheap `LIKE '{%'` filter to run before any `::jsonb` cast, so
+   * a row holding non-object JSON can never abort the whole DELETE.
+   * @param {number} userId - Owner of the sessions
+   * @returns {Promise<number>} Number of sessions deleted
+   */
+  async deleteAllSessionsForUser(userId) {
+    if (userId === null || userId === undefined) return 0;
+
+    const result = await this.#query(
+      `WITH candidates AS MATERIALIZED (
+         SELECT id, data FROM sessions WHERE data LIKE '{%'
+       )
+       DELETE FROM sessions
+       WHERE id IN (SELECT id FROM candidates WHERE data::jsonb @> $1::jsonb)
+       RETURNING id`,
+      [JSON.stringify({ user: { id: userId } })],
+    );
+    return result.rows.length;
+  }
+
+  /**
    * Delete sessions older than maxAgeDays.
    * Returns the number of deleted sessions.
    */

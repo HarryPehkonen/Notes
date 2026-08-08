@@ -7,15 +7,22 @@ import { Application, Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { Session } from "https://deno.land/x/oak_sessions@v4.1.9/mod.ts";
 import { PostgresSessionStore } from "./session-store.js";
 import { DatabaseClient } from "./database/client.js";
-import { GoogleAuthHandler } from "./auth/auth-handler.js";
+import { GoogleAuthHandler, revokeGoogleToken } from "./auth/auth-handler.js";
 import { optionalAuth, redirectIfAuthenticated, requireAuth } from "./auth/middleware.js";
+import { cspMiddleware, injectNonce } from "./security-headers.js";
+import { createApiRateLimiter, getClientIp } from "./rate-limit.js";
 
 // Import API routes
 import { createNotesRouter } from "./api/notes.js";
 import { createTagsRouter } from "./api/tags.js";
 import { createSearchRouter } from "./api/search.js";
 import { createImagesRouter } from "./api/images.js";
-import { addConnection, removeConnection, closeAll as closeAllWs } from "./services/ws-connections.js";
+import { createAuthRouter } from "./api/auth.js";
+import {
+  addConnection,
+  closeAll as closeAllWs,
+  removeConnection,
+} from "./services/ws-connections.js";
 
 // Configuration
 const config = {
@@ -80,17 +87,8 @@ app.use(Session.initMiddleware(sessionStore, {
   },
 }));
 
-// Helper to get real client IP (respects X-Forwarded-For behind proxy)
-function getClientIp(ctx) {
-  // Oak with proxy=true handles this, but let's be explicit
-  const forwarded = ctx.request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    return forwarded.split(",")[0].trim();
-  }
-  return ctx.request.ip;
-}
-
 // Rate limiting for auth endpoints
+// (getClientIp now lives in ./rate-limit.js so both limiters share one impl)
 const rateLimitMap = new Map();
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX = 10; // 10 requests per minute
@@ -155,6 +153,10 @@ app.use(async (ctx, next) => {
     `${ctx.request.method} ${ctx.request.url.pathname} - ${ctx.response.status} - ${ms}ms`,
   );
 });
+
+// Content-Security-Policy for HTML pages (see server/security-headers.js).
+// Applied in-app so dev/staging get it too, not just requests behind Caddy.
+app.use(cspMiddleware());
 
 // Make services available to all routes
 app.use(async (ctx, next) => {
@@ -283,6 +285,14 @@ router.get("/auth/callback", async (ctx) => {
 });
 
 router.post("/auth/logout", async (ctx) => {
+  const user = await ctx.state.session.get("user");
+
+  // Fire-and-forget: Google's revoke endpoint must never delay or fail logout
+  if (user?.id) {
+    revokeGoogleToken(db, authHandler, user.id)
+      .catch((error) => console.error("Google token revocation failed:", error));
+  }
+
   await ctx.state.session.deleteSession();
   ctx.response.body = { success: true, redirectTo: "/" };
 });
@@ -296,22 +306,40 @@ router.get("/", optionalAuth, async (ctx) => {
     return;
   }
 
-  // Serve main app
+  // Serve main app. The CSP nonce is stamped onto the inline scripts here so
+  // the file on disk stays free of per-request values.
   ctx.response.type = "text/html";
-  ctx.response.body = await Deno.readTextFile("./public/index.html");
+  ctx.response.body = injectNonce(
+    await Deno.readTextFile("./public/index.html"),
+    ctx.state.cspNonce,
+  );
 });
 
 router.get("/login", redirectIfAuthenticated, async (ctx) => {
   ctx.response.type = "text/html";
-  ctx.response.body = await Deno.readTextFile("./public/login.html");
+  ctx.response.body = injectNonce(
+    await Deno.readTextFile("./public/login.html"),
+    ctx.state.cspNonce,
+  );
 });
+
+// Rate limiting for the API surface. Mounted before requireAuth so unauthenticated
+// floods are cheap to reject: 120/min per IP, plus 300/min per API token or
+// 120/min per session user.
+const apiRateLimiter = createApiRateLimiter();
+router.use("/api", apiRateLimiter.middleware);
+
+// Drop stale buckets so the Maps do not grow unbounded (same cadence as auth)
+const apiRateLimitCleanupTimer = setInterval(() => apiRateLimiter.cleanup(), 5 * 60 * 1000);
 
 // Mount API routes
 const notesRouter = createNotesRouter();
 const tagsRouter = createTagsRouter();
 const searchRouter = createSearchRouter();
 const imagesRouter = createImagesRouter();
+const apiAuthRouter = createAuthRouter({ sessionStore });
 router.use("/api/notes", requireAuth, notesRouter.routes(), notesRouter.allowedMethods());
+router.use("/api/auth", requireAuth, apiAuthRouter.routes(), apiAuthRouter.allowedMethods());
 router.use("/api/tags", requireAuth, tagsRouter.routes(), tagsRouter.allowedMethods());
 router.use("/api/search", requireAuth, searchRouter.routes(), searchRouter.allowedMethods());
 router.use("/api/images", requireAuth, imagesRouter.routes(), imagesRouter.allowedMethods());
@@ -456,10 +484,26 @@ const sessionCleanupTimer = setInterval(async () => {
   }
 }, SESSION_CLEANUP_INTERVAL);
 
+// Periodic version-history pruning (daily, keeps the newest 50 versions per note)
+const VERSION_PRUNE_INTERVAL = 24 * 60 * 60 * 1000;
+const VERSION_KEEP_COUNT = 50;
+const versionPruneTimer = setInterval(async () => {
+  try {
+    const pruned = await db.pruneNoteVersions(VERSION_KEEP_COUNT);
+    if (pruned > 0) {
+      console.log(`  Pruned ${pruned} old note version(s)`);
+    }
+  } catch (error) {
+    console.error("Version prune error:", error.message);
+  }
+}, VERSION_PRUNE_INTERVAL);
+
 // Graceful shutdown
 const handleShutdown = async (signal) => {
   console.log(`\n  Received ${signal}, shutting down gracefully...`);
   clearInterval(sessionCleanupTimer);
+  clearInterval(apiRateLimitCleanupTimer);
+  clearInterval(versionPruneTimer);
   closeAllWs();
   await db.close();
   Deno.exit(0);

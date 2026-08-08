@@ -701,6 +701,30 @@ export class DatabaseClient {
   }
 
   /**
+   * Prune old note versions, keeping only the newest ones per note
+   * @param {number} [keepCount=50] - Versions to keep per note
+   * @returns {Promise<number>} Number of version rows deleted
+   */
+  async pruneNoteVersions(keepCount = 50) {
+    const result = await this.query(
+      `DELETE FROM note_versions
+             WHERE id IN (
+                 SELECT id FROM (
+                     SELECT id,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY note_id
+                                ORDER BY created_at DESC, id DESC
+                            ) AS rn
+                     FROM note_versions
+                 ) ranked
+                 WHERE ranked.rn > $1
+             )`,
+      [keepCount],
+    );
+    return result.rowCount ?? 0;
+  }
+
+  /**
    * Initialize database schema
    * @param {string} schemaPath - Path to schema.sql file
    * @returns {Promise<void>}

@@ -442,6 +442,10 @@ class NotesApp extends LitElement {
       gap: 0.6rem;
     }
 
+    .drawer-footer .user-popover-logout {
+      margin-top: 0.5rem;
+    }
+
     .drawer-user .user-name {
       flex: 1;
       font-size: 0.85rem;
@@ -1386,6 +1390,20 @@ class NotesApp extends LitElement {
     }
   }
 
+  async logoutAllDevices() {
+    if (!confirm("Log out from all devices? This will end this session and every other device.")) {
+      return;
+    }
+    try {
+      await globalThis.NotesApp.logoutAll();
+      this.showToast("Logged out from all devices", "success");
+      globalThis.location.href = "/";
+    } catch (error) {
+      console.error("Logout from all devices failed:", error);
+      this.showToast("Logout failed", "error");
+    }
+  }
+
   showToast(message, type = "info") {
     const toast = { id: Date.now(), message, type };
     this.toasts = [...this.toasts, toast];
@@ -1540,6 +1558,13 @@ class NotesApp extends LitElement {
                     ${icons.logout}
                   </button>
                 </div>
+                <button
+                  class="user-popover-logout"
+                  @click="${this.logoutAllDevices}"
+                  title="Log out from all devices"
+                >
+                  ${icons.logout} Log out from all devices
+                </button>
               `
               : ""}
           </div>
@@ -1590,6 +1615,9 @@ class NotesApp extends LitElement {
                 <div class="user-popover-name">${this.user?.name}</div>
                 <button class="user-popover-logout" @click="${this.logout}">
                   ${icons.logout} Log out
+                </button>
+                <button class="user-popover-logout" @click="${this.logoutAllDevices}">
+                  ${icons.logout} Log out from all devices
                 </button>
               </div>
             `

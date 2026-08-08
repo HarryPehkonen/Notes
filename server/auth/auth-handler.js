@@ -25,6 +25,39 @@
  * @property {string} locale
  */
 
+/**
+ * Revoke a user's stored Google access token, best effort
+ *
+ * Called on logout so the token we obtained during sign-in stops being valid on
+ * Google's side too. Deliberately total: it never throws and never rejects, so
+ * callers can fire-and-forget it without risking the logout itself. A user with
+ * no stored provider row (or no access token) is simply a no-op.
+ * @param {Object} db - Database client with a query(sql, params) method
+ * @param {GoogleAuthHandler} authHandler - Handler exposing revokeToken()
+ * @param {number} userId - Owner of the token
+ * @returns {Promise<boolean>} True only when Google accepted the revocation
+ */
+export async function revokeGoogleToken(db, authHandler, userId) {
+  try {
+    const result = await db.query(
+      `SELECT access_token FROM auth_providers
+       WHERE user_id = $1 AND provider = 'google'
+       ORDER BY updated_at DESC NULLS LAST
+       LIMIT 1`,
+      [userId],
+    );
+
+    const accessToken = result.rows[0]?.access_token;
+    if (!accessToken) return false;
+
+    return await authHandler.revokeToken(accessToken) === true;
+  } catch (error) {
+    // Never let a failed revoke break logging out
+    console.error("Google token revocation failed:", error.message);
+    return false;
+  }
+}
+
 export class GoogleAuthHandler {
   /**
    * @param {string} clientId - Google OAuth client ID
