@@ -182,11 +182,11 @@ deno task lint
 deno task fmt
 ```
 
-| Task | Host | Watch | Use case |
-|------|------|-------|----------|
-| `dev` | localhost | Yes | Local development |
-| `start` | localhost | No | Production behind Caddy |
-| `staging` | 0.0.0.0 | No | Direct external access |
+| Task      | Host      | Watch | Use case                |
+| --------- | --------- | ----- | ----------------------- |
+| `dev`     | localhost | Yes   | Local development       |
+| `start`   | localhost | No    | Production behind Caddy |
+| `staging` | 0.0.0.0   | No    | Direct external access  |
 
 ### Database Management
 
@@ -346,6 +346,31 @@ GET  /auth/login              # Redirect to Google OAuth
 GET  /auth/callback           # OAuth callback handler
 POST /auth/logout             # End session
 ```
+
+### API Tokens (machine access)
+
+Scripts and agents can call `/api/*` without a browser session by sending a
+personal API token. Tokens are managed from the server host:
+
+```bash
+# Create a token (the plaintext is printed once and never stored)
+deno task token:create --email you@example.com --name hermes
+
+# List tokens (never shows token values)
+deno task token:list --email you@example.com
+
+# Revoke a token (idempotent)
+deno task token:revoke --name hermes
+```
+
+Use the token as a bearer credential:
+
+```bash
+curl -H "Authorization: Bearer nt_..." https://notes.example.com/api/notes
+```
+
+Only the SHA-256 digest of a token is stored, tokens are accepted from the
+`Authorization` header only, and a token grants exactly the access its owner has.
 
 ### Notes Endpoints
 

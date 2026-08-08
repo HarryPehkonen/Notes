@@ -22,6 +22,9 @@
     "dev": "deno run --env --allow-net --allow-read --allow-env --allow-write --watch server/main.js",
     "start": "deno run --env --allow-net --allow-read --allow-env --allow-write server/main.js",
     "staging": "HOST=0.0.0.0 deno run --env --allow-net --allow-read --allow-env --allow-write server/main.js",
+    "token:create": "deno run --env --allow-net --allow-read --allow-env --allow-write server/cli/tokens.js create",
+    "token:list": "deno run --env --allow-net --allow-read --allow-env --allow-write server/cli/tokens.js list",
+    "token:revoke": "deno run --env --allow-net --allow-read --allow-env --allow-write server/cli/tokens.js revoke",
     "test": "deno test --no-check --allow-read tests/deno/",
     "lint": "deno lint",
     "fmt": "deno fmt"

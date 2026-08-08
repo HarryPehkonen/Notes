@@ -39,6 +39,7 @@ deno task test
 ### Database Operations
 
 The server uses a single schema file:
+
 - **`schema.sql`** - Production-safe with `IF NOT EXISTS` (idempotent)
 
 ```bash
@@ -83,7 +84,11 @@ psql -U notes_user -d notes_app
 │   ├── main.js              # Oak server, routes, and initialization
 │   ├── auth/
 │   │   ├── auth-handler.js  # Google OAuth 2.0 implementation
+│   │   ├── api-tokens.js    # Personal API token generation/hashing/extraction
 │   │   └── middleware.js    # requireAuth, optionalAuth, redirectIfAuthenticated
+│   ├── cli/
+│   │   ├── args.js          # Pure arg parsing for the token CLI
+│   │   └── tokens.js        # token:create / token:list / token:revoke
 │   ├── database/
 │   │   ├── client.js        # PostgreSQL connection and query wrapper
 │   │   └── schema.sql       # Database schema (auto-applied on startup)
@@ -161,6 +166,7 @@ PostgreSQL with the following key tables:
 - **tags**: User-specific tags with colors
 - **note_tags**: Many-to-many relationship between notes and tags
 - **note_versions**: Automatic version history (created via database trigger)
+- **api_tokens**: Personal API tokens for machine clients (SHA-256 digest only, `UNIQUE(user_id, name)`)
 
 **Key features**:
 
@@ -402,6 +408,48 @@ GET  /auth/login              # Redirect to Google OAuth
 GET  /auth/callback           # OAuth callback handler
 POST /auth/logout             # End session
 ```
+
+### API Tokens (machine access)
+
+Machine clients (scripts, AI agents) authenticate with a personal API token
+instead of the browser session cookie. Both paths run through the same
+`requireAuth` middleware, so every `/api/*` endpoint accepts either.
+
+**Managing tokens** (run on the server host, needs DB env vars from `.env`):
+
+```bash
+# Create — prints the plaintext token exactly once; it is never stored or logged
+deno task token:create --email you@example.com --name hermes
+
+# List — id, name, created_at, last_used_at, revoked_at (never token values)
+deno task token:list --email you@example.com
+
+# Revoke — idempotent; pass --email if the name is ambiguous across users
+deno task token:revoke --name hermes
+```
+
+**Using a token**:
+
+```bash
+curl -H "Authorization: Bearer nt_..." https://notes.example.com/api/notes
+```
+
+**Implementation notes**:
+
+- Token format: `nt_` + 43 base64url chars (32 random bytes, 256-bit entropy),
+  generated in `server/auth/api-tokens.js`
+- Storage: `api_tokens.token_hash` is `BYTEA` holding `digest(token, 'sha256')`
+  (pgcrypto). The plaintext is never persisted, so a lost token must be revoked
+  and recreated
+- Lookup: `requireAuth` hashes the presented token **in SQL**
+  (`WHERE token_hash = digest($1, 'sha256') AND revoked_at IS NULL`), so the
+  plaintext never round-trips through a JS digest on the auth path
+- Tokens are read from the `Authorization` header only — never query params or
+  request bodies, where they would leak into logs
+- `ctx.state.authMethod` is `"session"` or `"api_token"`; `ctx.state.user` has
+  the same shape either way, so handlers need no changes
+- `last_used_at` is updated fire-and-forget (not awaited) so it never delays a
+  response
 
 ### Notes Endpoints
 

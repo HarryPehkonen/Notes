@@ -4,6 +4,7 @@
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
@@ -99,6 +100,18 @@ CREATE TABLE IF NOT EXISTS images (
     UNIQUE(user_id, filename)
 );
 
+-- Personal API tokens for machine clients (only the SHA-256 digest is stored)
+CREATE TABLE IF NOT EXISTS api_tokens (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    token_hash BYTEA NOT NULL UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMP,
+    revoked_at TIMESTAMP,
+    UNIQUE(user_id, name)
+);
+
 -- Indexes (IF NOT EXISTS for safety)
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_auth_providers_user ON auth_providers(user_id);
@@ -112,6 +125,8 @@ CREATE INDEX IF NOT EXISTS idx_note_tags_note ON note_tags(note_id);
 CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_note_versions_note ON note_versions(note_id);
 CREATE INDEX IF NOT EXISTS idx_images_user ON images(user_id);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_active ON api_tokens(token_hash) WHERE revoked_at IS NULL;
 
 -- Functions and triggers (use CREATE OR REPLACE for safety)
 CREATE OR REPLACE FUNCTION update_updated_at_column()
