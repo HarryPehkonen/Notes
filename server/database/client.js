@@ -58,6 +58,31 @@ export function stripMarkdown(markdown) {
 }
 
 /**
+ * Build a prefix-matching tsquery from an already-sanitized search query.
+ *
+ * Each whitespace-separated token becomes its own `token:*` prefix term and the
+ * terms are ANDed together. Appending `:*` to the whole query instead would
+ * produce invalid tsquery syntax as soon as the query has more than one word
+ * (`to_tsquery('english', 'furnace filter:*')` raises "syntax error in tsquery").
+ *
+ * Tokens are also stripped of tsquery operator characters. `sanitizeQuery` in
+ * `searchNotes` already removes most of them, but the helper stays valid on its
+ * own so it can never hand Postgres an unparseable query.
+ *
+ * @param {string} sanitizedQuery - Search query, whitespace separated
+ * @returns {string} tsquery string, or "" when there are no usable tokens
+ */
+export function buildPrefixTsQuery(sanitizedQuery) {
+  if (!sanitizedQuery) return "";
+  return String(sanitizedQuery)
+    .split(/\s+/)
+    .map((token) => token.replace(/['"\\*#@&|!():<>]/g, ""))
+    .filter((token) => token.length > 0)
+    .map((token) => `${token}:*`)
+    .join(" & ");
+}
+
+/**
  * Parse PostgreSQL statements with dollar-quote handling and proper execution ordering
  * @param {string} sql - Raw SQL content
  * @returns {string[]} Array of individual statements in proper execution order
@@ -484,6 +509,9 @@ export class DatabaseClient {
       .replace(/\s+/g, " ") // Collapse multiple spaces to single space
       .trim(); // Remove leading/trailing spaces
 
+    // Per-token prefix tsquery - a multi-word query cannot just get ':*' appended
+    const prefixQuery = buildPrefixTsQuery(sanitizedQuery);
+
     const result = await this.query(
       `WITH fts_results AS (
                 -- Full-text search results (higher rank)
@@ -512,7 +540,7 @@ export class DatabaseClient {
                 WHERE n.user_id = $1
                     AND (
                         n.title ILIKE $4 OR n.content ILIKE $4 OR
-                        ($5 != '' AND n.search_vector @@ to_tsquery('english', $5 || ':*'))  -- Stem matching with prefix
+                        ($5 != '' AND n.search_vector @@ to_tsquery('english', $5))  -- Stem matching with prefix
                     )
                     AND NOT n.is_archived
                     AND n.id NOT IN (SELECT id FROM fts_results)
@@ -533,7 +561,7 @@ export class DatabaseClient {
             FROM all_results ar
             ORDER BY ar.rank DESC, ar.updated_at DESC
             LIMIT $3`,
-      [userId, sanitizedQuery, limit, `%${query}%`, sanitizedQuery],
+      [userId, sanitizedQuery, limit, `%${query}%`, prefixQuery],
     );
     return result.rows;
   }
