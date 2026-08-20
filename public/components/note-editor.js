@@ -8,6 +8,7 @@ import { unsafeHTML } from "https://cdn.jsdelivr.net/npm/lit@3.1.0/directives/un
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { icons } from "../utils/icons.js";
+import { parseCheckboxTokens, toggleCheckbox, tokenizeCheckboxes } from "../utils/checkboxes.js";
 
 // Configure marked for safe rendering
 marked.use({
@@ -433,6 +434,16 @@ export class NoteEditor extends LitElement {
 
     .markdown-preview li {
       margin: 0.25rem 0;
+    }
+
+    /* Checkboxes rendered from [ ] / [x] markers - sized for thumbs. */
+    .markdown-preview input[type="checkbox"] {
+      width: 1.15em;
+      height: 1.15em;
+      margin: 0 0.4em 0 0;
+      vertical-align: -0.15em;
+      cursor: pointer;
+      accent-color: var(--primary);
     }
 
     .markdown-preview code {
@@ -1164,11 +1175,39 @@ export class NoteEditor extends LitElement {
       return '<p class="empty-preview">Nothing to preview. Start writing in Edit mode.</p>';
     }
     try {
-      return DOMPurify.sanitize(marked.parse(content));
+      // Checkbox markers are swapped for tokens before parsing and turned into
+      // inputs after, so `marked` never has to render task lists itself.
+      const parsed = parseCheckboxTokens(marked.parse(tokenizeCheckboxes(content)));
+      return DOMPurify.sanitize(parsed, {
+        ADD_TAGS: ["input"],
+        ADD_ATTR: ["type", "checked", "data-cb-index"],
+      });
     } catch (error) {
       console.error("Markdown parsing error:", error);
       return `<p>Error rendering markdown</p>`;
     }
+  }
+
+  /**
+   * Toggle a checkbox tapped in the preview. The input's data-cb-index is the
+   * marker's position in the markdown source, so the edit is a pure text swap;
+   * markAsChanged() then hands persistence to the existing auto-save.
+   * @param {MouseEvent} event
+   */
+  _handlePreviewClick(event) {
+    const target = /** @type {HTMLElement} */ (event.target);
+    if (!target?.matches?.('input[type="checkbox"][data-cb-index]')) return;
+
+    const index = Number.parseInt(target.dataset.cbIndex, 10);
+    if (Number.isNaN(index)) return;
+
+    const current = this.getMarkdownContent();
+    const updated = toggleCheckbox(current, index);
+    if (updated === current) return;
+
+    // autoSave() reads _editingContent when the textarea is absent (preview mode).
+    this._editingContent = updated;
+    this.markAsChanged();
   }
 
   /** Short label shown in the sticky save-status pill for the current saveStatus. */
@@ -1331,7 +1370,7 @@ export class NoteEditor extends LitElement {
             <div class="doc-body">
               ${this.previewMode
                 ? html`
-                  <div class="markdown-preview">
+                  <div class="markdown-preview" @click="${this._handlePreviewClick}">
                     ${unsafeHTML(this.renderMarkdown(this.getMarkdownContent()))}
                   </div>
                 `
