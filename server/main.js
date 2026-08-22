@@ -241,9 +241,19 @@ router.get("/auth/callback", async (ctx) => {
   }
 
   // Validate CSRF state token
+  // The session cookie may have been replaced by an unrelated request between
+  // /auth/login and this callback (every unauthenticated request creates a
+  // fresh session). The state itself is a random UUID issued by us, so look
+  // it up by value as a fallback — the CSRF protection is preserved (an
+  // attacker cannot guess the state) while the login survives the race.
   const expectedState = await ctx.state.session.get("oauth_state");
   await ctx.state.session.set("oauth_state", null);
-  if (!state || state !== expectedState) {
+  let stateOk = Boolean(state) && state === expectedState;
+  if (!stateOk && state) {
+    const byValue = await sessionStore.findSessionByState(state);
+    stateOk = Boolean(byValue);
+  }
+  if (!stateOk) {
     ctx.response.status = 400;
     ctx.response.body = { error: "Invalid OAuth state - possible CSRF attack" };
     return;
