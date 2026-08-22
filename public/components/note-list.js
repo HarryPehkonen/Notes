@@ -5,6 +5,7 @@ import { css, html, LitElement } from "lit";
 import { unsafeHTML } from "https://cdn.jsdelivr.net/npm/lit@3.1.0/directives/unsafe-html.js/+esm";
 import { highlightText } from "../utils/text.js";
 import { icons } from "../utils/icons.js";
+import { formatMatch, hasMatchBadge } from "../utils/search-match.js";
 
 export class NoteList extends LitElement {
   static properties = {
@@ -292,6 +293,22 @@ export class NoteList extends LitElement {
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
+    }
+
+    .match-badge {
+      display: inline-block;
+      margin-left: 0.5rem;
+      padding: 0.15rem 0.6rem;
+      border-radius: 0.375rem;
+      background: var(--primary, #2563eb);
+      color: #ffffff;
+      font-family: var(--font-family);
+      font-size: 0.85rem;
+      font-weight: 700;
+      line-height: 1.4;
+      vertical-align: middle;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
 
     .untitled {
@@ -631,6 +648,11 @@ export class NoteList extends LitElement {
                   <span class="pin-indicator">${icons.pin}</span>
                 `
                 : ""} ${this.renderTitle(note)}
+              ${hasMatchBadge(note)
+                ? html`
+                  <span class="match-badge">${formatMatch(note.similarity)}</span>
+                `
+                : ""}
             </div>
             <div class="note-content">
               ${this.searchQuery
@@ -677,6 +699,11 @@ export class NoteList extends LitElement {
 
         <div class="note-title">
           ${this.renderTitle(note)}
+          ${hasMatchBadge(note)
+            ? html`
+              <span class="match-badge">${formatMatch(note.similarity)}</span>
+            `
+            : ""}
         </div>
 
         <div class="note-content">
