@@ -8,7 +8,7 @@
  *   refresh keeps assets fresh without manual cache version bumping)
  */
 
-const CACHE_NAME = "notes-app-v8";
+const CACHE_NAME = "notes-app-v9";
 
 self.addEventListener("install", (event) => {
   // Skip waiting so the new SW activates immediately

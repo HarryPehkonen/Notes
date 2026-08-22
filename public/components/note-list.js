@@ -5,7 +5,7 @@ import { css, html, LitElement } from "lit";
 import { unsafeHTML } from "https://cdn.jsdelivr.net/npm/lit@3.1.0/directives/unsafe-html.js/+esm";
 import { highlightText } from "../utils/text.js";
 import { icons } from "../utils/icons.js";
-import { formatMatch, hasMatchBadge } from "../utils/search-match.js";
+import { formatMatch, hasMatchBadge, isSemanticResults, sortBySimilarity } from "../utils/search-match.js";
 
 export class NoteList extends LitElement {
   static properties = {
@@ -551,6 +551,13 @@ export class NoteList extends LitElement {
 
   getFilteredNotes() {
     const filtered = [...this.notes];
+
+    // Semantic search results arrive pre-ranked by similarity (descending)
+    // from the API. The user's sort controls (date/title) would destroy that
+    // ordering, so when results carry a similarity score the API order wins.
+    if (isSemanticResults(filtered)) {
+      return sortBySimilarity(filtered);
+    }
 
     // Sort based on current sort settings
     filtered.sort((a, b) => {

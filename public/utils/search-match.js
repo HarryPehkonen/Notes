@@ -28,3 +28,24 @@ export function formatMatch(similarity) {
 export function hasMatchBadge(note) {
   return typeof note?.similarity === "number" && Number.isFinite(note.similarity);
 }
+
+/**
+ * Are these results semantic-search results (any carry a similarity score)?
+ * Semantic results arrive pre-ranked by the API; the list view must NOT
+ * re-sort them by date/title. Text results never carry similarity.
+ * @param {Array<Object>} notes - Results to check
+ * @returns {boolean}
+ */
+export function isSemanticResults(notes) {
+  return Array.isArray(notes) && notes.some((n) => hasMatchBadge(n));
+}
+
+/**
+ * Sort results by similarity descending. Used only for semantic results,
+ * where the API's ranking must be preserved client-side.
+ * @param {Array<Object>} notes - Results (already carrying similarity)
+ * @returns {Array<Object>} New array sorted by similarity desc
+ */
+export function sortBySimilarity(notes) {
+  return [...notes].sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0));
+}
