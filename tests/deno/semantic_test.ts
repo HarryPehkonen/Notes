@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertThrows } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { testing } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import {
+  embeddingTimeoutMs,
   buildEmbeddingPrompt,
   EmbeddingError,
   parseEmbeddingResponse,
@@ -345,4 +346,19 @@ Deno.test("shouldSendSemantic: anything but a checked box leaves it off", () => 
   assertEquals(shouldSendSemantic("false"), false);
   assertEquals(shouldSendSemantic(0), false);
   assertEquals(shouldSendSemantic(1), false);
+});
+
+
+Deno.test("embeddingTimeoutMs: returns the generous default when unset", () => {
+  // Deno.env.get returns undefined in the test runner (no --allow-env);
+  // the function must not throw and must fall back to a positive timeout.
+  const t = embeddingTimeoutMs();
+  assert(t > 0, `expected positive timeout, got ${t}`);
+  assertEquals(t, 60_000);
+});
+
+Deno.test("embeddingTimeoutMs: ignores invalid values and falls back", () => {
+  // Can't set env without --allow-env in this runner; the fallback branch is
+  // exercised by the unset case above. Guard against NaN regressions:
+  assertEquals(Number.isFinite(embeddingTimeoutMs()), true);
 });

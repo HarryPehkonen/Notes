@@ -12,7 +12,8 @@ export const EMBEDDING_DIMENSIONS = 1024;
 /** Default endpoint - the embedding server runs on the same host as the app */
 const DEFAULT_EMBEDDING_URL = "http://127.0.0.1:8080/v1/embeddings";
 const DEFAULT_EMBEDDING_MODEL = "bge-m3";
-const DEFAULT_TIMEOUT_MS = 10_000;
+// CPU-only BGE-M3 takes ~25s for a 3.4K-token note; 60s is a generous ceiling.
+const DEFAULT_TIMEOUT_MS = 60_000;
 
 /** Every embedding failure - unreachable server, bad status, bad body */
 export class EmbeddingError extends Error {
@@ -48,6 +49,14 @@ export function embeddingUrl() {
 /** @returns {string} The configured embedding model name */
 export function embeddingModel() {
   return readEnv("EMBEDDING_MODEL") || DEFAULT_EMBEDDING_MODEL;
+}
+
+/** Timeout for embedding requests (ms). Tune EMBEDDING_TIMEOUT_MS for slow
+ * CPU-only servers; falls back to the generous default. */
+export function embeddingTimeoutMs() {
+  const raw = readEnv("EMBEDDING_TIMEOUT_MS");
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_TIMEOUT_MS;
 }
 
 /**
@@ -114,7 +123,7 @@ export function parseEmbeddingResponse(body) {
  * @returns {Promise<number[]>} The embedding vector
  */
 export async function embedText(text, options = {}) {
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const timeoutMs = options.timeoutMs ?? embeddingTimeoutMs();
 
   if (typeof text !== "string" || text.trim().length === 0) {
     throw new EmbeddingError("Cannot embed empty text");
