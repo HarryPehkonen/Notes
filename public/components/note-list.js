@@ -766,26 +766,28 @@ export class NoteList extends LitElement {
           </div>
 
           <div class="header-controls">
-            <div class="sort-controls">
-              <select
-                class="sort-select"
-                .value="${this.sortField}"
-                @change="${this.handleSortFieldChange}"
-                title="Sort by"
-              >
-                <option value="modified">Modified</option>
-                <option value="created">Created</option>
-                <option value="title">Title</option>
-              </select>
-              <button
-                class="sort-direction"
-                @click="${this.toggleSortDirection}"
-                title="${this.sortDirection === "asc" ? "Ascending" : "Descending"}"
-              >
-                <span class="${this.sortDirection === "asc" ? "flip" : ""}">${icons
-                  .chevronDown}</span>
-              </button>
-            </div>
+            ${isSemanticResults(filteredNotes) ? "" : html`
+              <div class="sort-controls">
+                <select
+                  class="sort-select"
+                  .value="${this.sortField}"
+                  @change="${this.handleSortFieldChange}"
+                  title="Sort by"
+                >
+                  <option value="modified">Modified</option>
+                  <option value="created">Created</option>
+                  <option value="title">Title</option>
+                </select>
+                <button
+                  class="sort-direction"
+                  @click="${this.toggleSortDirection}"
+                  title="${this.sortDirection === "asc" ? "Ascending" : "Descending"}"
+                >
+                  <span class="${this.sortDirection === "asc" ? "flip" : ""}">${icons
+                    .chevronDown}</span>
+                </button>
+              </div>
+            `}
 
             <div class="view-toggle">
               <button
