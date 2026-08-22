@@ -5,6 +5,7 @@
 
 import { Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { broadcastToUser } from "../services/ws-connections.js";
+import { queueNoteEmbedding } from "./semantic.js";
 
 /**
  * Extract image filenames from note content
@@ -219,6 +220,14 @@ export function createNotesRouter() {
         tags: Array.isArray(tags) ? tags : [],
       });
 
+      // Keep semantic search fresh - never blocks or fails the write
+      queueNoteEmbedding(db, {
+        noteId: note.id,
+        userId: user.id,
+        title: note.title,
+        content: note.content_plain ?? note.content,
+      });
+
       ctx.response.status = 201;
       ctx.response.body = {
         success: true,
@@ -310,6 +319,17 @@ export function createNotesRouter() {
       }
 
       const note = await db.updateNote(noteId, updates, user.id);
+
+      // Re-embed only when the text actually changed - a pin or archive toggle
+      // leaves the vector valid. Fire-and-forget, as on create.
+      if (title !== undefined || content !== undefined) {
+        queueNoteEmbedding(db, {
+          noteId: note.id,
+          userId: user.id,
+          title: note.title,
+          content: note.content_plain ?? note.content,
+        });
+      }
 
       // Clean up images that were removed from the content
       if (content !== undefined) {
@@ -472,6 +492,14 @@ export function createNotesRouter() {
       }
 
       const restoredNote = await db.restoreNoteVersion(noteId, versionId);
+
+      // A restore rewrites the note text, so the vector has to follow
+      queueNoteEmbedding(db, {
+        noteId: restoredNote.id,
+        userId: user.id,
+        title: restoredNote.title,
+        content: restoredNote.content_plain ?? restoredNote.content,
+      });
 
       ctx.response.body = {
         success: true,

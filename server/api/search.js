@@ -5,13 +5,19 @@
 
 import { Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { parseSearchQuery } from "./search-query.js";
+import { embedText } from "./embed.js";
+import { semanticQueryNeeds, semanticSearch } from "./semantic.js";
 
 /** Escape LIKE/ILIKE special characters so user input is matched literally */
 function escapeLike(str) {
   return str.replace(/[%_\\]/g, "\\$&");
 }
 
-export function createSearchRouter() {
+/**
+ * @param {Object} [deps] - Injectable dependencies
+ * @param {Function} [deps.embed] - Embeds a query string (defaults to the local server)
+ */
+export function createSearchRouter({ embed = embedText } = {}) {
   const router = new Router();
 
   // GET /api/search - Perform full-text search on notes
@@ -20,6 +26,7 @@ export function createSearchRouter() {
     const q = ctx.request.url.searchParams.get("q");
     const limit = ctx.request.url.searchParams.get("limit") || 20;
     const offset = ctx.request.url.searchParams.get("offset") || 0;
+    const semantic = semanticQueryNeeds(ctx.request.url.searchParams.get("semantic"));
 
     if (!q || q.trim().length === 0) {
       ctx.response.status = 400;
@@ -39,6 +46,55 @@ export function createSearchRouter() {
         success: false,
         error: "Search query must be at least 1 character long",
       };
+      return;
+    }
+
+    // Semantic mode is an exclusive switch: no text search is mixed in, '#tag'
+    // filters are not applied (the raw query is what gets embedded), and an
+    // unreachable embedding server is an error rather than a silent fallback.
+    if (semantic) {
+      const searchLimit = Math.min(parseInt(limit) || 20, 100); // Cap at 100 results
+      const searchOffset = Math.max(parseInt(offset) || 0, 0);
+
+      let embedding;
+      try {
+        embedding = await embed(query);
+      } catch (error) {
+        console.error("Error embedding semantic search query:", error);
+        ctx.response.status = 502;
+        ctx.response.body = {
+          success: false,
+          error: "Semantic search unavailable",
+        };
+        return;
+      }
+
+      try {
+        const results = await semanticSearch(db, user.id, embedding, searchLimit, searchOffset);
+
+        ctx.response.body = {
+          success: true,
+          data: {
+            query: query,
+            results: results,
+          },
+          meta: {
+            total: results.length,
+            limit: searchLimit,
+            offset: searchOffset,
+            hasMore: results.length === searchLimit,
+            // Flags for the client that tag filters were not applied
+            semantic: true,
+          },
+        };
+      } catch (error) {
+        console.error("Error performing semantic search:", error);
+        ctx.response.status = 500;
+        ctx.response.body = {
+          success: false,
+          error: "Search failed",
+        };
+      }
       return;
     }
 

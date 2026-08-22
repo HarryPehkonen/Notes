@@ -6,6 +6,7 @@
 // Import services
 import { syncManager } from "./services/sync-manager.js";
 import { liveSync } from "./services/live-sync.js";
+import { shouldSendSemantic } from "./utils/search-mode.js";
 
 // Import all components
 import "./components/notes-app.js";
@@ -247,6 +248,9 @@ globalThis.NotesApp = {
     params.set("q", query);
     if (options.limit) params.set("limit", options.limit);
     if (options.offset) params.set("offset", options.offset);
+    // Exclusive switch: with the flag set the server does embedding search
+    // only, and applies no tag filters
+    if (shouldSendSemantic(options.semantic)) params.set("semantic", "1");
 
     return this.request(`/search?${params.toString()}`);
   },

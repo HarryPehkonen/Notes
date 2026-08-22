@@ -5,6 +5,8 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- pgvector, for semantic search over note embeddings
+CREATE EXTENSION IF NOT EXISTS "vector";
 
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
@@ -112,6 +114,15 @@ CREATE TABLE IF NOT EXISTS api_tokens (
     UNIQUE(user_id, name)
 );
 
+-- BGE-M3 embeddings for semantic search (one vector per note, kept fresh on
+-- write and by scripts/embed-notes.ts)
+CREATE TABLE IF NOT EXISTS note_embeddings (
+    note_id INTEGER PRIMARY KEY REFERENCES notes(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    embedding vector(1024) NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes (IF NOT EXISTS for safety)
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_auth_providers_user ON auth_providers(user_id);
@@ -125,6 +136,7 @@ CREATE INDEX IF NOT EXISTS idx_note_tags_note ON note_tags(note_id);
 CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_note_versions_note ON note_versions(note_id);
 CREATE INDEX IF NOT EXISTS idx_images_user ON images(user_id);
+CREATE INDEX IF NOT EXISTS idx_note_embeddings_user ON note_embeddings(user_id);
 CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_api_tokens_active ON api_tokens(token_hash) WHERE revoked_at IS NULL;
 

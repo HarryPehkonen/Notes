@@ -3,6 +3,7 @@
  */
 import { css, html, LitElement } from "lit";
 import { icons } from "../utils/icons.js";
+import { shouldSendSemantic } from "../utils/search-mode.js";
 
 export class SearchBar extends LitElement {
   static properties = {
@@ -11,6 +12,7 @@ export class SearchBar extends LitElement {
     showSuggestions: { type: Boolean },
     selectedIndex: { type: Number },
     loading: { type: Boolean },
+    semanticMode: { type: Boolean },
   };
 
   static styles = css`
@@ -22,6 +24,13 @@ export class SearchBar extends LitElement {
     }
 
     .search-container {
+      position: relative;
+      width: 100%;
+    }
+
+    /* Anchors the suggestions dropdown to the input, not to the whole
+      container, so the semantic toggle below cannot push it down. */
+    .search-field {
       position: relative;
       width: 100%;
     }
@@ -117,6 +126,37 @@ export class SearchBar extends LitElement {
       color: var(--gray-500);
       font-family: monospace;
       pointer-events: none;
+    }
+
+    /* Deliberately large and always visible: this switches search between two
+      very different behaviours, so it must be readable at a glance. */
+    .semantic-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      margin-top: 0.5rem;
+      padding: 0.25rem 0.125rem;
+      min-height: 44px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .semantic-checkbox {
+      width: 22px;
+      height: 22px;
+      margin: 0;
+      flex-shrink: 0;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+
+    .semantic-label {
+      font-size: 1rem;
+      font-weight: 600;
+      line-height: 1.2;
+      color: var(--gray-900);
+      font-family: var(--font-family);
     }
 
     .suggestions-dropdown {
@@ -242,6 +282,7 @@ export class SearchBar extends LitElement {
     this.showSuggestions = false;
     this.selectedIndex = -1;
     this.loading = false;
+    this.semanticMode = false;
     this.debounceTimer = null;
     this._isFocused = false;
 
@@ -425,10 +466,24 @@ export class SearchBar extends LitElement {
     this.focus();
   }
 
+  /**
+   * Flip between full-text and semantic search, re-running the current query
+   * so the results match the switch straight away.
+   */
+  _onSemanticToggle(e) {
+    this.semanticMode = e.target.checked;
+    if (this.query.trim()) {
+      this.performSearch(this.query);
+    }
+  }
+
   dispatchSearchEvent(query) {
     this.dispatchEvent(
       new CustomEvent("search-query", {
-        detail: { query: query.trim() },
+        detail: {
+          query: query.trim(),
+          semantic: shouldSendSemantic(this.semanticMode),
+        },
         bubbles: true,
         composed: true,
       }),
@@ -438,69 +493,82 @@ export class SearchBar extends LitElement {
   render() {
     return html`
       <div class="search-container">
-        <div class="search-input-wrapper">
-          <span class="search-icon">${icons.search}</span>
+        <div class="search-field">
+          <div class="search-input-wrapper">
+            <span class="search-icon">${icons.search}</span>
 
-          <input
-            type="text"
-            class="search-input"
-            placeholder="Search notes... (Ctrl+K)"
-            .value="${this.query}"
-            @input="${this.handleInput}"
-            @keydown="${this.handleKeydown}"
-            @focus="${this.handleFocus}"
-            @blur="${this.handleBlur}"
-          />
+            <input
+              type="text"
+              class="search-input"
+              placeholder="Search notes... (Ctrl+K)"
+              .value="${this.query}"
+              @input="${this.handleInput}"
+              @keydown="${this.handleKeydown}"
+              @focus="${this.handleFocus}"
+              @blur="${this.handleBlur}"
+            />
 
-          ${this.loading
+            ${this.loading
+              ? html`
+                <svg class="loading-spinner" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                  <path opacity="0.3" d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0-1A6 6 0 1 0 8 2a6 6 0 0 0 0 12z" />
+                  <path d="M8 1a7 7 0 0 1 7 7h-1a6 6 0 0 0-6-6V1z" />
+                </svg>
+              `
+              : ""} ${this.query && !this.loading
+              ? html`
+                <button class="clear-button" @click="${this.clearSearch}" title="Clear search">
+                  ${icons.close}
+                </button>
+              `
+              : !this.query && !this.loading
+              ? html`
+                <span class="keyboard-hint">⌘K</span>
+              `
+              : ""}
+          </div>
+
+          ${this.showSuggestions
             ? html`
-              <svg class="loading-spinner" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                <path opacity="0.3" d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0-1A6 6 0 1 0 8 2a6 6 0 0 0 0 12z" />
-                <path d="M8 1a7 7 0 0 1 7 7h-1a6 6 0 0 0-6-6V1z" />
-              </svg>
-            `
-            : ""} ${this.query && !this.loading
-            ? html`
-              <button class="clear-button" @click="${this.clearSearch}" title="Clear search">
-                ${icons.close}
-              </button>
-            `
-            : !this.query && !this.loading
-            ? html`
-              <span class="keyboard-hint">⌘K</span>
+              <div class="suggestions-dropdown">
+                ${this.suggestions.length > 0
+                  ? this.suggestions.map((suggestion, index) =>
+                    html`
+                      <div
+                        class="suggestion-item ${index === this.selectedIndex ? "selected" : ""}"
+                        @click="${() => this.selectSuggestion(suggestion)}"
+                      >
+                        ${suggestion.type === "tag"
+                          ? html`
+                            <span class="tag-color-dot" style="background-color: ${suggestion
+                              .color}"></span>
+                          `
+                          : html`
+                            <span class="suggestion-icon">${icons.search}</span>
+                          `}
+                        <span class="suggestion-text">${suggestion.display ||
+                          suggestion.text}</span>
+                        <span class="suggestion-type">${suggestion.type}</span>
+                      </div>
+                    `
+                  )
+                  : html`
+                    <div class="no-suggestions">No suggestions found</div>
+                  `}
+              </div>
             `
             : ""}
         </div>
 
-        ${this.showSuggestions
-          ? html`
-            <div class="suggestions-dropdown">
-              ${this.suggestions.length > 0
-                ? this.suggestions.map((suggestion, index) =>
-                  html`
-                    <div
-                      class="suggestion-item ${index === this.selectedIndex ? "selected" : ""}"
-                      @click="${() => this.selectSuggestion(suggestion)}"
-                    >
-                      ${suggestion.type === "tag"
-                        ? html`
-                          <span class="tag-color-dot" style="background-color: ${suggestion
-                            .color}"></span>
-                        `
-                        : html`
-                          <span class="suggestion-icon">${icons.search}</span>
-                        `}
-                      <span class="suggestion-text">${suggestion.display || suggestion.text}</span>
-                      <span class="suggestion-type">${suggestion.type}</span>
-                    </div>
-                  `
-                )
-                : html`
-                  <div class="no-suggestions">No suggestions found</div>
-                `}
-            </div>
-          `
-          : ""}
+        <label class="semantic-toggle">
+          <input
+            type="checkbox"
+            class="semantic-checkbox"
+            ?checked="${this.semanticMode}"
+            @change="${this._onSemanticToggle}"
+          />
+          <span class="semantic-label">Semantic search</span>
+        </label>
       </div>
     `;
   }

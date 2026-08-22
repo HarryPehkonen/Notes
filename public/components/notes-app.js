@@ -12,6 +12,7 @@ class NotesApp extends LitElement {
     tags: { type: Array },
     currentNote: { type: Object },
     searchQuery: { type: String },
+    semanticMode: { type: Boolean }, // search-bar's "Semantic search" switch
     selectedTags: { type: Array },
     pinnedOnly: { type: Boolean },
     loading: { type: Boolean },
@@ -740,6 +741,7 @@ class NotesApp extends LitElement {
     this.tags = [];
     this.currentNote = null;
     this.searchQuery = "";
+    this.semanticMode = false;
     this.selectedTags = [];
     this.pinnedOnly = false;
     this.loading = false;
@@ -1068,6 +1070,7 @@ class NotesApp extends LitElement {
 
     this.addEventListener("search-query", (event) => {
       this.searchQuery = event.detail.query;
+      this.semanticMode = event.detail.semantic === true;
       this.performSearch();
     });
 
@@ -1155,6 +1158,10 @@ class NotesApp extends LitElement {
    * supports that combination: advancedSearch when a query is paired with
    * tags and/or pinned, plain searchNotes for query-only, and getNotes for
    * tag/pinned filtering with no search text.
+   *
+   * Semantic mode short-circuits all of that: it is an exclusive switch, so a
+   * query goes to the embedding search alone and tag/pinned filters do not
+   * apply to it.
    */
   async filterNotes() {
     try {
@@ -1165,7 +1172,15 @@ class NotesApp extends LitElement {
       const hasTagFilter = this.selectedTags.length > 0;
       const hasPinnedFilter = this.pinnedOnly;
 
-      if (hasSearchQuery && (hasTagFilter || hasPinnedFilter)) {
+      if (hasSearchQuery && this.semanticMode) {
+        // Semantic search only - no text search and no filters mixed in
+        const result = await globalThis.NotesApp.searchNotes(this.searchQuery, {
+          semantic: true,
+        });
+        this.notes = result.data?.results || [];
+        this.hasMore = result.meta?.hasMore || false;
+        this.viewMode = "search";
+      } else if (hasSearchQuery && (hasTagFilter || hasPinnedFilter)) {
         // Search combined with tags and/or pinned - use advanced search
         const result = await globalThis.NotesApp.advancedSearch({
           query: this.searchQuery,
@@ -1198,7 +1213,12 @@ class NotesApp extends LitElement {
       this.requestUpdate(); // Force re-render
     } catch (error) {
       console.error("Failed to filter notes:", error);
-      this.showToast("Failed to filter notes", "error");
+      // 502 means the embedding server is down - say so instead of blaming
+      // the filter, since the fix is different
+      this.showToast(
+        error.status === 502 ? "Semantic search unavailable" : "Failed to filter notes",
+        "error",
+      );
     } finally {
       this.loading = false;
     }
@@ -1217,7 +1237,13 @@ class NotesApp extends LitElement {
       const hasPinnedFilter = this.pinnedOnly;
 
       let result;
-      if (hasSearchQuery && (hasTagFilter || hasPinnedFilter)) {
+      if (hasSearchQuery && this.semanticMode) {
+        result = await globalThis.NotesApp.searchNotes(this.searchQuery, {
+          semantic: true,
+          offset,
+        });
+        this.notes = [...this.notes, ...(result.data?.results || [])];
+      } else if (hasSearchQuery && (hasTagFilter || hasPinnedFilter)) {
         result = await globalThis.NotesApp.advancedSearch({
           query: this.searchQuery,
           tags: this.selectedTags.map((tag) => tag.id),
@@ -1654,6 +1680,7 @@ class NotesApp extends LitElement {
                   .query="${this.searchQuery}"
                   @search-query="${(e) => {
                     this.searchQuery = e.detail.query;
+                    this.semanticMode = e.detail.semantic === true;
                     this.performSearch();
                   }}"
                 ></search-bar>
