@@ -1,5 +1,9 @@
 /**
- * Tag-selection logic for the search bar.
+ * Tri-state tag filtering.
+ *
+ * A tag is in one of three states: "any" (not part of the filter at all),
+ * "required" (only notes WITH it) or "excluded" (only notes WITHOUT it). A
+ * click cycles any -> required -> excluded -> any, wherever the tag is drawn.
  *
  * Kept out of the Lit component so it is testable without a DOM, and so the
  * search bar and the tag-manager can agree on one set of rules for the single
@@ -25,19 +29,104 @@ export function isTagSelected(selectedTags, tagId) {
 }
 
 /**
- * Add a tag to the selection, or take it out if it is already there.
+ * The state a tag is in when it is part of the selection but carries no state
+ * of its own - a selection made before tri-state filtering existed.
+ */
+const DEFAULT_STATE = "required";
+
+/** How the three states are shown wherever a tag can be clicked. */
+const STATE_META = {
+  any: {
+    state: "any",
+    label: "Any",
+    marker: "",
+    className: "state-any",
+    description: "Not filtering on this tag",
+  },
+  required: {
+    state: "required",
+    label: "Required",
+    marker: "✓",
+    className: "state-required",
+    description: "Only notes WITH this tag",
+  },
+  excluded: {
+    state: "excluded",
+    label: "Excluded",
+    marker: "≠",
+    className: "state-excluded",
+    description: "Hide notes with this tag",
+  },
+};
+
+/**
+ * Which of the three states is this tag in?
+ *
+ * A selected tag with no `filterState` counts as required, so a selection made
+ * before tri-state filtering (or restored from an older client) still means
+ * what it used to.
  *
  * @param {Array<Object>|null|undefined} selectedTags - Current selection
- * @param {Object} tag - Tag the user tapped in the picker
+ * @param {number} tagId - Tag id to look up
+ * @returns {"any"|"required"|"excluded"}
+ */
+export function tagFilterState(selectedTags, tagId) {
+  if (!Array.isArray(selectedTags)) return "any";
+
+  const entry = selectedTags.find((tag) => tag.id === tagId);
+  if (!entry) return "any";
+
+  return entry.filterState === "excluded" ? "excluded" : DEFAULT_STATE;
+}
+
+/**
+ * The state one more click lands on: any -> required -> excluded -> any.
+ *
+ * @param {unknown} state - Current state
+ * @returns {"any"|"required"|"excluded"}
+ */
+export function nextTagState(state) {
+  if (state === "required") return "excluded";
+  if (state === "excluded") return "any";
+  return "required";
+}
+
+/**
+ * Advance one tag through the cycle - the single click handler behind the
+ * picker rows, the chips and the sidebar tag list alike.
+ *
+ * The tag keeps its position while it cycles, so the chip row does not
+ * reshuffle under the user's finger, and the freshest tag object wins so a
+ * renamed or recoloured tag updates its own chip.
+ *
+ * @param {Array<Object>|null|undefined} selectedTags - Current selection
+ * @param {Object} tag - Tag the user clicked
  * @returns {Array<Object>} The new selection
  */
-export function toggleTagSelection(selectedTags, tag) {
+export function cycleTagSelection(selectedTags, tag) {
   const current = Array.isArray(selectedTags) ? selectedTags : [];
+  const next = nextTagState(tagFilterState(current, tag.id));
 
-  if (isTagSelected(current, tag.id)) {
+  if (next === "any") {
     return current.filter((t) => t.id !== tag.id);
   }
-  return [...current, tag];
+
+  if (isTagSelected(current, tag.id)) {
+    return current.map((t) => (t.id === tag.id ? { ...tag, filterState: next } : t));
+  }
+
+  return [...current, { ...tag, filterState: next }];
+}
+
+/**
+ * How a state is presented. Never returns undefined: an unrecognised state
+ * renders as "any" rather than as a blank control.
+ *
+ * @param {unknown} state - A tag filter state
+ * @returns {{state: string, label: string, marker: string, className: string, description: string}}
+ */
+export function tagStateMeta(state) {
+  return STATE_META[state] ?? STATE_META.any;
 }
 
 /**
@@ -62,29 +151,48 @@ export function clearTagSelection() {
 }
 
 /**
- * The ids the server filters on, in selection order.
+ * Ids of the tags a note must carry - the `tags` request parameter.
  *
  * @param {Array<Object>|null|undefined} selectedTags - Current selection
  * @returns {number[]}
  */
-export function selectedTagIds(selectedTags) {
+export function requiredTagIds(selectedTags) {
   if (!Array.isArray(selectedTags)) return [];
-  return selectedTags.map((tag) => tag.id);
+  return selectedTags
+    .filter((tag) => tagFilterState(selectedTags, tag.id) === "required")
+    .map((tag) => tag.id);
+}
+
+/**
+ * Ids of the tags a note must NOT carry - the `exclude_tags` parameter.
+ *
+ * @param {Array<Object>|null|undefined} selectedTags - Current selection
+ * @returns {number[]}
+ */
+export function excludedTagIds(selectedTags) {
+  if (!Array.isArray(selectedTags)) return [];
+  return selectedTags
+    .filter((tag) => tag.filterState === "excluded")
+    .map((tag) => tag.id);
 }
 
 /**
  * The `tags-selected` event payload.
  *
  * `tags` is the field notes-app and tag-manager already exchange, so both
- * surfaces stay on one source of truth; `tagIds` saves every listener from
- * mapping the same array again.
+ * surfaces stay on one source of truth; the two id lists save every listener
+ * from splitting the selection by sign again.
  *
  * @param {Array<Object>|null|undefined} selectedTags - The new selection
- * @returns {{tags: Array<Object>, tagIds: number[]}}
+ * @returns {{tags: Array<Object>, requiredTagIds: number[], excludedTagIds: number[]}}
  */
 export function tagSelectionDetail(selectedTags) {
   const tags = Array.isArray(selectedTags) ? selectedTags : [];
-  return { tags, tagIds: selectedTagIds(tags) };
+  return {
+    tags,
+    requiredTagIds: requiredTagIds(tags),
+    excludedTagIds: excludedTagIds(tags),
+  };
 }
 
 /**
