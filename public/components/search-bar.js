@@ -6,12 +6,14 @@ import { icons } from "../utils/icons.js";
 import { shouldSendSemantic } from "../utils/search-mode.js";
 import {
   clearTagSelection,
+  cycleTagSelection,
   filterTagOptions,
-  isTagSelected,
+  nextTagState,
   removeTagFromSelection,
   tagFilterLabel,
+  tagFilterState,
   tagSelectionDetail,
-  toggleTagSelection,
+  tagStateMeta,
 } from "../utils/tag-filter.js";
 
 export class SearchBar extends LitElement {
@@ -333,20 +335,77 @@ export class SearchBar extends LitElement {
     .tag-chip {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
       min-height: 36px;
-      padding: 0.25rem 0.25rem 0.25rem 0.75rem;
+      padding: 0 0.25rem 0 0;
       background: var(--gray-100);
-      border: 1px solid var(--gray-300);
+      border: 2px solid var(--gray-300);
       border-radius: var(--radius-full);
       font-size: 1rem;
       color: var(--gray-900);
       max-width: 100%;
     }
 
+    /* The chip itself is the control: clicking it cycles the tag's state, so
+      required/excluded can be flipped without reopening the picker. */
+    .tag-chip-cycle {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-height: 36px;
+      padding: 0.25rem 0.25rem 0.25rem 0.75rem;
+      background: transparent;
+      border: none;
+      border-radius: var(--radius-full);
+      font-size: 1rem;
+      font-family: var(--font-family);
+      color: inherit;
+      cursor: pointer;
+      max-width: 100%;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .tag-chip-cycle:focus-visible {
+      outline: 3px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    .tag-chip-marker {
+      font-weight: 700;
+      line-height: 1;
+    }
+
     .tag-chip-name {
       font-weight: 600;
       overflow-wrap: anywhere;
+    }
+
+    /* The state in words, never colour alone. */
+    .tag-chip-state {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    /* Required: filled, in the app's primary colour, ticked. */
+    .tag-chip.state-required {
+      background: var(--primary);
+      border-color: var(--primary-dark);
+      color: var(--white);
+    }
+
+    /* Excluded: outlined in the error colour, struck through, marked '≠'.
+      Deliberately nothing like the filled chip - at arm's length the two must
+      not be a matter of shade. */
+    .tag-chip.state-excluded {
+      background: var(--white);
+      border-color: var(--error);
+      color: var(--error);
+    }
+
+    .tag-chip.state-excluded .tag-chip-name {
+      text-decoration: line-through;
     }
 
     .tag-chip-remove {
@@ -360,7 +419,7 @@ export class SearchBar extends LitElement {
       background: transparent;
       border: none;
       border-radius: 50%;
-      color: var(--gray-700);
+      color: inherit;
       font-size: 1.125rem;
       line-height: 1;
       cursor: pointer;
@@ -369,8 +428,7 @@ export class SearchBar extends LitElement {
 
     @media (hover: hover) {
       .tag-chip-remove:hover {
-        background: var(--gray-300);
-        color: var(--gray-900);
+        background: rgba(127, 127, 127, 0.25);
       }
     }
 
@@ -422,6 +480,41 @@ export class SearchBar extends LitElement {
       color: var(--gray-900);
     }
 
+    /* Says out loud what clicking does; the three states are otherwise only
+      discoverable by trying. */
+    .tag-picker-legend {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0 1rem 0.5rem;
+      font-size: 0.8125rem;
+      color: var(--gray-600);
+    }
+
+    .legend-state {
+      padding: 0.125rem 0.5rem;
+      border-radius: var(--radius-full);
+      font-weight: 700;
+    }
+
+    .legend-state.state-any {
+      background: var(--gray-100);
+      border: 1px solid var(--gray-300);
+      color: var(--gray-700);
+    }
+
+    .legend-state.state-required {
+      background: var(--primary);
+      color: var(--white);
+    }
+
+    .legend-state.state-excluded {
+      background: var(--white);
+      border: 1px solid var(--error);
+      color: var(--error);
+    }
+
     .tag-picker-filter {
       margin: 0 1rem 0.5rem;
       padding: 0.625rem 0.75rem;
@@ -458,9 +551,44 @@ export class SearchBar extends LitElement {
       -webkit-tap-highlight-color: transparent;
     }
 
-    .tag-picker-option.selected {
-      background: var(--primary-light);
+    .tag-picker-option.state-required {
+      background: var(--primary);
+      color: var(--white);
       font-weight: 700;
+    }
+
+    .tag-picker-option.state-excluded {
+      background: var(--white);
+      color: var(--error);
+      font-weight: 700;
+      box-shadow: inset 4px 0 0 var(--error);
+    }
+
+    .tag-picker-option.state-excluded .tag-picker-option-name {
+      text-decoration: line-through;
+    }
+
+    /* A fixed-width column so the markers line up down the list and a set tag
+      is visible while scanning, not only when read. */
+    .tag-picker-marker {
+      width: 1.25rem;
+      flex-shrink: 0;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    /* The state spelled out on every row, so no state is "the one with no
+      badge". */
+    .tag-picker-state {
+      flex-shrink: 0;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .tag-picker-option.state-any .tag-picker-state {
+      color: var(--gray-500);
     }
 
     @media (hover: hover) {
@@ -472,12 +600,6 @@ export class SearchBar extends LitElement {
     .tag-picker-option-name {
       flex: 1;
       overflow-wrap: anywhere;
-    }
-
-    .tag-picker-check {
-      flex-shrink: 0;
-      font-weight: 700;
-      color: var(--primary-dark);
     }
 
     .tag-picker-empty {
@@ -544,6 +666,10 @@ export class SearchBar extends LitElement {
       /* Chips are finger targets on a phone, so everything on them grows to
         the 44px minimum. On desktop they stay compact for the mouse. */
       .tag-chip {
+        min-height: 44px;
+      }
+
+      .tag-chip-cycle {
         min-height: 44px;
         padding: 0.25rem 0.25rem 0.25rem 0.875rem;
       }
@@ -825,11 +951,13 @@ export class SearchBar extends LitElement {
   }
 
   /**
-   * Tap a row in the picker. The picker stays open so several tags can be
-   * chosen in one go; the chips below the input show the running selection.
+   * Tap a tag - in a picker row or on its own chip. One click moves it one
+   * step round the cycle: any -> required -> excluded -> any. The picker stays
+   * open so several tags can be set in one go; the chips below the input show
+   * the running selection.
    */
-  _onTagOptionClick(tag) {
-    this._emitTagSelection(toggleTagSelection(this.selectedTags, tag));
+  _onTagCycle(tag) {
+    this._emitTagSelection(cycleTagSelection(this.selectedTags, tag));
   }
 
   _onChipRemove(tagId) {
@@ -874,15 +1002,34 @@ export class SearchBar extends LitElement {
   /**
    * The selected tags, always visible under the input while a filter is on.
    * Wraps to as many rows as needed - nothing is hidden behind an ellipsis.
+   *
+   * Each chip states its own filter in words ("Required" / "Excluded") as well
+   * as by colour and marker, and clicking the chip cycles it, so a tag can be
+   * flipped from required to excluded without reopening the picker. The "x"
+   * still takes the tag out of the filter altogether.
    */
   _renderTagChips() {
     return html`
       <div class="tag-chips">
-        ${this.selectedTags.map((tag) =>
-          html`
-            <span class="tag-chip">
-              <span class="tag-color-dot" style="background-color: ${tag.color}"></span>
-              <span class="tag-chip-name">${tag.name}</span>
+        ${this.selectedTags.map((tag) => {
+          const state = tagFilterState(this.selectedTags, tag.id);
+          const meta = tagStateMeta(state);
+          const next = tagStateMeta(nextTagState(state));
+
+          return html`
+            <span class="tag-chip ${meta.className}">
+              <button
+                class="tag-chip-cycle"
+                @click="${() => this._onTagCycle(tag)}"
+                aria-label="${tag.name}: ${meta.label}. ${meta.description}. Click to make it ${next
+                  .label.toLowerCase()}"
+                title="${meta.description} - click to make it ${next.label.toLowerCase()}"
+              >
+                <span class="tag-chip-marker" aria-hidden="true">${meta.marker}</span>
+                <span class="tag-color-dot" style="background-color: ${tag.color}"></span>
+                <span class="tag-chip-name">${tag.name}</span>
+                <span class="tag-chip-state">${meta.label}</span>
+              </button>
               <button
                 class="tag-chip-remove"
                 @click="${() => this._onChipRemove(tag.id)}"
@@ -890,8 +1037,8 @@ export class SearchBar extends LitElement {
                 title="Remove tag ${tag.name}"
               >×</button>
             </span>
-          `
-        )}
+          `;
+        })}
         <button class="tag-chips-clear" @click="${this._onClearAllTags}">
           Clear all tags
         </button>
@@ -912,6 +1059,15 @@ export class SearchBar extends LitElement {
       <div class="tag-picker" role="dialog" aria-label="Filter by tags">
         <div class="tag-picker-header">Filter by tags</div>
 
+        <!-- Three states are only obvious if the control says so; the legend
+          spells out both the markers and the order clicking moves in. -->
+        <div class="tag-picker-legend">
+          Click cycles:
+          <span class="legend-state state-any">Any</span> →
+          <span class="legend-state state-required">✓ Required</span> →
+          <span class="legend-state state-excluded">≠ Excluded</span>
+        </div>
+
         <input
           type="text"
           class="tag-picker-filter"
@@ -922,25 +1078,26 @@ export class SearchBar extends LitElement {
 
         <div class="tag-picker-list">
           ${options.length > 0
-            ? options.map((tag) =>
-              html`
+            ? options.map((tag) => {
+              const state = tagFilterState(this.selectedTags, tag.id);
+              const meta = tagStateMeta(state);
+              const next = tagStateMeta(nextTagState(state));
+
+              return html`
                 <button
-                  class="tag-picker-option ${isTagSelected(this.selectedTags, tag.id)
-                    ? "selected"
-                    : ""}"
-                  @click="${() => this._onTagOptionClick(tag)}"
-                  aria-pressed="${isTagSelected(this.selectedTags, tag.id)}"
+                  class="tag-picker-option ${meta.className}"
+                  @click="${() => this._onTagCycle(tag)}"
+                  aria-label="${tag.name}: ${meta.label}. ${meta
+                    .description}. Click to make it ${next.label.toLowerCase()}"
+                  title="${meta.description} - click to make it ${next.label.toLowerCase()}"
                 >
+                  <span class="tag-picker-marker" aria-hidden="true">${meta.marker}</span>
                   <span class="tag-color-dot" style="background-color: ${tag.color}"></span>
                   <span class="tag-picker-option-name">${tag.name}</span>
-                  ${isTagSelected(this.selectedTags, tag.id)
-                    ? html`
-                      <span class="tag-picker-check">✓</span>
-                    `
-                    : ""}
+                  <span class="tag-picker-state">${meta.label}</span>
                 </button>
-              `
-            )
+              `;
+            })
             : html`
               <div class="tag-picker-empty">No tags match</div>
             `}

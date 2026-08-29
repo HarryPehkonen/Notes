@@ -3,6 +3,14 @@
  */
 import { css, html, LitElement } from "lit";
 import { icons } from "../utils/icons.js";
+import {
+  clearTagSelection,
+  cycleTagSelection,
+  nextTagState,
+  tagFilterState,
+  tagSelectionDetail,
+  tagStateMeta,
+} from "../utils/tag-filter.js";
 
 export class TagManager extends LitElement {
   static properties = {
@@ -45,15 +53,60 @@ export class TagManager extends LitElement {
       }
     }
 
-    .tag-item.selected {
+    /* Required - and the "All Notes" row, which is the active one when no tag
+      filter is set: filled in the primary colour. */
+    .tag-item.state-required,
+    .tag-item.active {
       background: var(--primary);
       color: var(--white);
       border-color: var(--primary);
     }
 
-    .tag-item.selected .tag-name,
-    .tag-item.selected .tag-count {
+    .tag-item.state-required .tag-name,
+    .tag-item.state-required .tag-count,
+    .tag-item.state-required .tag-state,
+    .tag-item.active .tag-name,
+    .tag-item.active .tag-count {
       color: var(--white);
+    }
+
+    /* Excluded: outlined in the error colour and struck through - a different
+      shape of highlight, not a different shade of the same one. */
+    .tag-item.state-excluded {
+      background: var(--white);
+      border-color: var(--error);
+      border-width: 2px;
+    }
+
+    .tag-item.state-excluded .tag-name {
+      color: var(--error);
+      text-decoration: line-through;
+    }
+
+    .tag-item.state-excluded .tag-marker,
+    .tag-item.state-excluded .tag-state,
+    .tag-item.state-excluded .tag-count {
+      color: var(--error);
+    }
+
+    /* A fixed column, so the markers line up down the list. */
+    .tag-marker {
+      width: 1rem;
+      flex-shrink: 0;
+      font-weight: 700;
+      font-size: 0.875rem;
+      line-height: 1;
+    }
+
+    /* The state in words as well as in colour. */
+    .tag-state {
+      flex-shrink: 0;
+      margin-right: 0.5rem;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--gray-600);
     }
 
     .tag-color {
@@ -135,12 +188,14 @@ export class TagManager extends LitElement {
       color: var(--gray-700);
     }
 
-    .tag-item.selected .tag-action-btn {
+    .tag-item.state-required .tag-action-btn,
+    .tag-item.active .tag-action-btn {
       color: var(--white);
       opacity: 0.8;
     }
 
-    .tag-item.selected .tag-action-btn:hover {
+    .tag-item.state-required .tag-action-btn:hover,
+    .tag-item.active .tag-action-btn:hover {
       background: rgb(0 0 0 / 0.12);
       opacity: 1;
     }
@@ -329,31 +384,24 @@ export class TagManager extends LitElement {
     this.offline = false;
   }
 
-  toggleTag(tag) {
-    const index = this.selectedTags.findIndex((t) => t.id === tag.id);
-    let newSelection;
-
-    if (index === -1) {
-      newSelection = [...this.selectedTags, tag];
-    } else {
-      newSelection = this.selectedTags.filter((t) => t.id !== tag.id);
-    }
-
-    this.selectedTags = newSelection;
-    this.dispatchEvent(
-      new CustomEvent("tags-selected", {
-        detail: { tags: newSelection },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+  /**
+   * The sidebar list is a selection surface too, so a click here cycles the
+   * same three states as the search bar: any -> required -> excluded -> any.
+   * notes-app owns the selection and pushes it back into both surfaces.
+   */
+  cycleTag(tag) {
+    this._emitSelection(cycleTagSelection(this.selectedTags, tag));
   }
 
   clearSelection() {
-    this.selectedTags = [];
+    this._emitSelection(clearTagSelection());
+  }
+
+  _emitSelection(newSelection) {
+    this.selectedTags = newSelection;
     this.dispatchEvent(
       new CustomEvent("tags-selected", {
-        detail: { tags: [] },
+        detail: tagSelectionDetail(newSelection),
         bubbles: true,
         composed: true,
       }),
@@ -456,15 +504,8 @@ export class TagManager extends LitElement {
       const result = await globalThis.NotesApp.getTags();
       this.tags = result.data || [];
 
-      // Remove from selection if it was selected
-      this.selectedTags = this.selectedTags.filter((t) => t.id !== tag.id);
-      this.dispatchEvent(
-        new CustomEvent("tags-selected", {
-          detail: { tags: this.selectedTags },
-          bubbles: true,
-          composed: true,
-        }),
-      );
+      // Remove from selection if it was part of the filter
+      this._emitSelection(this.selectedTags.filter((t) => t.id !== tag.id));
     } catch (error) {
       console.error("Failed to delete tag:", error);
       this.showToast("Failed to delete tag. Please try again.", "error");
@@ -542,9 +583,10 @@ export class TagManager extends LitElement {
 
         <div class="all-tags-option">
           <div
-            class="tag-item ${!hasSelection ? "selected" : ""}"
+            class="tag-item ${!hasSelection ? "active" : ""}"
             @click="${() => this.clearSelection()}"
           >
+            <div class="tag-marker" aria-hidden="true"></div>
             <div class="tag-color" style="background: var(--gray-400)"></div>
             <div class="tag-name">All Notes</div>
             <div class="tag-count">${this.tags.reduce(
@@ -561,14 +603,21 @@ export class TagManager extends LitElement {
             </div>
           `
           : ""} ${this.tags.map((tag) => {
-            const isSelected = this.selectedTags.some((t) => t.id === tag.id);
+            const state = tagFilterState(this.selectedTags, tag.id);
+            const meta = tagStateMeta(state);
+            const next = tagStateMeta(nextTagState(state));
+
             return html`
               <div
-                class="tag-item ${isSelected ? "selected" : ""}"
-                @click="${() => this.toggleTag(tag)}"
+                class="tag-item ${meta.className}"
+                @click="${() => this.cycleTag(tag)}"
+                title="${meta.description} - click to make it ${next.label.toLowerCase()}"
+                aria-label="${tag.name}: ${meta.label}. ${meta.description}"
               >
+                <div class="tag-marker" aria-hidden="true">${meta.marker}</div>
                 <div class="tag-color" style="background-color: ${tag.color}"></div>
                 <div class="tag-name">${tag.name}</div>
+                ${state === "any" ? "" : html`<div class="tag-state">${meta.label}</div>`}
                 <div class="tag-count">${tag.note_count || 0}</div>
                 ${!this.offline
                   ? html`

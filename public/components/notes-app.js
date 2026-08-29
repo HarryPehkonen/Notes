@@ -5,7 +5,7 @@
 
 import { css, html, LitElement } from "lit";
 import { icons } from "../utils/icons.js";
-import { selectedTagIds } from "../utils/tag-filter.js";
+import { excludedTagIds, requiredTagIds, tagStateMeta } from "../utils/tag-filter.js";
 
 class NotesApp extends LitElement {
   static properties = {
@@ -1161,6 +1161,9 @@ class NotesApp extends LitElement {
    * tags and/or pinned, plain searchNotes for query-only, and getNotes for
    * tag/pinned filtering with no search text.
    *
+   * Tag filters are tri-state: the required ids go out as `tags` and the
+   * excluded ids as `exclude_tags`/`excludeTags`, on every one of those paths.
+   *
    * Semantic mode short-circuits the text routing - the query goes to the
    * embedding search alone - but tag filters still apply there: the server
    * intersects the embedding results with tag membership and reports it back
@@ -1180,7 +1183,8 @@ class NotesApp extends LitElement {
         // sent along and genuinely filters the embedding results
         const result = await globalThis.NotesApp.searchNotes(this.searchQuery, {
           semantic: true,
-          tags: selectedTagIds(this.selectedTags),
+          tags: requiredTagIds(this.selectedTags),
+          excludeTags: excludedTagIds(this.selectedTags),
         });
         this.notes = result.data?.results || [];
         this.hasMore = result.meta?.hasMore || false;
@@ -1189,7 +1193,8 @@ class NotesApp extends LitElement {
         // Search combined with tags and/or pinned - use advanced search
         const result = await globalThis.NotesApp.advancedSearch({
           query: this.searchQuery,
-          tags: this.selectedTags.map((tag) => tag.id),
+          tags: requiredTagIds(this.selectedTags),
+          excludeTags: excludedTagIds(this.selectedTags),
           isPinned: hasPinnedFilter || undefined,
         });
         this.notes = result.data?.results || [];
@@ -1205,7 +1210,8 @@ class NotesApp extends LitElement {
         // No search query, filter by tags/pinned (or show all)
         const options = {};
         if (hasTagFilter) {
-          options.tags = this.selectedTags.map((tag) => tag.id);
+          options.tags = requiredTagIds(this.selectedTags);
+          options.excludeTags = excludedTagIds(this.selectedTags);
         }
         if (hasPinnedFilter) {
           options.pinned = true;
@@ -1245,14 +1251,16 @@ class NotesApp extends LitElement {
       if (hasSearchQuery && this.semanticMode) {
         result = await globalThis.NotesApp.searchNotes(this.searchQuery, {
           semantic: true,
-          tags: selectedTagIds(this.selectedTags),
+          tags: requiredTagIds(this.selectedTags),
+          excludeTags: excludedTagIds(this.selectedTags),
           offset,
         });
         this.notes = [...this.notes, ...(result.data?.results || [])];
       } else if (hasSearchQuery && (hasTagFilter || hasPinnedFilter)) {
         result = await globalThis.NotesApp.advancedSearch({
           query: this.searchQuery,
-          tags: this.selectedTags.map((tag) => tag.id),
+          tags: requiredTagIds(this.selectedTags),
+          excludeTags: excludedTagIds(this.selectedTags),
           isPinned: hasPinnedFilter || undefined,
           offset,
         });
@@ -1263,7 +1271,8 @@ class NotesApp extends LitElement {
       } else {
         const options = { offset };
         if (hasTagFilter) {
-          options.tags = this.selectedTags.map((tag) => tag.id);
+          options.tags = requiredTagIds(this.selectedTags);
+          options.excludeTags = excludedTagIds(this.selectedTags);
         }
         if (hasPinnedFilter) {
           options.pinned = true;
@@ -1377,7 +1386,10 @@ class NotesApp extends LitElement {
     const parts = [];
     if (this.pinnedOnly) parts.push("Pinned");
     if (this.selectedTags.length === 1) {
-      parts.push(this.selectedTags[0].name);
+      // The marker keeps "cpp" and "not cpp" from reading the same in the libbar
+      const tag = this.selectedTags[0];
+      const { marker } = tagStateMeta(tag.filterState ?? "required");
+      parts.push(`${marker} ${tag.name}`.trim());
     } else if (this.selectedTags.length > 1) {
       parts.push(`${this.selectedTags.length} tags`);
     }
