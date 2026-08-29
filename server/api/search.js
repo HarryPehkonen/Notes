@@ -6,7 +6,7 @@
 import { Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { parseSearchQuery } from "./search-query.js";
 import { embedText } from "./embed.js";
-import { semanticQueryNeeds, semanticSearch } from "./semantic.js";
+import { parseTagIds, semanticQueryNeeds, semanticSearch } from "./semantic.js";
 
 /** Escape LIKE/ILIKE special characters so user input is matched literally */
 function escapeLike(str) {
@@ -27,6 +27,7 @@ export function createSearchRouter({ embed = embedText } = {}) {
     const limit = ctx.request.url.searchParams.get("limit") || 20;
     const offset = ctx.request.url.searchParams.get("offset") || 0;
     const semantic = semanticQueryNeeds(ctx.request.url.searchParams.get("semantic"));
+    const rawTags = ctx.request.url.searchParams.get("tags");
 
     if (!q || q.trim().length === 0) {
       ctx.response.status = 400;
@@ -49,12 +50,28 @@ export function createSearchRouter({ embed = embedText } = {}) {
       return;
     }
 
-    // Semantic mode is an exclusive switch: no text search is mixed in, '#tag'
-    // filters are not applied (the raw query is what gets embedded), and an
-    // unreachable embedding server is an error rather than a silent fallback.
+    // Semantic mode is exclusive over the *text* search: no full-text query is
+    // mixed in and '#tag' tokens are not resolved (the raw query is what gets
+    // embedded), and an unreachable embedding server is an error rather than a
+    // silent fallback. An explicit `tags` filter is honoured, though - it
+    // narrows the embedding results without touching their ranking.
     if (semantic) {
       const searchLimit = Math.min(parseInt(limit) || 20, 100); // Cap at 100 results
       const searchOffset = Math.max(parseInt(offset) || 0, 0);
+      const tagIds = parseTagIds(rawTags);
+
+      // A non-empty `tags` that yields no usable id is a malformed request.
+      // Answering it with unfiltered results would be the silent drop this
+      // endpoint used to do, so it is a 400 instead - and it is checked before
+      // embedding, so a bad request costs no model call.
+      if (rawTags && rawTags.trim().length > 0 && tagIds.length === 0) {
+        ctx.response.status = 400;
+        ctx.response.body = {
+          success: false,
+          error: "Invalid tags parameter",
+        };
+        return;
+      }
 
       let embedding;
       try {
@@ -70,7 +87,14 @@ export function createSearchRouter({ embed = embedText } = {}) {
       }
 
       try {
-        const results = await semanticSearch(db, user.id, embedding, searchLimit, searchOffset);
+        const results = await semanticSearch(
+          db,
+          user.id,
+          embedding,
+          searchLimit,
+          searchOffset,
+          tagIds,
+        );
 
         ctx.response.body = {
           success: true,
@@ -83,8 +107,11 @@ export function createSearchRouter({ embed = embedText } = {}) {
             limit: searchLimit,
             offset: searchOffset,
             hasMore: results.length === searchLimit,
-            // Flags for the client that tag filters were not applied
             semantic: true,
+            // So the client can show that the tags it sent really did filter,
+            // instead of guessing from a suspiciously short result list
+            tagsApplied: tagIds.length > 0,
+            tags: tagIds,
           },
         };
       } catch (error) {

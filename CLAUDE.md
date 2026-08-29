@@ -491,10 +491,21 @@ POST   /api/notes/:id/restore/:versionId # Restore version
 ### Search Endpoint
 
 ```http
-GET  /api/search?q=query      # Full-text search
+GET  /api/search?q=query                    # Full-text search
+GET  /api/search?q=query&semantic=1         # Embedding (semantic) search
+GET  /api/search?q=query&semantic=1&tags=3,5  # Semantic search, tag-filtered
 ```
 
 Response includes highlighted snippets and relevance ranking.
+
+**`tags` (semantic mode)**: comma-separated tag IDs, same shape as
+`/api/search/advanced`. Tags are AND-ed - a result must carry ALL of them. The
+embedding distance stays the only sort key, so results are (tag-filtered,
+similarity-ranked). `meta.tagsApplied` and `meta.tags` echo back what was
+actually applied. A non-empty `tags` with no usable ID is a 400, never a
+silently unfiltered result set. Note this is separate from `#tag` tokens inside
+`q`, which semantic mode still does not resolve (the raw query is embedded
+as-is).
 
 ### Tags Endpoints
 
