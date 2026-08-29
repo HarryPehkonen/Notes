@@ -541,6 +541,23 @@ export class SearchBar extends LitElement {
         left: 0.75rem;
       }
 
+      /* Chips are finger targets on a phone, so everything on them grows to
+        the 44px minimum. On desktop they stay compact for the mouse. */
+      .tag-chip {
+        min-height: 44px;
+        padding: 0.25rem 0.25rem 0.25rem 0.875rem;
+      }
+
+      .tag-chip-remove {
+        width: 44px;
+        height: 44px;
+        font-size: 1.25rem;
+      }
+
+      .tag-chips-clear {
+        min-height: 44px;
+      }
+
       /* A bottom sheet, anchored to the viewport rather than to the button, so
         the picker never runs off the side of a narrow screen. It is part of the
         search bar - it does not depend on the nav drawer being open. */
