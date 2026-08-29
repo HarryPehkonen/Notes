@@ -14,14 +14,17 @@ import { buildEmbeddingPrompt, EmbeddingError, embedText, toVectorLiteral } from
 // already reach for it through the semantic module.
 export { parseTagIds } from "./tag-filter.js";
 
+import { buildTagFilterClause } from "./tag-filter.js";
+
 /**
  * Build the nearest-neighbour SQL, optionally narrowed to a tag selection.
  *
  * Pure so the filter construction is unit-testable without a live DB. The tag
  * filter is a WHERE condition on note ids, never a re-ordering: the embedding
  * distance stays the only sort key, so results are (tag-filtered,
- * similarity-ranked). Tags are AND-ed - a note must carry ALL of them, matching
- * how /api/search/advanced and the tag-manager selection behave.
+ * similarity-ranked). Required tags are AND-ed - a note must carry ALL of them
+ * - and excluded tags drop a note that carries any of them, matching how
+ * /api/search/advanced and the notes list behave.
  *
  * @param {Object} spec - Query inputs
  * @param {string} spec.vector - pgvector literal for the query embedding
@@ -29,25 +32,22 @@ export { parseTagIds } from "./tag-filter.js";
  * @param {number} spec.limit - Max results
  * @param {number} spec.offset - Pagination offset
  * @param {number[]} [spec.tagIds] - Tag ids the note must all carry
+ * @param {number[]} [spec.excludeTagIds] - Tag ids the note must not carry
  * @returns {{sql: string, params: unknown[]}} Query and its bound parameters
  */
-export function buildSemanticSearchQuery({ vector, userId, limit, offset, tagIds = [] }) {
+export function buildSemanticSearchQuery(
+  { vector, userId, limit, offset, tagIds = [], excludeTagIds = [] },
+) {
   const params = [vector, userId, limit, offset];
 
-  // $5/$6 are appended only when there is a filter, so the unfiltered query
-  // binds exactly the four parameters it always has.
-  let tagFilter = "";
-  if (tagIds.length > 0) {
-    tagFilter = `
-           AND n.id IN (
-               SELECT nt.note_id
-               FROM note_tags nt
-               WHERE nt.tag_id = ANY($5::int[])
-               GROUP BY nt.note_id
-               HAVING COUNT(DISTINCT nt.tag_id) = $6
-           )`;
-    params.push(tagIds, tagIds.length);
-  }
+  // $5 onwards are appended only when there is a filter, so the unfiltered
+  // query binds exactly the four parameters it always has.
+  const { clause: tagFilter, params: tagParams } = buildTagFilterClause({
+    tagIds,
+    excludeTagIds,
+    startIndex: 5,
+  });
+  params.push(...tagParams);
 
   const sql = `SELECT n.id,
                 n.user_id,
@@ -114,8 +114,9 @@ export function parseSemanticResults(row) {
  * Nearest-neighbour search over the user's note embeddings.
  *
  * Cosine distance (`<=>`), so similarity is `1 - distance`. Archived notes are
- * excluded to match the text search. When tag ids are given the results are
- * narrowed to notes carrying all of them, without disturbing the ranking.
+ * excluded to match the text search. Tag filters narrow the results - required
+ * tags must all be present, excluded tags must all be absent - without
+ * disturbing the ranking.
  *
  * @param {Object} db - Database client
  * @param {number} userId - Authenticated user id
@@ -123,15 +124,25 @@ export function parseSemanticResults(row) {
  * @param {number} limit - Max results
  * @param {number} offset - Pagination offset
  * @param {number[]} [tagIds] - Tag ids the note must all carry
+ * @param {number[]} [excludeTagIds] - Tag ids the note must not carry
  * @returns {Promise<Object[]>} Results, most similar first
  */
-export async function semanticSearch(db, userId, embedding, limit, offset, tagIds = []) {
+export async function semanticSearch(
+  db,
+  userId,
+  embedding,
+  limit,
+  offset,
+  tagIds = [],
+  excludeTagIds = [],
+) {
   const { sql, params } = buildSemanticSearchQuery({
     vector: toVectorLiteral(embedding),
     userId,
     limit,
     offset,
     tagIds,
+    excludeTagIds,
   });
 
   const result = await db.query(sql, params);

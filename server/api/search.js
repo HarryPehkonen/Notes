@@ -6,7 +6,8 @@
 import { Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { parseSearchQuery } from "./search-query.js";
 import { embedText } from "./embed.js";
-import { parseTagIds, semanticQueryNeeds, semanticSearch } from "./semantic.js";
+import { semanticQueryNeeds, semanticSearch } from "./semantic.js";
+import { buildTagFilterClause, parseTagFilterParams } from "./tag-filter.js";
 
 /** Escape LIKE/ILIKE special characters so user input is matched literally */
 function escapeLike(str) {
@@ -27,7 +28,6 @@ export function createSearchRouter({ embed = embedText } = {}) {
     const limit = ctx.request.url.searchParams.get("limit") || 20;
     const offset = ctx.request.url.searchParams.get("offset") || 0;
     const semantic = semanticQueryNeeds(ctx.request.url.searchParams.get("semantic"));
-    const rawTags = ctx.request.url.searchParams.get("tags");
 
     if (!q || q.trim().length === 0) {
       ctx.response.status = 400;
@@ -58,13 +58,16 @@ export function createSearchRouter({ embed = embedText } = {}) {
     if (semantic) {
       const searchLimit = Math.min(parseInt(limit) || 20, 100); // Cap at 100 results
       const searchOffset = Math.max(parseInt(offset) || 0, 0);
-      const tagIds = parseTagIds(rawTags);
+      const { tagIds, excludeTagIds, invalid } = parseTagFilterParams({
+        tags: ctx.request.url.searchParams.get("tags"),
+        excludeTags: ctx.request.url.searchParams.get("exclude_tags"),
+      });
 
-      // A non-empty `tags` that yields no usable id is a malformed request.
-      // Answering it with unfiltered results would be the silent drop this
-      // endpoint used to do, so it is a 400 instead - and it is checked before
-      // embedding, so a bad request costs no model call.
-      if (rawTags && rawTags.trim().length > 0 && tagIds.length === 0) {
+      // A non-empty tag filter that yields no usable id is a malformed
+      // request. Answering it with unfiltered results would be the silent drop
+      // this endpoint used to do, so it is a 400 instead - and it is checked
+      // before embedding, so a bad request costs no model call.
+      if (invalid) {
         ctx.response.status = 400;
         ctx.response.body = {
           success: false,
@@ -94,6 +97,7 @@ export function createSearchRouter({ embed = embedText } = {}) {
           searchLimit,
           searchOffset,
           tagIds,
+          excludeTagIds,
         );
 
         ctx.response.body = {
@@ -112,6 +116,8 @@ export function createSearchRouter({ embed = embedText } = {}) {
             // instead of guessing from a suspiciously short result list
             tagsApplied: tagIds.length > 0,
             tags: tagIds,
+            excludeTagsApplied: excludeTagIds.length > 0,
+            excludeTags: excludeTagIds,
           },
         };
       } catch (error) {
@@ -356,13 +362,28 @@ export function createSearchRouter({ embed = embedText } = {}) {
       const body = await ctx.request.body({ type: "json" }).value;
       const {
         query = "",
-        tags = [],
         dateFrom,
         dateTo,
         isPinned,
         limit = 20,
         offset = 0,
       } = body;
+
+      // Tri-state tag filtering, same semantics as the notes list and the
+      // semantic search: `tags` must all be present, `excludeTags` all absent.
+      const { tagIds, excludeTagIds, invalid } = parseTagFilterParams({
+        tags: body.tags,
+        excludeTags: body.excludeTags,
+      });
+
+      if (invalid) {
+        ctx.response.status = 400;
+        ctx.response.body = {
+          success: false,
+          error: "Invalid tags parameter",
+        };
+        return;
+      }
 
       // Build advanced search query
       // Return tags as array of JSON objects (same format as getNotes)
@@ -393,19 +414,15 @@ export function createSearchRouter({ embed = embedText } = {}) {
         paramIndex++;
       }
 
-      // Add tag filtering (accepts tag IDs)
-      if (tags.length > 0) {
-        searchQuery += ` AND n.id IN (
-                    SELECT nt.note_id
-                    FROM note_tags nt
-                    WHERE nt.tag_id = ANY($${paramIndex}::int[])
-                    GROUP BY nt.note_id
-                    HAVING COUNT(DISTINCT nt.tag_id) = $${paramIndex + 1}
-                )`;
-        params.push(tags);
-        params.push(tags.length);
-        paramIndex += 2;
-      }
+      // Add tag filtering (accepts tag IDs), required and excluded alike
+      const tagFilter = buildTagFilterClause({
+        tagIds,
+        excludeTagIds,
+        startIndex: paramIndex,
+      });
+      searchQuery += tagFilter.clause;
+      params.push(...tagFilter.params);
+      paramIndex = tagFilter.nextIndex;
 
       // Add date filtering
       if (dateFrom) {
@@ -439,7 +456,8 @@ export function createSearchRouter({ embed = embedText } = {}) {
         data: {
           criteria: {
             query: query.trim(),
-            tags,
+            tags: tagIds,
+            excludeTags: excludeTagIds,
             dateFrom,
             dateTo,
             isPinned,
@@ -451,6 +469,10 @@ export function createSearchRouter({ embed = embedText } = {}) {
           limit: Math.min(parseInt(limit), 100),
           offset: parseInt(offset),
           hasMore: results.rows.length === Math.min(parseInt(limit), 100),
+          tags: tagIds,
+          excludeTags: excludeTagIds,
+          tagsApplied: tagIds.length > 0,
+          excludeTagsApplied: excludeTagIds.length > 0,
         },
       };
     } catch (error) {

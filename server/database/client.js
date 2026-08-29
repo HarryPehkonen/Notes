@@ -4,6 +4,7 @@
  */
 
 import { Pool } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
+import { buildTagFilterClause } from "../api/tag-filter.js";
 
 /**
  * @typedef {Object} User
@@ -195,6 +196,74 @@ export function parsePostgreSQLStatements(sql) {
 /**
  * Database client with connection pooling
  */
+/**
+ * Build the notes-list query, tag filters and all.
+ *
+ * Pure, so the filtering - especially the tri-state tag selection, where a
+ * wrong sign silently returns the opposite of what was asked for - is unit
+ * testable without a database.
+ *
+ * @param {number} userId - Authenticated user id
+ * @param {Object} [options] - Filters
+ * @param {number} [options.limit] - Max rows
+ * @param {number} [options.offset] - Pagination offset
+ * @param {number[]} [options.tags] - Tags the note must carry
+ * @param {number[]} [options.excludeTags] - Tags the note must not carry
+ * @param {string} [options.search] - Full-text query
+ * @param {boolean} [options.pinned] - Pinned filter
+ * @param {boolean} [options.archived] - Show archived instead of active notes
+ * @returns {{query: string, params: unknown[]}}
+ */
+export function buildNotesListQuery(userId, options = {}) {
+  const { limit = 20, offset = 0, tags, excludeTags, search, pinned, archived } = options;
+
+  let query = `
+            SELECT n.*,
+                   ARRAY(
+                       SELECT json_build_object('id', t.id, 'name', t.name, 'color', t.color)
+                       FROM tags t
+                       JOIN note_tags nt ON t.id = nt.tag_id
+                       WHERE nt.note_id = n.id
+                   ) as tags
+            FROM notes n
+            WHERE n.user_id = $1
+        `;
+  if (archived) {
+    query += ` AND n.is_archived = true`;
+  } else {
+    query += ` AND NOT n.is_archived`;
+  }
+  const params = [userId];
+  let paramIndex = 2;
+
+  if (search) {
+    query += ` AND n.search_vector @@ plainto_tsquery('english', $${paramIndex})`;
+    params.push(search);
+    paramIndex++;
+  }
+
+  if (pinned !== undefined) {
+    query += ` AND n.is_pinned = $${paramIndex}`;
+    params.push(pinned);
+    paramIndex++;
+  }
+
+  const tagFilter = buildTagFilterClause({
+    tagIds: tags || [],
+    excludeTagIds: excludeTags || [],
+    startIndex: paramIndex,
+  });
+  query += tagFilter.clause;
+  params.push(...tagFilter.params);
+  paramIndex = tagFilter.nextIndex;
+
+  query += ` ORDER BY n.is_pinned DESC, n.updated_at DESC`;
+  query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+  params.push(limit, offset);
+
+  return { query, params };
+}
+
 export class DatabaseClient {
   /**
    * @param {Object} config - Database configuration
@@ -426,56 +495,7 @@ export class DatabaseClient {
    * @returns {Promise<Note[]>}
    */
   async getNotes(userId, options = {}) {
-    const { limit = 20, offset = 0, tags, search, pinned, archived } = options;
-
-    let query = `
-            SELECT n.*,
-                   ARRAY(
-                       SELECT json_build_object('id', t.id, 'name', t.name, 'color', t.color)
-                       FROM tags t
-                       JOIN note_tags nt ON t.id = nt.tag_id
-                       WHERE nt.note_id = n.id
-                   ) as tags
-            FROM notes n
-            WHERE n.user_id = $1
-        `;
-    if (archived) {
-      query += ` AND n.is_archived = true`;
-    } else {
-      query += ` AND NOT n.is_archived`;
-    }
-    const params = [userId];
-    let paramIndex = 2;
-
-    if (search) {
-      query += ` AND n.search_vector @@ plainto_tsquery('english', $${paramIndex})`;
-      params.push(search);
-      paramIndex++;
-    }
-
-    if (pinned !== undefined) {
-      query += ` AND n.is_pinned = $${paramIndex}`;
-      params.push(pinned);
-      paramIndex++;
-    }
-
-    if (tags && tags.length > 0) {
-      query += ` AND n.id IN (
-                SELECT nt.note_id
-                FROM note_tags nt
-                WHERE nt.tag_id = ANY($${paramIndex}::int[])
-                GROUP BY nt.note_id
-                HAVING COUNT(DISTINCT nt.tag_id) = $${paramIndex + 1}
-            )`;
-      params.push(tags);
-      params.push(tags.length);
-      paramIndex += 2;
-    }
-
-    query += ` ORDER BY n.is_pinned DESC, n.updated_at DESC`;
-    query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
-    params.push(limit, offset);
-
+    const { query, params } = buildNotesListQuery(userId, options);
     const result = await this.query(query, params);
     return result.rows;
   }

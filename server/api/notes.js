@@ -6,6 +6,7 @@
 import { Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { broadcastToUser } from "../services/ws-connections.js";
 import { queueNoteEmbedding } from "./semantic.js";
+import { parseTagFilterParams } from "./tag-filter.js";
 
 /**
  * Extract image filenames from note content
@@ -67,10 +68,28 @@ export function createNotesRouter() {
     // Properly extract parameters from URLSearchParams
     const limit = ctx.request.url.searchParams.get("limit") || 20;
     const offset = ctx.request.url.searchParams.get("offset") || 0;
-    const tags = ctx.request.url.searchParams.get("tags");
     const search = ctx.request.url.searchParams.get("search");
     const pinned = ctx.request.url.searchParams.get("pinned");
     const archived = ctx.request.url.searchParams.get("archived");
+
+    // Tri-state tag filtering: `tags` are the tags a note must carry,
+    // `exclude_tags` the ones it must not.
+    const { tagIds, excludeTagIds, invalid } = parseTagFilterParams({
+      tags: ctx.request.url.searchParams.get("tags"),
+      excludeTags: ctx.request.url.searchParams.get("exclude_tags"),
+    });
+
+    // A filter that cannot be read is a malformed request. Answering it with
+    // an unfiltered list would quietly show exactly the notes the user asked
+    // to hide, so it is a 400 instead.
+    if (invalid) {
+      ctx.response.status = 400;
+      ctx.response.body = {
+        success: false,
+        error: "Invalid tags parameter",
+      };
+      return;
+    }
 
     try {
       const options = {
@@ -78,8 +97,12 @@ export function createNotesRouter() {
         offset: Math.max(parseInt(offset) || 0, 0),
       };
 
-      if (tags) {
-        options.tags = tags.split(",").map((tag) => parseInt(tag.trim()));
+      if (tagIds.length > 0) {
+        options.tags = tagIds;
+      }
+
+      if (excludeTagIds.length > 0) {
+        options.excludeTags = excludeTagIds;
       }
 
       if (search) {
@@ -103,6 +126,11 @@ export function createNotesRouter() {
           limit: options.limit,
           offset: options.offset,
           hasMore: notes.length === options.limit,
+          // So the client can see which tag filters really reached the query
+          tags: tagIds,
+          excludeTags: excludeTagIds,
+          tagsApplied: tagIds.length > 0,
+          excludeTagsApplied: excludeTagIds.length > 0,
         },
       };
     } catch (error) {
