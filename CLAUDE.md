@@ -242,6 +242,13 @@ The application supports **three types of filtering** that can be combined:
    - Many-to-many relationship via `note_tags` junction table
    - Multiple tags use AND logic (note must have ALL selected tags)
    - Efficient JOIN queries at database level
+   - **UI**: selection lives at the search bar - a labeled "Tags (n)" button opens
+     a filterable, scrolling picker (dropdown on desktop, bottom sheet on mobile),
+     and the selected tags render as removable chips under the search input. The
+     sidebar/flyout `tag-manager` still manages tags and shares the same
+     `notes-app.selectedTags` state, so both surfaces stay in sync.
+   - Selection logic is pure and unit-tested in `public/utils/tag-filter.js`;
+     the search request shape (including `tags`) is in `public/utils/search-mode.js`
 
 3. **Status filtering** (`/api/notes?pinned=true`)
    - Filter by pinned status

@@ -19,3 +19,35 @@
 export function shouldSendSemantic(checkboxState) {
   return checkboxState === true;
 }
+
+/**
+ * Build the query string for GET /api/search.
+ *
+ * Shaping the request here rather than in the API client keeps the wire
+ * format - including the `tags` filter the semantic path now honours - under
+ * test without a network or a DOM.
+ *
+ * @param {string} query - Raw search text
+ * @param {Object} [options] - Request options
+ * @param {number} [options.limit] - Max results
+ * @param {number} [options.offset] - Pagination offset
+ * @param {unknown} [options.semantic] - Semantic checkbox state
+ * @param {number[]} [options.tags] - Selected tag ids
+ * @returns {string} Encoded query string, without the leading "?"
+ */
+export function buildSearchParams(query, options = {}) {
+  const params = new URLSearchParams();
+  params.set("q", query);
+
+  if (options.limit) params.set("limit", options.limit);
+  if (options.offset) params.set("offset", options.offset);
+  if (shouldSendSemantic(options.semantic)) params.set("semantic", "1");
+
+  // Comma-separated, the shape the server's parseTagIds expects. Sent in both
+  // modes: semantic search filters by tags now instead of dropping them.
+  if (Array.isArray(options.tags) && options.tags.length > 0) {
+    params.set("tags", options.tags.join(","));
+  }
+
+  return params.toString();
+}

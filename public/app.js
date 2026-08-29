@@ -6,7 +6,7 @@
 // Import services
 import { syncManager } from "./services/sync-manager.js";
 import { liveSync } from "./services/live-sync.js";
-import { shouldSendSemantic } from "./utils/search-mode.js";
+import { buildSearchParams } from "./utils/search-mode.js";
 
 // Import all components
 import "./components/notes-app.js";
@@ -244,15 +244,10 @@ globalThis.NotesApp = {
 
   // Search API
   searchNotes(query, options = {}) {
-    const params = new URLSearchParams();
-    params.set("q", query);
-    if (options.limit) params.set("limit", options.limit);
-    if (options.offset) params.set("offset", options.offset);
-    // Exclusive switch: with the flag set the server does embedding search
-    // only, and applies no tag filters
-    if (shouldSendSemantic(options.semantic)) params.set("semantic", "1");
-
-    return this.request(`/search?${params.toString()}`);
+    // Request shaping lives in utils/search-mode.js so it stays under test.
+    // `options.tags` (tag ids) applies in both modes - semantic search filters
+    // by tags now rather than dropping them.
+    return this.request(`/search?${buildSearchParams(query, options)}`);
   },
 
   getSearchSuggestions(query, limit = 10) {

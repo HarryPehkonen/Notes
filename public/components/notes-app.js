@@ -5,6 +5,7 @@
 
 import { css, html, LitElement } from "lit";
 import { icons } from "../utils/icons.js";
+import { selectedTagIds } from "../utils/tag-filter.js";
 
 class NotesApp extends LitElement {
   static properties = {
@@ -144,7 +145,8 @@ class NotesApp extends LitElement {
     }
 
     @keyframes syncPulse {
-      0%, 100% {
+      0%,
+      100% {
         opacity: 1;
         transform: scale(1);
       }
@@ -1159,9 +1161,10 @@ class NotesApp extends LitElement {
    * tags and/or pinned, plain searchNotes for query-only, and getNotes for
    * tag/pinned filtering with no search text.
    *
-   * Semantic mode short-circuits all of that: it is an exclusive switch, so a
-   * query goes to the embedding search alone and tag/pinned filters do not
-   * apply to it.
+   * Semantic mode short-circuits the text routing - the query goes to the
+   * embedding search alone - but tag filters still apply there: the server
+   * intersects the embedding results with tag membership and reports it back
+   * as meta.tagsApplied. Pinned is the one filter semantic mode still ignores.
    */
   async filterNotes() {
     try {
@@ -1173,9 +1176,11 @@ class NotesApp extends LitElement {
       const hasPinnedFilter = this.pinnedOnly;
 
       if (hasSearchQuery && this.semanticMode) {
-        // Semantic search only - no text search and no filters mixed in
+        // Semantic search: no text search mixed in, but the tag selection is
+        // sent along and genuinely filters the embedding results
         const result = await globalThis.NotesApp.searchNotes(this.searchQuery, {
           semantic: true,
+          tags: selectedTagIds(this.selectedTags),
         });
         this.notes = result.data?.results || [];
         this.hasMore = result.meta?.hasMore || false;
@@ -1240,6 +1245,7 @@ class NotesApp extends LitElement {
       if (hasSearchQuery && this.semanticMode) {
         result = await globalThis.NotesApp.searchNotes(this.searchQuery, {
           semantic: true,
+          tags: selectedTagIds(this.selectedTags),
           offset,
         });
         this.notes = [...this.notes, ...(result.data?.results || [])];
@@ -1678,6 +1684,8 @@ class NotesApp extends LitElement {
                 <span class="crumb">${this._libraryLabel()}</span>
                 <search-bar
                   .query="${this.searchQuery}"
+                  .tags="${this.tags}"
+                  .selectedTags="${this.selectedTags}"
                   @search-query="${(e) => {
                     this.searchQuery = e.detail.query;
                     this.semanticMode = e.detail.semantic === true;
