@@ -28,3 +28,22 @@
 export function resolveSaveContent(textareaValue, editingBuffer, noteContent) {
   return textareaValue ?? editingBuffer ?? noteContent ?? null;
 }
+
+/**
+ * Is this `note` property change the same note being refreshed, rather than a
+ * switch to a different one?
+ *
+ * A save round-trip replaces the note object with the server's copy, which
+ * looks like any other property change to Lit but must not be treated as
+ * navigation: the reader's scroll position, the editing buffer and the change
+ * tracking all stay put across it.
+ *
+ * @param {{id?: unknown}|null|undefined} previousNote
+ * @param {{id?: unknown}|null|undefined} nextNote
+ * @returns {boolean} True only when both notes exist and carry the same id
+ */
+export function isSameNoteUpdate(previousNote, nextNote) {
+  if (!previousNote || !nextNote) return false;
+  if (previousNote.id === undefined || previousNote.id === null) return false;
+  return previousNote.id === nextNote.id;
+}

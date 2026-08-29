@@ -9,7 +9,7 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { icons } from "../utils/icons.js";
 import { parseCheckboxTokens, toggleCheckbox, tokenizeCheckboxes } from "../utils/checkboxes.js";
-import { resolveSaveContent } from "../utils/editor-state.js";
+import { isSameNoteUpdate, resolveSaveContent } from "../utils/editor-state.js";
 
 // Configure marked for safe rendering
 marked.use({
@@ -614,6 +614,7 @@ export class NoteEditor extends LitElement {
     this.restoringVersionId = null;
     this._editingContent = null; // Track textarea content across preview toggles
     this._isSaving = false; // Non-reactive guard against concurrent saves
+    this._scrollTopBeforeUpdate = null; // Canvas position to restore after a re-render
 
     // Store bound handlers to fix memory leak
     this._boundHandleInput = this.handleInputChange.bind(this);
@@ -732,15 +733,33 @@ export class NoteEditor extends LitElement {
     }
   }
 
+  /**
+   * Note where the reader is *before* Lit re-renders. A completed save swaps in
+   * the server's copy of the note, and re-fitting the textarea against it can
+   * clamp .canvas back towards the top; updated() puts the position back.
+   * Only for same-note refreshes -- a genuine note switch gets its own scroll.
+   */
+  willUpdate(changedProperties) {
+    this._scrollTopBeforeUpdate = null;
+    if (
+      changedProperties.has("note") &&
+      isSameNoteUpdate(changedProperties.get("note"), this.note)
+    ) {
+      this._scrollTopBeforeUpdate = this.shadowRoot?.querySelector(".canvas")?.scrollTop ?? null;
+    }
+  }
+
   updated(changedProperties) {
     // Re-fit whenever a different note loads or we come back from preview.
     if (changedProperties.has("note") || changedProperties.has("previewMode")) {
       this._autoGrowTextarea();
     }
 
+    this._restoreCanvasScroll();
+
     if (changedProperties.has("note") && this.note) {
       const prevNote = changedProperties.get("note");
-      const isSameNote = prevNote && prevNote.id === this.note.id;
+      const isSameNote = isSameNoteUpdate(prevNote, this.note);
 
       if (isSameNote) {
         // Same note updated (e.g. after auto-save) — update tracking
@@ -793,13 +812,58 @@ export class NoteEditor extends LitElement {
   /**
    * Size the textarea to its content so .canvas stays the only scroller.
    * Cheap enough to run per keystroke: one forced reflow on a single element.
+   *
+   * Measuring costs a scroll position: collapsing the textarea to `auto`
+   * shortens the document, and .canvas clamps its scrollTop to the shorter
+   * range -- which is what used to throw the reader back to the top of a long
+   * note every time a save landed. So the growing case, where scrollHeight
+   * already reports the full content height, skips the collapse entirely, and
+   * the shrinking case restores the scroller in the same synchronous block,
+   * before the browser gets a chance to paint the collapsed frame.
    */
   _autoGrowTextarea() {
     if (this.previewMode) return;
     const textarea = this.shadowRoot?.querySelector(".content-textarea");
     if (!textarea) return;
+
+    // Content overflows its box: scrollHeight is the exact height we want.
+    if (textarea.scrollHeight > textarea.clientHeight) {
+      textarea.style.height = `${textarea.scrollHeight}px`;
+      return;
+    }
+
+    // Otherwise the box is at least as tall as its content and scrollHeight is
+    // clamped to it, so the natural height can only be had by collapsing.
+    const canvas = this.shadowRoot?.querySelector(".canvas");
+    const scrollTop = canvas?.scrollTop;
     textarea.style.height = "auto";
     textarea.style.height = `${textarea.scrollHeight}px`;
+    if (canvas && scrollTop !== undefined && canvas.scrollTop !== scrollTop) {
+      canvas.scrollTop = scrollTop;
+    }
+  }
+
+  /**
+   * Put .canvas back where willUpdate() found it. Runs after the re-render has
+   * been laid out; the rAF pass covers a height that only settles on the next
+   * frame, and both passes no-op when the position never moved.
+   */
+  _restoreCanvasScroll() {
+    const target = this._scrollTopBeforeUpdate;
+    this._scrollTopBeforeUpdate = null;
+    if (target === null) return;
+
+    const canvas = this.shadowRoot?.querySelector(".canvas");
+    if (!canvas || canvas.scrollTop === target) return;
+    canvas.scrollTop = target;
+
+    const noteId = this.note?.id;
+    requestAnimationFrame(() => {
+      // A note switch in the meantime owns the scroller now -- don't fight it.
+      if (this.note?.id !== noteId) return;
+      const later = this.shadowRoot?.querySelector(".canvas");
+      if (later && later.scrollTop !== target) later.scrollTop = target;
+    });
   }
 
   markAsChanged() {
