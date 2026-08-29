@@ -9,6 +9,7 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { icons } from "../utils/icons.js";
 import { parseCheckboxTokens, toggleCheckbox, tokenizeCheckboxes } from "../utils/checkboxes.js";
+import { resolveSaveContent } from "../utils/editor-state.js";
 
 // Configure marked for safe rendering
 marked.use({
@@ -851,8 +852,16 @@ export class NoteEditor extends LitElement {
     const titleInput = this.shadowRoot.querySelector(".doc-title");
     const contentTextarea = this.shadowRoot.querySelector(".content-textarea");
 
-    const content = contentTextarea?.value ?? this._editingContent;
-    if (content === null || content === undefined) return;
+    // In preview mode there is no textarea, and if the user only clicked a tag
+    // chip there is no editing buffer either -- fall back to the persisted
+    // content so a tag-only change still gets saved instead of leaving the
+    // note stuck on "unsaved" forever.
+    const content = resolveSaveContent(
+      contentTextarea?.value,
+      this._editingContent,
+      this.note.content,
+    );
+    if (content === null) return;
 
     const updates = {
       title: titleInput ? titleInput.value.trim() : this.note.title,

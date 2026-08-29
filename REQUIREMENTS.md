@@ -36,6 +36,7 @@ For developer setup, deployment instructions, and operational details see [READM
 ### Auto-Save & Sync
 
 - **3-second debounce** — auto-save triggers after 3 seconds of inactivity in the editor
+- **Tag-only edits are saved** — toggling a tag chip is a change like any other: it saves even in preview mode, where there is no textarea and no typed content, by carrying the note's persisted content through unchanged. A save is skipped only when there is no content anywhere
 - **SyncManager** — central coordinator that handles all save operations:
   - Saves to IndexedDB immediately (crash protection)
   - Queues network request with retry
