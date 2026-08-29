@@ -9,37 +9,10 @@
 
 import { buildEmbeddingPrompt, EmbeddingError, embedText, toVectorLiteral } from "./embed.js";
 
-/**
- * Parse the `tags` query parameter into tag ids.
- *
- * Same shape as /api/search/advanced accepts: comma-separated ids. Only
- * positive integers survive - anything else (names, zero, negatives,
- * fractions) can never be a tag id, so it is dropped rather than bound into
- * the query. Duplicates collapse, because the filter counts DISTINCT matches
- * and a repeated id would otherwise make it unsatisfiable.
- *
- * Returning an empty array is not the same as "the caller sent junk": the
- * handler distinguishes the two so a malformed filter is a 400 rather than a
- * silently unfiltered result set.
- *
- * @param {unknown} raw - Raw `tags` query parameter, e.g. "3,5"
- * @returns {number[]} Unique positive tag ids, in the order given
- */
-export function parseTagIds(raw) {
-  if (typeof raw !== "string") return [];
-
-  const ids = [];
-  for (const part of raw.split(",")) {
-    const trimmed = part.trim();
-    if (trimmed.length === 0) continue;
-
-    const id = Number(trimmed);
-    if (!Number.isInteger(id) || id <= 0) continue;
-    if (!ids.includes(id)) ids.push(id);
-  }
-
-  return ids;
-}
+// The `tags` parsing is shared with the notes list and advanced search, so it
+// lives in tag-filter.js; re-exported here because callers (and their tests)
+// already reach for it through the semantic module.
+export { parseTagIds } from "./tag-filter.js";
 
 /**
  * Build the nearest-neighbour SQL, optionally narrowed to a tag selection.
