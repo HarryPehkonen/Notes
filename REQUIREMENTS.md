@@ -73,13 +73,15 @@ For developer setup, deployment instructions, and operational details see [READM
 - **Keyboard navigation** — Arrow Up/Down to select suggestions, Enter to apply, Escape to dismiss
 - **Keyboard shortcut** — Ctrl/Cmd+K focuses the search bar from anywhere
 - **Debounced input** — 150ms debounce on search input to avoid excessive API calls
-- **Advanced search** — POST endpoint combining text query, tag IDs, date range, and pinned filter
+- **Advanced search** — POST endpoint combining text query, required/excluded tag IDs, date range, and pinned filter
 
 ### Tag System
 
 - **CRUD operations** — create, rename, recolor, and delete tags
 - **Hex color picker** — each tag has a user-chosen `#RRGGBB` color
-- **AND filtering** — selecting multiple tags shows notes that have ALL selected tags
+- **Tri-state filtering** — each tag is *any* (not filtered on), *required*, or *excluded*; clicking a tag cycles any → required → excluded → any, in the search-bar picker, on the chips, and in the sidebar tag list
+- **AND filtering** — a note must carry ALL required tags and NONE of the excluded tags
+- **State is visible, not inferred** — required renders as a filled primary chip marked `✓`, excluded as an outlined error-coloured chip marked `≠` with the name struck through, and both spell the state out in words; the picker carries a legend for the cycle
 - **Usage counts** — tag list shows note count per tag (excluding archived notes)
 - **Lowercase normalization** — tag names are lowercased on creation
 - **Unique constraint** — per-user tag names are unique (enforced at database level)
@@ -178,6 +180,7 @@ For developer setup, deployment instructions, and operational details see [READM
 
 - **Purpose**: Root component orchestrating all child components and managing global state
 - **State**: `notes`, `tags`, `currentNote`, `searchQuery`, `selectedTags`, `loading`, `viewMode` (list/edit/search), `sidebarOpen`, `pendingSyncCount`, `syncStatus`
+- **`selectedTags` shape**: tag objects carrying a `filterState` of `"required"` or `"excluded"`; a tag absent from the array is *any*. An entry with no `filterState` counts as required, so a selection from an older client still means what it used to. Selection logic is pure and unit-tested in `public/utils/tag-filter.js`
 - **Layout**:
   - **Desktop**: sidebar (280px) + main content area with top bar
   - **Mobile**: full-width main content with hamburger menu toggle; sidebar as drawer overlay (240px)
@@ -237,7 +240,7 @@ For developer setup, deployment instructions, and operational details see [READM
 - **Purpose**: CRUD for tags and tag-based filtering
 - **Layout**: vertical list of tag items with "All Notes" option at top
 - **Tag items**: color dot, name, usage count, edit/delete buttons (visible on hover)
-- **Selection**: click to toggle; selected tags shown with primary color background
+- **Selection**: click cycles any → required → excluded → any (same three states, and the same `selectedTags` array, as the search bar); required rows are filled with the primary color and marked `✓`, excluded rows are outlined in the error color, struck through and marked `≠`, and both name their state in words
 - **Create/Edit form**: inline form with name input, color picker, save/cancel buttons
 - **"Add Tag" button**: dashed-border button at bottom of list
 - **Empty state**: "No tags yet. Create your first tag!"
@@ -285,7 +288,7 @@ Key custom events:
 - `note-selected` — user clicks a note in list → root loads editor
 - `note-created` / `note-updated` / `note-deleted` — CRUD outcomes → root updates state
 - `search-query` — search input changes → root triggers search/filter
-- `tags-selected` — tag filter changes → root switches to list view and filters
+- `tags-selected` — tag filter changes → root switches to list view and filters; detail is `{ tags, requiredTagIds, excludedTagIds }`
 - `tag-created` / `tag-updated` / `tag-deleted` — tag CRUD → root updates tags array
 - `close-editor` — editor close button → root switches to list view
 - Document-level: `focus-search`, `new-note`, `escape-pressed`, `show-toast`
@@ -459,16 +462,26 @@ POST /auth/logout    → 200 { success: true, redirectTo: "/" }
 
 **List notes**
 ```
-GET /api/notes?limit=20&offset=0&tags=1,2,3&search=query&pinned=true&archived=true
+GET /api/notes?limit=20&offset=0&tags=1,2,3&exclude_tags=4,5&search=query&pinned=true&archived=true
 → 200 {
     success: true,
     data: { notes: [ { id, user_id, title, content, content_plain, is_pinned, is_archived,
               created_at, updated_at, tags: [{id, name, color}] } ] },
-    meta: { limit, offset, hasMore }
+    meta: { limit, offset, hasMore, tags, excludeTags, tagsApplied, excludeTagsApplied }
   }
+→ 400 { success: false, error: "Invalid tags parameter" }
 ```
 
 When `archived=true`, returns only archived notes. Otherwise returns only non-archived notes (default).
+
+**Tag filter wire format** (identical on every endpoint that filters by tags):
+
+| Parameter | Meaning |
+|-----------|---------|
+| `tags` | Comma-separated tag IDs the note must ALL carry (required) |
+| `exclude_tags` | Comma-separated tag IDs the note must NOT carry — one match drops the note |
+
+Both may appear in one request. Only positive integers are accepted; duplicates collapse. A non-empty parameter with no usable ID is a `400`, never a silently unfiltered result set — answering it without the filter would show exactly the notes the caller asked to hide. `meta.tagsApplied` / `meta.excludeTagsApplied` report what actually reached the query.
 
 **Get single note**
 ```
@@ -565,6 +578,8 @@ GET /api/search?q=query&limit=20&offset=0
 
 Supports `#tagname` prefix to search by tag instead of content.
 
+The `tags` / `exclude_tags` parameters apply in **semantic** mode (`GET /api/search?q=...&semantic=1&tags=3&exclude_tags=4`), where they narrow the embedding results without touching their ranking. The text path ignores them: text search combined with a tag filter goes to `POST /api/search/advanced`, which is where the client sends it.
+
 **Search suggestions**
 ```
 GET /api/search/suggestions?q=query&limit=10
@@ -583,11 +598,14 @@ GET /api/search/recent?limit=10
 **Advanced search**
 ```
 POST /api/search/advanced
-Body: { query?, tags?: number[], dateFrom?, dateTo?, isPinned?: boolean, limit?: 20, offset?: 0 }
-→ 200 { success: true, data: { criteria, results: [...] }, meta: {total, limit, offset, hasMore} }
+Body: { query?, tags?: number[], excludeTags?: number[], dateFrom?, dateTo?, isPinned?: boolean,
+        limit?: 20, offset?: 0 }
+→ 200 { success: true, data: { criteria, results: [...] },
+        meta: {total, limit, offset, hasMore, tags, excludeTags, tagsApplied, excludeTagsApplied} }
+→ 400 { success: false, error: "Invalid tags parameter" }
 ```
 
-Tags parameter accepts tag IDs (integers), consistent with `GET /api/notes?tags=1,2,3`.
+`tags` / `excludeTags` accept tag IDs (integers) as JSON arrays — the same required/excluded semantics as `GET /api/notes?tags=1,2,3&exclude_tags=4,5`, spelled camelCase to match the rest of this body.
 
 ### Images
 

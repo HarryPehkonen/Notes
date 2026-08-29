@@ -238,17 +238,27 @@ The application supports **three types of filtering** that can be combined:
    - Results include highlighted snippets using `ts_headline()`
    - Search is case-insensitive and handles partial words
 
-2. **Tag filtering** (`/api/notes?tags=1,2,3`)
+2. **Tri-state tag filtering** (`/api/notes?tags=1,2,3&exclude_tags=4,5`)
    - Many-to-many relationship via `note_tags` junction table
-   - Multiple tags use AND logic (note must have ALL selected tags)
-   - Efficient JOIN queries at database level
+   - Each tag is in one of three states: **any** (not filtered on), **required**
+     (`tags`) or **excluded** (`exclude_tags`)
+   - Required tags use AND logic (note must have ALL of them); excluded tags drop
+     a note that carries ANY of them. Both may be present in one query
+   - Efficient JOIN queries at database level; the SQL fragment is built once in
+     `server/api/tag-filter.js` (`buildTagFilterClause`) and shared by the notes
+     list, advanced search and semantic search so they cannot drift apart
    - **UI**: selection lives at the search bar - a labeled "Tags (n)" button opens
      a filterable, scrolling picker (dropdown on desktop, bottom sheet on mobile),
-     and the selected tags render as removable chips under the search input. The
+     and the selected tags render as chips under the search input. A click cycles
+     any → required → excluded → any on picker rows, chips and sidebar rows alike;
+     the chip's "x" takes the tag out of the filter entirely. The
      sidebar/flyout `tag-manager` still manages tags and shares the same
      `notes-app.selectedTags` state, so both surfaces stay in sync.
-   - Selection logic is pure and unit-tested in `public/utils/tag-filter.js`;
-     the search request shape (including `tags`) is in `public/utils/search-mode.js`
+   - `selectedTags` entries carry a `filterState` (`"required"` / `"excluded"`);
+     an entry with none counts as required
+   - Selection logic is pure and unit-tested in `public/utils/tag-filter.js`; the
+     request shapes are in `public/utils/search-mode.js` (search) and
+     `public/utils/notes-query.js` (the tag-only list)
 
 3. **Status filtering** (`/api/notes?pinned=true`)
    - Filter by pinned status
@@ -474,7 +484,9 @@ POST   /api/notes/:id/restore/:versionId # Restore version
 
 - `limit` - Number of results (default: 50)
 - `offset` - Pagination offset (default: 0)
-- `tags` - Comma-separated tag IDs (e.g., `tags=1,2,3`)
+- `tags` - Comma-separated tag IDs a note must ALL carry (e.g., `tags=1,2,3`)
+- `exclude_tags` - Comma-separated tag IDs a note must NOT carry (e.g., `exclude_tags=4,5`);
+  a non-empty `tags`/`exclude_tags` with no usable ID is a 400, never an unfiltered list
 - `search` - Search query string
 - `pinned` - Filter by pinned status (`true`/`false`)
 - `archived` - Include archived notes (`true`/`false`)
@@ -500,19 +512,25 @@ POST   /api/notes/:id/restore/:versionId # Restore version
 ```http
 GET  /api/search?q=query                    # Full-text search
 GET  /api/search?q=query&semantic=1         # Embedding (semantic) search
-GET  /api/search?q=query&semantic=1&tags=3,5  # Semantic search, tag-filtered
+GET  /api/search?q=query&semantic=1&tags=3,5&exclude_tags=9  # Semantic, tag-filtered
 ```
 
 Response includes highlighted snippets and relevance ranking.
 
-**`tags` (semantic mode)**: comma-separated tag IDs, same shape as
-`/api/search/advanced`. Tags are AND-ed - a result must carry ALL of them. The
-embedding distance stays the only sort key, so results are (tag-filtered,
-similarity-ranked). `meta.tagsApplied` and `meta.tags` echo back what was
-actually applied. A non-empty `tags` with no usable ID is a 400, never a
+**`tags` / `exclude_tags` (semantic mode)**: comma-separated tag IDs, same shape
+as `/api/notes` (and as `tags`/`excludeTags` in the `/api/search/advanced` JSON
+body). Required tags are AND-ed - a result must carry ALL of them - and excluded
+tags drop any result carrying one. The embedding distance stays the only sort
+key, so results are (tag-filtered, similarity-ranked). `meta.tagsApplied`,
+`meta.tags`, `meta.excludeTagsApplied` and `meta.excludeTags` echo back what was
+actually applied. A non-empty tag parameter with no usable ID is a 400, never a
 silently unfiltered result set. Note this is separate from `#tag` tokens inside
 `q`, which semantic mode still does not resolve (the raw query is embedded
 as-is).
+
+The **text** path of `GET /api/search` ignores both parameters: text search
+combined with a tag filter goes to `POST /api/search/advanced`
+(`{ query, tags, excludeTags, ... }`), which is where the client sends it.
 
 ### Tags Endpoints
 
