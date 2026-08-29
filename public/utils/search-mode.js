@@ -24,15 +24,16 @@ export function shouldSendSemantic(checkboxState) {
  * Build the query string for GET /api/search.
  *
  * Shaping the request here rather than in the API client keeps the wire
- * format - including the `tags` filter the semantic path now honours - under
- * test without a network or a DOM.
+ * format - including the tri-state tag filter the semantic path honours -
+ * under test without a network or a DOM.
  *
  * @param {string} query - Raw search text
  * @param {Object} [options] - Request options
  * @param {number} [options.limit] - Max results
  * @param {number} [options.offset] - Pagination offset
  * @param {unknown} [options.semantic] - Semantic checkbox state
- * @param {number[]} [options.tags] - Selected tag ids
+ * @param {number[]} [options.tags] - Tag ids a note must carry
+ * @param {number[]} [options.excludeTags] - Tag ids a note must not carry
  * @returns {string} Encoded query string, without the leading "?"
  */
 export function buildSearchParams(query, options = {}) {
@@ -43,10 +44,16 @@ export function buildSearchParams(query, options = {}) {
   if (options.offset) params.set("offset", options.offset);
   if (shouldSendSemantic(options.semantic)) params.set("semantic", "1");
 
-  // Comma-separated, the shape the server's parseTagIds expects. Sent in both
-  // modes: semantic search filters by tags now instead of dropping them.
+  // Comma-separated, the shape the server's parseTagFilterParams expects. Sent
+  // in both modes: semantic search filters by tags now instead of dropping
+  // them. The two parameters carry the sign - `tags` a note must have,
+  // `exclude_tags` it must not.
   if (Array.isArray(options.tags) && options.tags.length > 0) {
     params.set("tags", options.tags.join(","));
+  }
+
+  if (Array.isArray(options.excludeTags) && options.excludeTags.length > 0) {
+    params.set("exclude_tags", options.excludeTags.join(","));
   }
 
   return params.toString();

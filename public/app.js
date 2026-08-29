@@ -7,6 +7,7 @@
 import { syncManager } from "./services/sync-manager.js";
 import { liveSync } from "./services/live-sync.js";
 import { buildSearchParams } from "./utils/search-mode.js";
+import { buildNotesParams } from "./utils/notes-query.js";
 
 // Import all components
 import "./components/notes-app.js";
@@ -106,14 +107,9 @@ globalThis.NotesApp = {
 
   // Notes API
   getNotes(options = {}) {
-    const params = new URLSearchParams();
-    if (options.limit) params.set("limit", options.limit);
-    if (options.offset) params.set("offset", options.offset);
-    if (options.tags?.length) params.set("tags", options.tags.join(","));
-    if (options.search) params.set("search", options.search);
-    if (options.pinned !== undefined) params.set("pinned", options.pinned);
-
-    const queryString = params.toString();
+    // Request shaping lives in utils/notes-query.js so the wire format - both
+    // signs of the tag filter included - stays under test.
+    const queryString = buildNotesParams(options);
     const endpoint = `/notes${queryString ? `?${queryString}` : ""}`;
 
     return this.request(endpoint);
@@ -245,8 +241,8 @@ globalThis.NotesApp = {
   // Search API
   searchNotes(query, options = {}) {
     // Request shaping lives in utils/search-mode.js so it stays under test.
-    // `options.tags` (tag ids) applies in both modes - semantic search filters
-    // by tags now rather than dropping them.
+    // `options.tags` / `options.excludeTags` apply in both modes - semantic
+    // search filters by tags now rather than dropping them.
     return this.request(`/search?${buildSearchParams(query, options)}`);
   },
 

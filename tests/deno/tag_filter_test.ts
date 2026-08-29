@@ -21,6 +21,7 @@ import {
   tagStateMeta,
 } from "../../public/utils/tag-filter.js";
 import { buildSearchParams } from "../../public/utils/search-mode.js";
+import { buildNotesParams } from "../../public/utils/notes-query.js";
 
 const home = { id: 3, name: "home", color: "#667eea" };
 const work = { id: 5, name: "work", color: "#f59e0b" };
@@ -300,6 +301,61 @@ Deno.test("buildSearchParams: tags apply in semantic mode too - that is the whol
 Deno.test("buildSearchParams: an empty or missing tag selection sends no `tags` param", () => {
   assert(!buildSearchParams("led", { tags: [] }).includes("tags"));
   assert(!buildSearchParams("led", {}).includes("tags"));
+});
+
+Deno.test("buildSearchParams: excluded tags travel as `exclude_tags`", () => {
+  assertEquals(
+    decodeURIComponent(buildSearchParams("led", { excludeTags: [4, 9] })),
+    "q=led&exclude_tags=4,9",
+  );
+});
+
+Deno.test("buildSearchParams: required and excluded tags ride along together", () => {
+  assertEquals(
+    decodeURIComponent(buildSearchParams("led", { semantic: true, tags: [3], excludeTags: [4] })),
+    "q=led&semantic=1&tags=3&exclude_tags=4",
+  );
+});
+
+Deno.test("buildSearchParams: an empty exclusion list sends no `exclude_tags` param", () => {
+  assert(!buildSearchParams("led", { excludeTags: [] }).includes("exclude_tags"));
+  assert(!buildSearchParams("led", {}).includes("exclude_tags"));
+});
+
+// buildNotesParams - the tag-only list, where there is no text query at all
+
+Deno.test("buildNotesParams: no options means no query string", () => {
+  assertEquals(buildNotesParams({}), "");
+  assertEquals(buildNotesParams(), "");
+});
+
+Deno.test("buildNotesParams: required tags become `tags`", () => {
+  assertEquals(decodeURIComponent(buildNotesParams({ tags: [3, 5] })), "tags=3,5");
+});
+
+Deno.test("buildNotesParams: excluded tags become `exclude_tags`", () => {
+  assertEquals(decodeURIComponent(buildNotesParams({ excludeTags: [4] })), "exclude_tags=4");
+});
+
+Deno.test("buildNotesParams: an exclusion-only filter is a real filter, not an empty one", () => {
+  assert(buildNotesParams({ excludeTags: [4] }).length > 0);
+});
+
+Deno.test("buildNotesParams: tags, exclusions, pinned and paging combine", () => {
+  assertEquals(
+    decodeURIComponent(buildNotesParams({
+      tags: [3],
+      excludeTags: [4],
+      pinned: true,
+      limit: 20,
+      offset: 40,
+    })),
+    "limit=20&offset=40&tags=3&exclude_tags=4&pinned=true",
+  );
+});
+
+Deno.test("buildNotesParams: empty tag lists are left out entirely", () => {
+  assertEquals(buildNotesParams({ tags: [], excludeTags: [] }), "");
 });
 
 Deno.test("buildSearchParams: the query is encoded, not concatenated raw", () => {
