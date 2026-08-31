@@ -735,6 +735,47 @@ class NotesApp extends LitElement {
         opacity: 1;
       }
     }
+    /* ---------- Print ----------
+    *
+    * The shell is a fixed-height, overflow-hidden frame with its own inner
+    * scrollers, which on paper means everything past the bottom of page one
+    * is simply cut off. Undo the viewport sizing and hide every navigation
+    * surface; what reaches the paper is the note itself, styled by
+    * note-editor's own print rules.
+    */
+    @media print {
+      :host {
+        height: auto;
+        overflow: visible;
+      }
+
+      .app-layout {
+        display: block;
+        height: auto;
+        background: none;
+      }
+
+      .drawer,
+      .drawer-overlay,
+      .rail,
+      .libbar,
+      .flyout,
+      .flyout-scrim,
+      .popover-scrim,
+      .user-popover,
+      .loading-overlay,
+      .toast-container {
+        display: none !important;
+      }
+
+      .main-content,
+      .content-area {
+        display: block;
+        height: auto;
+        overflow: visible;
+      }
+    }
+
   `;
 
   constructor() {

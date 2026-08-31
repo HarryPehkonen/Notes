@@ -10,6 +10,7 @@ import DOMPurify from "dompurify";
 import { icons } from "../utils/icons.js";
 import { parseCheckboxTokens, toggleCheckbox, tokenizeCheckboxes } from "../utils/checkboxes.js";
 import { isSameNoteUpdate, resolveSaveContent } from "../utils/editor-state.js";
+import { checkboxesToPrintGlyphs, printDocumentTitle } from "../utils/print.js";
 
 // Configure marked for safe rendering
 marked.use({
@@ -32,6 +33,7 @@ export class NoteEditor extends LitElement {
     versions: { type: Array },
     loadingVersions: { type: Boolean },
     restoringVersionId: { type: Number },
+    printing: { type: Boolean },
   };
 
   static styles = css`
@@ -103,6 +105,42 @@ export class NoteEditor extends LitElement {
 
     .icon-btn.uploading {
       color: var(--info);
+    }
+
+    /* A labeled button, for actions whose icon alone would be a guess. */
+    .text-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      height: 40px;
+      padding: 0 0.7rem;
+      border: 1px solid var(--gray-200);
+      background: var(--white);
+      border-radius: 8px;
+      color: var(--gray-700);
+      font-family: inherit;
+      font-size: 0.85rem;
+      white-space: nowrap;
+      cursor: pointer;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .text-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    @media (hover: hover) {
+      .text-btn:hover {
+        background: var(--gray-100);
+        color: var(--gray-900);
+      }
+    }
+
+    .text-btn:active {
+      background: var(--gray-200);
+      color: var(--gray-900);
     }
 
     .crumb {
@@ -520,6 +558,11 @@ export class NoteEditor extends LitElement {
       font-style: italic;
     }
 
+    /* Only ever visible on paper - see the @media print block below. */
+    .print-doc {
+      display: none;
+    }
+
     @media (max-width: 768px) {
       .topbar {
         padding: 0.35rem 0.4rem;
@@ -567,11 +610,17 @@ export class NoteEditor extends LitElement {
         min-height: 44px;
       }
 
-      /* The save pill is the only flexible item in the toolbar, so the five
+      /* The save pill is the only flexible item in the toolbar, so the
         buttons keep their full 44px even at 320px and the pill absorbs it. */
       .icon-btn {
         width: 44px;
         height: 44px;
+      }
+
+      /* The label stays: an unlabeled printer glyph is a guess. */
+      .text-btn {
+        height: 44px;
+        padding: 0 0.55rem;
       }
 
       .tag-chip {
@@ -586,6 +635,10 @@ export class NoteEditor extends LitElement {
         height: 44px;
       }
 
+      .text-btn {
+        height: 44px;
+      }
+
       .tag-chip {
         min-height: 36px;
         padding: 0.35rem 0.8rem;
@@ -593,6 +646,186 @@ export class NoteEditor extends LitElement {
 
       .history-restore-btn {
         min-height: 40px;
+      }
+    }
+
+    /* ---------- Print ----------
+    *
+    * On paper the app stops being an app: every control is hidden and what
+    * is left is the note itself, rendered (never the raw textarea) and set
+    * in the same serif the preview already uses for headings.
+    *
+    * The .print-doc element is only in the DOM while a print is in flight -
+    * see _enterPrintView() - so none of this can affect the screen.
+    *
+    * The page gutter is padding here rather than an @page margin: the
+    * zero margin (in app.css, since a shadow root cannot set page context)
+    * is what leaves Chrome's URL/date/page-number line nowhere to draw.
+    * That line is still the browser's to decide - unchecking "Headers and
+    * footers" in the print dialog is the user's switch, not ours.
+    */
+    @media print {
+      :host {
+        height: auto;
+        background: var(--white);
+      }
+
+      .editor-container {
+        display: block;
+        height: auto;
+      }
+
+      /* Every screen-only surface: the toolbar and its history panel, and
+        the whole editable canvas - title input, metadata, tag chips and
+        the textarea/preview body. */
+      .topbar,
+      .history-scrim,
+      .history-panel,
+      .canvas {
+        display: none !important;
+      }
+
+      .print-doc {
+        display: block;
+        padding: 16mm 18mm;
+        color: #000;
+        background: none;
+      }
+
+      .print-title {
+        font-family: var(--font-serif);
+        font-size: 20pt;
+        font-weight: 400;
+        line-height: 1.25;
+        margin: 0 0 6mm;
+        padding-bottom: 3mm;
+        border-bottom: 0.5pt solid #999;
+      }
+
+      .print-doc .markdown-preview {
+        min-height: 0;
+        font-family: var(--font-serif);
+        font-size: 11pt;
+        line-height: 1.5;
+        color: #000;
+      }
+
+      .print-doc h1,
+      .print-doc h2,
+      .print-doc h3 {
+        color: #000;
+        /* A heading alone at the foot of a page reads as a mistake. */
+        break-after: avoid;
+        page-break-after: avoid;
+      }
+
+      .print-doc h1 {
+        font-size: 15pt;
+        margin: 6mm 0 3mm;
+        padding-bottom: 1.5mm;
+        border-bottom: 0.5pt solid #bbb;
+      }
+
+      .print-doc h2 {
+        font-size: 13pt;
+        margin: 5mm 0 2.5mm;
+      }
+
+      .print-doc h3 {
+        font-size: 11.5pt;
+        margin: 4mm 0 2mm;
+      }
+
+      .print-doc p,
+      .print-doc ul,
+      .print-doc ol {
+        margin: 0 0 3mm;
+        orphans: 2;
+        widows: 2;
+      }
+
+      .print-doc li {
+        margin: 0 0 1mm;
+      }
+
+      /* Ink, not screen: no fills, no hover tints, no accent colors. */
+      .print-doc a {
+        color: #000;
+        text-decoration: underline;
+      }
+
+      .print-doc code {
+        background: none;
+        border: 0.5pt solid #bbb;
+        border-radius: 0;
+        font-size: 9.5pt;
+      }
+
+      .print-doc pre {
+        background: none;
+        border: 0.5pt solid #bbb;
+        border-radius: 0;
+        padding: 3mm;
+        /* A code block cannot scroll on paper, and splitting one across a
+          page break makes it unreadable. */
+        overflow: visible;
+        white-space: pre-wrap;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .print-doc pre code {
+        border: none;
+        font-size: 9pt;
+      }
+
+      .print-doc blockquote {
+        background: none;
+        border-left: 1pt solid #666;
+        color: #000;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .print-doc hr {
+        border-top: 0.5pt solid #999;
+        margin: 5mm 0;
+      }
+
+      .print-doc table {
+        display: table;
+        width: 100%;
+        overflow: visible;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .print-doc th,
+      .print-doc td {
+        border: 0.5pt solid #999;
+        padding: 1.5mm 2mm;
+      }
+
+      .print-doc th {
+        background: none;
+      }
+
+      .print-doc img {
+        max-width: 100%;
+        border-radius: 0;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      /* Checkboxes come through as [x] / [ ] text (checkboxesToPrintGlyphs),
+        so there is no tappable control left to tint or size. */
+      .print-checkbox {
+        font-family: var(--font-mono);
+        margin-right: 0.35em;
+      }
+
+      .print-doc .empty-preview {
+        color: #555;
       }
     }
   `;
@@ -612,6 +845,7 @@ export class NoteEditor extends LitElement {
     this.versions = [];
     this.loadingVersions = false;
     this.restoringVersionId = null;
+    this.printing = false;
     this._editingContent = null; // Track textarea content across preview toggles
     this._isSaving = false; // Non-reactive guard against concurrent saves
     this._scrollTopBeforeUpdate = null; // Canvas position to restore after a re-render
@@ -625,6 +859,9 @@ export class NoteEditor extends LitElement {
     this._boundHandleSyncPending = this._handleSyncPending.bind(this);
     this._boundHandleDraftSaved = this._handleDraftSaved.bind(this);
     this._boundHandlePaste = this._handlePaste.bind(this);
+    this._boundHandleBeforePrint = this._handleBeforePrint.bind(this);
+    this._boundHandleAfterPrint = this._handleAfterPrint.bind(this);
+    this._titleBeforePrint = null; // document.title to put back after printing
   }
 
   connectedCallback() {
@@ -636,6 +873,7 @@ export class NoteEditor extends LitElement {
     this._setupSyncListeners();
     this._checkForDraft();
     this._setupPasteListener();
+    this._setupPrintListeners();
   }
 
   disconnectedCallback() {
@@ -643,6 +881,8 @@ export class NoteEditor extends LitElement {
     this.clearAutoSaveTimer();
     this._removeSyncListeners();
     this._removePasteListener();
+    this._removePrintListeners();
+    this._exitPrintView();
   }
 
   /**
@@ -1150,6 +1390,79 @@ export class NoteEditor extends LitElement {
     this.removeEventListener("paste", this._boundHandlePaste);
   }
 
+  _setupPrintListeners() {
+    globalThis.addEventListener("beforeprint", this._boundHandleBeforePrint);
+    globalThis.addEventListener("afterprint", this._boundHandleAfterPrint);
+  }
+
+  _removePrintListeners() {
+    globalThis.removeEventListener("beforeprint", this._boundHandleBeforePrint);
+    globalThis.removeEventListener("afterprint", this._boundHandleAfterPrint);
+  }
+
+  /**
+   * Swap in the printable rendering of the note (see the @media print block).
+   *
+   * It is rendered only while a print is in flight rather than kept hidden in
+   * the DOM, so typing a note does not re-render its markdown twice per
+   * keystroke. `document.title` carries the note's title for the duration
+   * because that is what browsers offer as the "Save as PDF" filename.
+   */
+  _enterPrintView() {
+    if (this.printing) return;
+    this._titleBeforePrint = document.title;
+    document.title = this._printTitle();
+    this.printing = true;
+  }
+
+  /**
+   * The note's title as it stands on screen, so a title typed but not yet
+   * saved still prints. Same precedence autoSave() uses: input, then note.
+   * @returns {string} A non-empty title, falling back to a placeholder
+   */
+  _printTitle() {
+    const titleInput = this.shadowRoot?.querySelector(".doc-title");
+    return printDocumentTitle({ title: titleInput?.value ?? this.note?.title });
+  }
+
+  /** Undo _enterPrintView(). Safe to call when no print is in flight. */
+  _exitPrintView() {
+    if (!this.printing) return;
+    this.printing = false;
+    if (this._titleBeforePrint !== null) {
+      document.title = this._titleBeforePrint;
+      this._titleBeforePrint = null;
+    }
+  }
+
+  /**
+   * The browser's own Print command (Ctrl+P, or the app menu). Lit renders on
+   * a microtask, which is too late for a print that has already begun, so the
+   * print view is flushed synchronously here.
+   */
+  _handleBeforePrint() {
+    this._enterPrintView();
+    this.performUpdate();
+  }
+
+  _handleAfterPrint() {
+    this._exitPrintView();
+  }
+
+  /**
+   * Print button. beforeprint would normally do the preparation, but not
+   * every browser fires it, so this path prepares the view itself - both
+   * are idempotent.
+   */
+  async handlePrint() {
+    this._enterPrintView();
+    await this.updateComplete;
+    globalThis.print();
+    // print() blocks until the dialog is dismissed, so by here the job is
+    // done; afterprint may have restored the view already, which is fine.
+    this._exitPrintView();
+  }
+
   /**
    * Handle paste events to detect image content
    */
@@ -1391,6 +1704,13 @@ export class NoteEditor extends LitElement {
             ${icons.clock}
           </button>
           <button
+            class="text-btn"
+            @click="${this.handlePrint}"
+            title="Print or save as PDF - uncheck 'Headers and footers' in the print dialog for a clean page"
+          >
+            ${icons.printer}<span>Print</span>
+          </button>
+          <button
             class="icon-btn"
             @click="${() => this.togglePreviewMode(!this.previewMode)}"
             title="${this.previewMode ? "Back to editing" : "Preview"}"
@@ -1457,6 +1777,26 @@ export class NoteEditor extends LitElement {
                 `}
             </div>
           </div>
+        </div>
+
+        ${this.printing ? this._renderPrintDoc() : ""}
+      </div>
+    `;
+  }
+
+  /**
+   * The note as it goes on paper: its title and the rendered markdown, with
+   * the tappable checkboxes turned into text. Everything else - the toolbar,
+   * the title input, the metadata line, the tag chips - is hidden by the
+   * @media print styles.
+   */
+  _renderPrintDoc() {
+    const rendered = this.renderMarkdown(this.getMarkdownContent());
+    return html`
+      <div class="print-doc">
+        <h1 class="print-title">${this._printTitle()}</h1>
+        <div class="markdown-preview">
+          ${unsafeHTML(checkboxesToPrintGlyphs(rendered))}
         </div>
       </div>
     `;

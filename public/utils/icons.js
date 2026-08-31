@@ -115,6 +115,11 @@ export const icons = {
     <path d="M8.2 12h7.2" />
     <path d="M8.2 15.3h7.2" />
   `),
+  printer: stroke(svg`
+    <path d="M7 9V4.2h10V9" />
+    <path d="M7 17H5.2A1.2 1.2 0 0 1 4 15.8v-5.6A1.2 1.2 0 0 1 5.2 9h13.6A1.2 1.2 0 0 1 20 10.2v5.6a1.2 1.2 0 0 1-1.2 1.2H17" />
+    <path d="M7 14h10v5.8H7Z" />
+  `),
   logout: stroke(svg`
     <path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3" />
     <path d="M15 16l4-4-4-4" />
