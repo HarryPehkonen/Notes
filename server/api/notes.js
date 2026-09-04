@@ -7,6 +7,7 @@ import { Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { broadcastToUser } from "../services/ws-connections.js";
 import { queueNoteEmbedding } from "./semantic.js";
 import { parseTagFilterParams } from "./tag-filter.js";
+import { normalizeNoteFields } from "./note-fields.js";
 
 /**
  * Extract image filenames from note content
@@ -241,10 +242,12 @@ export function createNotesRouter() {
         return;
       }
 
+      const fields = normalizeNoteFields({ title, content });
+
       const note = await db.createNote({
         userId: user.id,
-        title: title.trim(),
-        content: content.trim(),
+        title: fields.title,
+        content: fields.content,
         tags: Array.isArray(tags) ? tags : [],
       });
 
@@ -331,8 +334,9 @@ export function createNotesRouter() {
       const oldContent = existingNote.rows[0].content;
 
       const updates = {};
-      if (title !== undefined) updates.title = title.trim();
-      if (content !== undefined) updates.content = content.trim();
+      const fields = normalizeNoteFields({ title, content });
+      if (fields.title !== undefined) updates.title = fields.title;
+      if (fields.content !== undefined) updates.content = fields.content;
       if (tags !== undefined) updates.tags = Array.isArray(tags) ? tags : [];
       if (is_pinned !== undefined) updates.is_pinned = Boolean(is_pinned);
       if (is_archived !== undefined) updates.is_archived = Boolean(is_archived);
