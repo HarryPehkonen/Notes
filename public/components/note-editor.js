@@ -11,11 +11,15 @@ import { icons } from "../utils/icons.js";
 import { parseCheckboxTokens, toggleCheckbox, tokenizeCheckboxes } from "../utils/checkboxes.js";
 import { isSameNoteUpdate, resolveSaveContent } from "../utils/editor-state.js";
 import { checkboxesToPrintGlyphs, printDocumentTitle } from "../utils/print.js";
+import { createInertHtmlRenderer } from "../utils/inert-html.js";
 
-// Configure marked for safe rendering
+// Configure marked for safe rendering. Raw HTML typed into a note is shown
+// as inert literal text, never interpreted (audit #10); DOMPurify below
+// stays as a second layer behind that.
 marked.use({
   breaks: true, // Convert \n to <br>
   gfm: true, // GitHub Flavored Markdown
+  renderer: createInertHtmlRenderer(),
 });
 
 export class NoteEditor extends LitElement {
@@ -212,7 +216,8 @@ export class NoteEditor extends LitElement {
     }
 
     @keyframes pulse {
-      0%, 100% {
+      0%,
+      100% {
         opacity: 1;
       }
       50% {
@@ -466,7 +471,8 @@ export class NoteEditor extends LitElement {
       margin: 0.75rem 0;
     }
 
-    .markdown-preview ul, .markdown-preview ol {
+    .markdown-preview ul,
+    .markdown-preview ol {
       margin: 0.75rem 0;
       padding-left: 1.5rem;
     }
@@ -542,7 +548,8 @@ export class NoteEditor extends LitElement {
       margin: 1rem 0;
     }
 
-    .markdown-preview th, .markdown-preview td {
+    .markdown-preview th,
+    .markdown-preview td {
       border: 1px solid var(--gray-300);
       padding: 0.5rem;
       text-align: left;

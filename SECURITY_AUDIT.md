@@ -83,13 +83,23 @@ Lit, marked, and DOMPurify are loaded from jsdelivr.net without SRI hashes
 malicious code. Mitigated by the in-app CSP (script-src allows only
 cdn.jsdelivr.net + self + nonce). Self-hosting would eliminate this risk.
 
-### #10 - DOMPurify allows style, form, input
+### #10 - DOMPurify allows style, form, input — RESOLVED (stronger policy)
 
-**File:** `public/components/note-editor.js:1088`
+**File:** `public/utils/inert-html.js`, `public/components/note-editor.js`
 
-Default DOMPurify config allows `<style>`, `<form>`, `<input>` in Markdown
-preview. Currently self-XSS only (single-user notes); would be critical if
-note sharing is ever added.
+Default DOMPurify config allowed `<style>`, `<form>`, `<input>` in Markdown
+preview — raw HTML in a note was "sanitized then interpreted".
+
+**Resolved (2026-09-05)** by superseding the allowlist question entirely: raw
+HTML in a note is now INERT. `createInertHtmlRenderer()` overrides marked's
+block/inline `html` token rendering to escaped literal text (render-time
+only; stored markdown is untouched, so nothing is ever un-escaped). Markdown
+constructs — headings, emphasis, links, `<https://…>` autolinks, checkbox
+tokens — render normally; typed tags display as text and do nothing.
+DOMPurify stays as a second layer. The override also handles the token-object
+renderer signature of newer marked versions, so a CDN bump cannot silently
+re-enable raw HTML. Tests: `tests/deno/inert_html_test.ts` (unit + end-to-end
+through the pinned marked@12.0.0).
 
 ## LOW
 
