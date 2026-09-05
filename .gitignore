@@ -56,3 +56,9 @@ temp/
 
 # Uploaded files
 uploads/
+
+# Server config copies (live on the host, not in the repo)
+Caddyfile
+
+# Deploy runbooks are generated per release, not tracked
+MIGRATION.md
