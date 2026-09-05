@@ -10,6 +10,7 @@
     }
   },
   "remote": {
+    "https://cdn.jsdelivr.net/npm/marked@12.0.0/+esm": "0be57f0f976b771effed1be5253a5f90738a98b3b3f6f2f784b7312ac1d790e0",
     "https://deno.land/std@0.132.0/_deno_unstable.ts": "23a1a36928f1b6d3b0170aaa67de09af12aa998525f608ff7331b9fb364cbde6",
     "https://deno.land/std@0.132.0/_util/assert.ts": "e94f2eb37cebd7f199952e242c77654e43333c1ac4c5c700e929ea3aa5489f74",
     "https://deno.land/std@0.132.0/_util/os.ts": "49b92edea1e82ba295ec946de8ffd956ed123e2948d9bd1d3e901b04e4307617",
