@@ -289,6 +289,9 @@ Copy `.env.example` to `.env` and configure:
 **Optional variables**:
 
 - `DEBUG_SQL`: Enable SQL query logging
+- `APP_NAME`: Display name shown in the browser tab, PWA install name, login
+  screen and sidebar (e.g. `APP_NAME="Harri's Notes"`). Unset keeps the
+  defaults "Notes App" / "Notes". Applied server-side in `server/branding.js`.
 
 ## Common Development Tasks
 

@@ -11,6 +11,13 @@ import { GoogleAuthHandler, isVerifiedOAuthUser, revokeGoogleToken } from "./aut
 import { optionalAuth, redirectIfAuthenticated, requireAuth } from "./auth/middleware.js";
 import { cspMiddleware, injectNonce } from "./security-headers.js";
 import { createApiRateLimiter, getClientIp } from "./rate-limit.js";
+import {
+  DEFAULT_APP_NAME,
+  DEFAULT_APP_SHORT_NAME,
+  injectAppName,
+  injectAppNameIntoManifest,
+  resolveAppName,
+} from "./branding.js";
 
 // Import API routes
 import { createNotesRouter } from "./api/notes.js";
@@ -31,6 +38,14 @@ const config = {
   googleClientId: Deno.env.get("GOOGLE_CLIENT_ID"),
   googleClientSecret: Deno.env.get("GOOGLE_CLIENT_SECRET"),
   googleRedirectUri: Deno.env.get("GOOGLE_REDIRECT_URI"),
+};
+
+// Display name shown in the tab title, PWA install name, login screen and
+// sidebar. Optional; unset keeps the current product name everywhere.
+const rawAppName = Deno.env.get("APP_NAME");
+const appNames = {
+  full: resolveAppName(rawAppName, DEFAULT_APP_NAME),
+  short: resolveAppName(rawAppName, DEFAULT_APP_SHORT_NAME),
 };
 
 // Validate required environment variables
@@ -326,20 +341,20 @@ router.get("/", optionalAuth, async (ctx) => {
     return;
   }
 
-  // Serve main app. The CSP nonce is stamped onto the inline scripts here so
-  // the file on disk stays free of per-request values.
+  // Serve main app. The CSP nonce and app name are stamped in here so the
+  // files on disk stay free of per-request/per-deployment values.
   ctx.response.type = "text/html";
-  ctx.response.body = injectNonce(
-    await Deno.readTextFile("./public/index.html"),
-    ctx.state.cspNonce,
+  ctx.response.body = injectAppName(
+    injectNonce(await Deno.readTextFile("./public/index.html"), ctx.state.cspNonce),
+    appNames,
   );
 });
 
 router.get("/login", redirectIfAuthenticated, async (ctx) => {
   ctx.response.type = "text/html";
-  ctx.response.body = injectNonce(
-    await Deno.readTextFile("./public/login.html"),
-    ctx.state.cspNonce,
+  ctx.response.body = injectAppName(
+    injectNonce(await Deno.readTextFile("./public/login.html"), ctx.state.cspNonce),
+    appNames,
   );
 });
 
@@ -406,7 +421,14 @@ router.get("/static/:path*", async (ctx) => {
       return;
     }
 
-    const file = await Deno.readFile(requestedPath);
+    let file = await Deno.readFile(requestedPath);
+
+    // manifest.json's name/short_name reflect APP_NAME too (parsed and
+    // re-stringified, so this is also a no-op re-serialization when unset)
+    if (filePath === "manifest.json") {
+      const manifestText = injectAppNameIntoManifest(new TextDecoder().decode(file), appNames);
+      file = new TextEncoder().encode(manifestText);
+    }
 
     // Set content type based on extension
     const ext = filePath.split(".").pop()?.toLowerCase();
@@ -487,7 +509,7 @@ try {
 }
 
 // Start server
-console.log(`→ Notes App server starting on http://${config.host}:${config.port}`);
+console.log(`→ ${appNames.full} server starting on http://${config.host}:${config.port}`);
 console.log(`  Environment: ${Deno.env.get("NODE_ENV") || "development"}`);
 console.log(`   Database: ${Deno.env.get("DB_NAME")} on ${Deno.env.get("DB_HOST")}`);
 

@@ -6,6 +6,11 @@
 import { css, html, LitElement } from "lit";
 import { icons } from "../utils/icons.js";
 import { excludedTagIds, requiredTagIds, tagStateMeta } from "../utils/tag-filter.js";
+import { readAppShortName } from "../utils/branding.js";
+
+// Read once at module load: the server has already injected the meta tag by
+// the time this module executes (module scripts run after the head parses).
+const APP_SHORT_NAME = readAppShortName();
 
 class NotesApp extends LitElement {
   static properties = {
@@ -775,7 +780,6 @@ class NotesApp extends LitElement {
         overflow: visible;
       }
     }
-
   `;
 
   constructor() {
@@ -1599,7 +1603,7 @@ class NotesApp extends LitElement {
         <aside class="drawer ${this.sidebarOpen ? "open" : ""}">
           <div class="drawer-header">
             <span class="logo-mark">n</span>
-            <span class="drawer-title">Notes</span>
+            <span class="drawer-title">${APP_SHORT_NAME}</span>
             <button class="icon-btn" @click="${this.closeSidebar}" aria-label="Close menu">
               ${icons.close}
             </button>
