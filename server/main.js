@@ -7,7 +7,7 @@ import { Application, Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { Session } from "https://deno.land/x/oak_sessions@v4.1.9/mod.ts";
 import { PostgresSessionStore } from "./session-store.js";
 import { DatabaseClient } from "./database/client.js";
-import { GoogleAuthHandler, revokeGoogleToken } from "./auth/auth-handler.js";
+import { GoogleAuthHandler, isVerifiedOAuthUser, revokeGoogleToken } from "./auth/auth-handler.js";
 import { optionalAuth, redirectIfAuthenticated, requireAuth } from "./auth/middleware.js";
 import { cspMiddleware, injectNonce } from "./security-headers.js";
 import { createApiRateLimiter, getClientIp } from "./rate-limit.js";
@@ -66,13 +66,15 @@ const authHandler = new GoogleAuthHandler(
   config.googleRedirectUri,
 );
 
+// Only production runs behind the reverse proxy (Caddy); dev and staging take
+// direct connections, where X-Forwarded-* headers would be attacker-supplied.
+const isProduction = Deno.env.get("NODE_ENV") === "production";
+
 // Initialize Oak application
-// proxy: true tells Oak to trust X-Forwarded-* headers from reverse proxy (Caddy)
-const app = new Application({ proxy: true });
+// proxy tells Oak to trust X-Forwarded-* headers — only safe behind Caddy
+const app = new Application({ proxy: isProduction });
 
 // Session middleware with secure cookies in production
-// Note: With proxy=true, Oak checks X-Forwarded-Proto for HTTPS detection
-const isProduction = Deno.env.get("NODE_ENV") === "production";
 const sessionStore = new PostgresSessionStore(db.pool);
 // Note: secure is set to false here because Caddy terminates TLS and forwards
 // plain HTTP to Oak. Oak's SecureCookieMap rejects secure cookies over non-TLS
@@ -209,19 +211,27 @@ router.get("/health", (ctx) => {
 
 // Authentication routes (rate limited)
 router.get("/auth/login", redirectIfAuthenticated, async (ctx) => {
-  const ip = getClientIp(ctx);
+  const ip = getClientIp(ctx, isProduction);
   if (!rateLimit(ctx, `auth:${ip}`)) return;
 
-  // Generate CSRF state token and store in session
+  // Generate the CSRF state token. It lives in its own short-lived cookie —
+  // NOT the session row, which any concurrent unauthenticated request may
+  // replace before the callback arrives — so the flow stays bound to this
+  // browser without needing a lookup-by-value fallback.
   const state = crypto.randomUUID();
-  await ctx.state.session.set("oauth_state", state);
+  await ctx.cookies.set("oauth_state", state, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: false, // same reasoning as the session cookie: Caddy terminates TLS
+    maxAge: 10 * 60, // seconds; an OAuth round trip takes well under 10 minutes
+  });
 
   const authUrl = authHandler.getAuthorizationUrl(state);
   ctx.response.redirect(authUrl);
 });
 
 router.get("/auth/callback", async (ctx) => {
-  const ip = getClientIp(ctx);
+  const ip = getClientIp(ctx, isProduction);
   if (!rateLimit(ctx, `auth:${ip}`)) return;
 
   const code = ctx.request.url.searchParams.get("code");
@@ -240,19 +250,12 @@ router.get("/auth/callback", async (ctx) => {
     return;
   }
 
-  // Validate CSRF state token
-  // The session cookie may have been replaced by an unrelated request between
-  // /auth/login and this callback (every unauthenticated request creates a
-  // fresh session). The state itself is a random UUID issued by us, so look
-  // it up by value as a fallback — the CSRF protection is preserved (an
-  // attacker cannot guess the state) while the login survives the race.
-  const expectedState = await ctx.state.session.get("oauth_state");
-  await ctx.state.session.set("oauth_state", null);
-  let stateOk = Boolean(state) && state === expectedState;
-  if (!stateOk && state) {
-    const byValue = await sessionStore.findSessionByState(state);
-    stateOk = Boolean(byValue);
-  }
+  // Validate CSRF state token against the dedicated cookie set by /auth/login.
+  // The cookie binds the OAuth flow to this browser (unlike the session row,
+  // which unrelated requests can replace mid-flow) and is single-use.
+  const expectedState = await ctx.cookies.get("oauth_state");
+  await ctx.cookies.delete("oauth_state");
+  const stateOk = Boolean(state) && Boolean(expectedState) && state === expectedState;
   if (!stateOk) {
     ctx.response.status = 400;
     ctx.response.body = { error: "Invalid OAuth state - possible CSRF attack" };
@@ -263,6 +266,13 @@ router.get("/auth/callback", async (ctx) => {
     // Exchange code for tokens and get user info
     const tokens = await authHandler.exchangeCodeForTokens(code);
     const userInfo = await authHandler.getUserInfo(tokens.access_token);
+
+    // Accounts are keyed by email, so an unverified one must never sign in
+    if (!isVerifiedOAuthUser(userInfo)) {
+      ctx.response.status = 403;
+      ctx.response.body = { error: "Google account email is missing or unverified" };
+      return;
+    }
 
     // Find or create user in database
     let user = await db.findUserByEmail(userInfo.email);
@@ -336,7 +346,7 @@ router.get("/login", redirectIfAuthenticated, async (ctx) => {
 // Rate limiting for the API surface. Mounted before requireAuth so unauthenticated
 // floods are cheap to reject: 120/min per IP, plus 300/min per API token or
 // 120/min per session user.
-const apiRateLimiter = createApiRateLimiter();
+const apiRateLimiter = createApiRateLimiter({ trustProxy: isProduction });
 router.use("/api", apiRateLimiter.middleware);
 
 // Drop stale buckets so the Maps do not grow unbounded (same cadence as auth)
@@ -481,7 +491,8 @@ console.log(`→ Notes App server starting on http://${config.host}:${config.por
 console.log(`  Environment: ${Deno.env.get("NODE_ENV") || "development"}`);
 console.log(`   Database: ${Deno.env.get("DB_NAME")} on ${Deno.env.get("DB_HOST")}`);
 
-// Periodic session cleanup (every hour, removes sessions older than 7 days)
+// Periodic session cleanup (every hour, removes sessions IDLE for 7+ days —
+// last_seen_at slides on every request, so active logins never expire)
 const SESSION_CLEANUP_INTERVAL = 60 * 60 * 1000;
 const sessionCleanupTimer = setInterval(async () => {
   try {

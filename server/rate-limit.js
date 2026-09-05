@@ -15,14 +15,24 @@ const TOO_MANY_BODY = { error: "Too many requests. Please try again later." };
 const DEFAULT_WINDOW_MS = 60 * 1000;
 
 /**
- * Resolve the real client IP, honouring the reverse proxy's header
+ * Resolve the real client IP
+ *
+ * Only trusts x-forwarded-for when explicitly told the app sits behind the
+ * reverse proxy, and then only its LAST entry: Caddy APPENDS the real client
+ * address to whatever list the client sent, so every earlier entry is
+ * attacker-supplied. Off-proxy (dev/staging, direct connections) the header
+ * is ignored entirely and the socket address is used.
  * @param {Object} ctx - Oak context
+ * @param {boolean} [trustProxy] - True only when a proxy fronts the app
  * @returns {string} Client IP address
  */
-export function getClientIp(ctx) {
-  const forwarded = ctx.request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    return forwarded.split(",")[0].trim();
+export function getClientIp(ctx, trustProxy = false) {
+  if (trustProxy) {
+    const forwarded = ctx.request.headers.get("x-forwarded-for");
+    if (forwarded) {
+      const parts = forwarded.split(",");
+      return parts[parts.length - 1].trim();
+    }
   }
   return ctx.request.ip;
 }
@@ -35,13 +45,14 @@ export function getClientIp(ctx) {
  * @param {number} [options.max] - Requests allowed per key per window
  * @param {Function} [options.keyFn] - Derives the bucket key from an Oak ctx.
  *   Returning null/undefined means "do not limit this request".
+ * @param {boolean} [options.trustProxy] - Passed to getClientIp by the default keyFn
  * @returns {{
  *   check: Function, cleanup: Function, middleware: Function,
  *   size: Function, keys: Function
  * }}
  */
 export function createRateLimiter(
-  { windowMs = DEFAULT_WINDOW_MS, max = 60, keyFn = null } = {},
+  { windowMs = DEFAULT_WINDOW_MS, max = 60, keyFn = null, trustProxy = false } = {},
 ) {
   /** @type {Map<string, number[]>} key -> hit timestamps inside the window */
   const buckets = new Map();
@@ -91,7 +102,7 @@ export function createRateLimiter(
    * @param {Function} next - Next middleware
    */
   async function middleware(ctx, next) {
-    const key = keyFn ? await keyFn(ctx) : getClientIp(ctx) || "unknown";
+    const key = keyFn ? await keyFn(ctx) : getClientIp(ctx, trustProxy) || "unknown";
 
     if (!check(key)) {
       ctx.response.status = 429;
@@ -127,10 +138,17 @@ export function createRateLimiter(
  * @param {number} [options.ipMax]
  * @param {number} [options.tokenMax]
  * @param {number} [options.userMax]
+ * @param {boolean} [options.trustProxy] - True only when a proxy fronts the app
  * @returns {{ middleware: Function, cleanup: Function, limiters: Object }}
  */
 export function createApiRateLimiter(
-  { windowMs = DEFAULT_WINDOW_MS, ipMax = 120, tokenMax = 300, userMax = 120 } = {},
+  {
+    windowMs = DEFAULT_WINDOW_MS,
+    ipMax = 120,
+    tokenMax = 300,
+    userMax = 120,
+    trustProxy = false,
+  } = {},
 ) {
   const ip = createRateLimiter({ windowMs, max: ipMax });
   const token = createRateLimiter({ windowMs, max: tokenMax });
@@ -147,7 +165,7 @@ export function createApiRateLimiter(
       c.response.body = { ...TOO_MANY_BODY };
     };
 
-    if (!ip.check(getClientIp(ctx) || "unknown")) {
+    if (!ip.check(getClientIp(ctx, trustProxy) || "unknown")) {
       deny(ctx);
       return;
     }

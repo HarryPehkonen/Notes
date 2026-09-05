@@ -38,30 +38,6 @@ export class PostgresSessionStore {
     return JSON.parse(result.rows[0].data);
   }
 
-  /**
-   * Find a session by its OAuth CSRF state value.
-   *
-   * The state is a random UUID stored in `data.oauth_state`. A browser may
-   * have accumulated a NEWER session cookie between /auth/login and the
-   * callback (every unauthenticated request creates a session), orphaning
-   * the state. Looking the state up by VALUE keeps the CSRF check intact
-   * (the state is unguessable and was issued by us) while surviving those
-   * unrelated session creations. Returns the session data or null.
-   * @param {string} state - The oauth_state value from the callback
-   * @returns {Promise<Object|null>} Session data, or null if not found
-   */
-  async findSessionByState(state) {
-    if (typeof state !== "string" || state.length === 0) return null;
-    const result = await this.#query(
-      `SELECT data FROM sessions
-       WHERE data LIKE '%"oauth_state":"' || $1 || '"%'
-       LIMIT 1`,
-      [state],
-    );
-    if (result.rows.length === 0) return null;
-    return JSON.parse(result.rows[0].data);
-  }
-
   async createSession(sessionId, initialData) {
     await this.#query(
       `INSERT INTO sessions (id, data) VALUES ($1, $2)
@@ -70,9 +46,16 @@ export class PostgresSessionStore {
     );
   }
 
+  /**
+   * Persist session data at the end of a request.
+   *
+   * oak_sessions calls this on EVERY request, so bumping `last_seen_at` here
+   * makes the 7-day session genuinely sliding (see deleteExpiredSessions) at
+   * zero extra query cost.
+   */
   async persistSessionData(sessionId, sessionData) {
     await this.#query(
-      `UPDATE sessions SET data = $1 WHERE id = $2`,
+      `UPDATE sessions SET data = $1, last_seen_at = CURRENT_TIMESTAMP WHERE id = $2`,
       [JSON.stringify(sessionData), sessionId],
     );
   }
@@ -111,12 +94,19 @@ export class PostgresSessionStore {
   }
 
   /**
-   * Delete sessions older than maxAgeDays.
+   * Delete sessions idle for more than maxAgeDays (sliding expiry).
+   *
+   * Keyed on `last_seen_at`, which persistSessionData refreshes on every
+   * request — so a session in active use never expires, and one that goes
+   * quiet dies maxAgeDays after its LAST use, not its creation. COALESCE
+   * covers rows that predate the last_seen_at column.
    * Returns the number of deleted sessions.
    */
   async deleteExpiredSessions(maxAgeDays = 7) {
     const result = await this.#query(
-      `DELETE FROM sessions WHERE created_at < NOW() - INTERVAL '1 day' * $1 RETURNING id`,
+      `DELETE FROM sessions
+       WHERE COALESCE(last_seen_at, created_at) < NOW() - INTERVAL '1 day' * $1
+       RETURNING id`,
       [maxAgeDays],
     );
     return result.rows.length;

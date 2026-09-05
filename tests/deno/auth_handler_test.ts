@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
-import { GoogleAuthHandler } from "../../server/auth/auth-handler.js";
+import { GoogleAuthHandler, isVerifiedOAuthUser } from "../../server/auth/auth-handler.js";
 
 const handler = new GoogleAuthHandler(
   "test-client-id",
@@ -94,6 +94,48 @@ Deno.test("getAuthorizationUrl: includes required scopes", () => {
   assertEquals(url.includes("openid"), true);
   assertEquals(url.includes("email"), true);
   assertEquals(url.includes("profile"), true);
+});
+
+// isVerifiedOAuthUser tests (audit #24)
+
+Deno.test("isVerifiedOAuthUser: accepts Google v2 userinfo with verified_email true", () => {
+  assertEquals(
+    isVerifiedOAuthUser({ email: "a@example.com", verified_email: true }),
+    true,
+  );
+});
+
+Deno.test("isVerifiedOAuthUser: accepts OIDC-style payloads with email_verified true", () => {
+  assertEquals(
+    isVerifiedOAuthUser({ email: "a@example.com", email_verified: true }),
+    true,
+  );
+});
+
+Deno.test("isVerifiedOAuthUser: rejects an unverified email", () => {
+  assertEquals(
+    isVerifiedOAuthUser({ email: "a@example.com", verified_email: false }),
+    false,
+  );
+});
+
+Deno.test("isVerifiedOAuthUser: rejects when no verification flag is present at all", () => {
+  assertEquals(isVerifiedOAuthUser({ email: "a@example.com" }), false);
+});
+
+Deno.test("isVerifiedOAuthUser: only an explicit boolean true counts", () => {
+  // Truthy-but-not-true values must not pass (defensive against odd payloads)
+  assertEquals(isVerifiedOAuthUser({ email: "a@example.com", verified_email: "true" }), false);
+  assertEquals(isVerifiedOAuthUser({ email: "a@example.com", verified_email: 1 }), false);
+  assertEquals(isVerifiedOAuthUser({ email: "a@example.com", email_verified: "yes" }), false);
+});
+
+Deno.test("isVerifiedOAuthUser: rejects payloads without a usable email", () => {
+  assertEquals(isVerifiedOAuthUser({ verified_email: true }), false);
+  assertEquals(isVerifiedOAuthUser({ email: "", verified_email: true }), false);
+  assertEquals(isVerifiedOAuthUser({ email: 42, verified_email: true }), false);
+  assertEquals(isVerifiedOAuthUser(null), false);
+  assertEquals(isVerifiedOAuthUser(undefined), false);
 });
 
 // isConfigured tests

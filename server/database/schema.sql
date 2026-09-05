@@ -80,15 +80,20 @@ CREATE TABLE IF NOT EXISTS note_versions (
     created_by INTEGER REFERENCES users(id)
 );
 
--- Sessions table for server-side session storage
+-- Sessions table for server-side session storage. last_seen_at slides on
+-- every request (see PostgresSessionStore.persistSessionData); expiry is
+-- keyed on it so active logins never die (audit #28).
 CREATE TABLE IF NOT EXISTS sessions (
     id VARCHAR(21) NOT NULL PRIMARY KEY,
     data TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Add created_at to sessions if missing (migration for existing databases)
+-- Migrations for existing databases (idempotent; the default backfills
+-- existing rows without touching any other data)
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
 -- Images table for uploaded images
 CREATE TABLE IF NOT EXISTS images (

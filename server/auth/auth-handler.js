@@ -58,6 +58,24 @@ export async function revokeGoogleToken(db, authHandler, userId) {
   }
 }
 
+/**
+ * Decide whether an OAuth userinfo payload identifies a verified user
+ *
+ * Accounts are keyed by email, so an UNVERIFIED email must never sign in: a
+ * Google account claiming (but not owning) an existing user's address would
+ * otherwise take that account over. Google's v2 userinfo endpoint reports
+ * `verified_email`; OIDC-style payloads call it `email_verified`. Only an
+ * explicit boolean true on either counts.
+ * @param {Object|null|undefined} userInfo - Payload from the userinfo endpoint
+ * @returns {boolean} True only for a payload with a usable, verified email
+ */
+export function isVerifiedOAuthUser(userInfo) {
+  if (!userInfo || typeof userInfo.email !== "string" || userInfo.email.length === 0) {
+    return false;
+  }
+  return userInfo.verified_email === true || userInfo.email_verified === true;
+}
+
 export class GoogleAuthHandler {
   /**
    * @param {string} clientId - Google OAuth client ID

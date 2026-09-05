@@ -57,13 +57,20 @@ async function hit(
 
 // getClientIp tests
 
-Deno.test("getClientIp: prefers the first x-forwarded-for entry", () => {
+Deno.test("getClientIp: ignores x-forwarded-for unless the proxy is trusted", () => {
   const ctx = fakeContext({ ip: "127.0.0.1", forwardedFor: "203.0.113.9, 70.41.3.18" });
-  assertEquals(getClientIp(ctx), "203.0.113.9");
+  assertEquals(getClientIp(ctx), "127.0.0.1");
+});
+
+Deno.test("getClientIp: behind the proxy, only the LAST x-forwarded-for entry counts", () => {
+  // Caddy appends the real client IP; earlier entries are client-supplied
+  const ctx = fakeContext({ ip: "127.0.0.1", forwardedFor: "6.6.6.6, 203.0.113.9" });
+  assertEquals(getClientIp(ctx, true), "203.0.113.9");
 });
 
 Deno.test("getClientIp: falls back to the socket ip", () => {
   assertEquals(getClientIp(fakeContext({ ip: "192.168.1.5" })), "192.168.1.5");
+  assertEquals(getClientIp(fakeContext({ ip: "192.168.1.5" }), true), "192.168.1.5");
 });
 
 // check() tests
@@ -184,6 +191,18 @@ Deno.test("createApiRateLimiter: allows 120 requests per ip per minute", async (
   assertEquals(passed, 120);
   assertEquals(ctx.response.status, 429);
   assertEquals(ctx.response.body, TOO_MANY);
+});
+
+Deno.test("createApiRateLimiter: spoofed x-forwarded-for cannot escape the ip bucket", async () => {
+  const api = createApiRateLimiter({ ipMax: 2, trustProxy: true });
+  let n = 0;
+  // Attacker varies the first (client-supplied) entry; Caddy's appended real
+  // IP stays the same, so every request must land in the same bucket
+  const ctxFor = () => fakeContext({ forwardedFor: `6.6.6.${n++}, 203.0.113.9` });
+  const { passed, ctx } = await hit(api.middleware, ctxFor, 3);
+
+  assertEquals(passed, 2);
+  assertEquals(ctx.response.status, 429);
 });
 
 Deno.test("createApiRateLimiter: token requests get a 300/min budget", async () => {
