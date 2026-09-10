@@ -7,6 +7,7 @@ import { css, html, LitElement } from "lit";
 import { icons } from "../utils/icons.js";
 import { excludedTagIds, requiredTagIds, tagStateMeta } from "../utils/tag-filter.js";
 import { readAppShortName } from "../utils/branding.js";
+import { readNotesPage } from "../utils/notes-response.js";
 import { APP_VERSION } from "../version.js";
 
 // Read once at module load: the server has already injected the meta tag by
@@ -1026,6 +1027,21 @@ class NotesApp extends LitElement {
     }
   }
 
+  /**
+   * Put a notes payload into the list state: the rows, the total behind them,
+   * and whether a next page exists.
+   *
+   * Every fetch path goes through here. The initial load once took only the
+   * rows, which is why a freshly loaded page showed "20 Notes" and no "Load
+   * more" button while a filtered fetch of the same data showed "20 of 65".
+   */
+  _applyNotesPage(result) {
+    const page = readNotesPage(result);
+    this.notes = page.notes;
+    this.total = page.total;
+    this.hasMore = page.hasMore;
+  }
+
   async loadInitialData() {
     this.loading = true;
     try {
@@ -1037,7 +1053,7 @@ class NotesApp extends LitElement {
         globalThis.NotesApp.getTags(),
       ]);
 
-      this.notes = notesResult.data?.notes || [];
+      this._applyNotesPage(notesResult);
       this.tags = tagsResult.data || [];
     } catch (error) {
       console.error("Failed to load initial data:", error);
@@ -1248,9 +1264,7 @@ class NotesApp extends LitElement {
           tags: requiredTagIds(this.selectedTags),
           excludeTags: excludedTagIds(this.selectedTags),
         });
-        this.notes = result.data?.results || [];
-        this.hasMore = result.meta?.hasMore || false;
-        this.total = result.meta?.total ?? null;
+        this._applyNotesPage(result);
         this.viewMode = "search";
       } else if (hasSearchQuery && (hasTagFilter || hasPinnedFilter)) {
         // Search combined with tags and/or pinned - use advanced search
@@ -1260,16 +1274,12 @@ class NotesApp extends LitElement {
           excludeTags: excludedTagIds(this.selectedTags),
           isPinned: hasPinnedFilter || undefined,
         });
-        this.notes = result.data?.results || [];
-        this.hasMore = result.meta?.hasMore || false;
-        this.total = result.meta?.total ?? null;
+        this._applyNotesPage(result);
         this.viewMode = "search";
       } else if (hasSearchQuery) {
         // Just search query
         const result = await globalThis.NotesApp.searchNotes(this.searchQuery);
-        this.notes = result.data?.results || [];
-        this.hasMore = result.meta?.hasMore || false;
-        this.total = result.meta?.total ?? null;
+        this._applyNotesPage(result);
         this.viewMode = "search";
       } else {
         // No search query, filter by tags/pinned (or show all)
@@ -1282,9 +1292,7 @@ class NotesApp extends LitElement {
           options.pinned = true;
         }
         const result = await globalThis.NotesApp.getNotes(options);
-        this.notes = result.data?.notes || [];
-        this.hasMore = result.meta?.hasMore || false;
-        this.total = result.meta?.total ?? null;
+        this._applyNotesPage(result);
         this.viewMode = "list";
       }
       this.requestUpdate(); // Force re-render

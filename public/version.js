@@ -10,4 +10,4 @@
  * phone being asked "what does it say?", so it has to be short, readable, and
  * comparable at a glance ("mine says 19, yours says 20").
  */
-export const APP_VERSION = 20;
+export const APP_VERSION = 21;
