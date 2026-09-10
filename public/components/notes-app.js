@@ -1236,7 +1236,7 @@ class NotesApp extends LitElement {
         });
         this.notes = result.data?.results || [];
         this.hasMore = result.meta?.hasMore || false;
-        this.total = result.meta?.total ?? this.total;
+        this.total = result.meta?.total ?? null;
         this.viewMode = "search";
       } else if (hasSearchQuery && (hasTagFilter || hasPinnedFilter)) {
         // Search combined with tags and/or pinned - use advanced search
@@ -1248,14 +1248,14 @@ class NotesApp extends LitElement {
         });
         this.notes = result.data?.results || [];
         this.hasMore = result.meta?.hasMore || false;
-        this.total = result.meta?.total ?? this.total;
+        this.total = result.meta?.total ?? null;
         this.viewMode = "search";
       } else if (hasSearchQuery) {
         // Just search query
         const result = await globalThis.NotesApp.searchNotes(this.searchQuery);
         this.notes = result.data?.results || [];
         this.hasMore = result.meta?.hasMore || false;
-        this.total = result.meta?.total ?? this.total;
+        this.total = result.meta?.total ?? null;
         this.viewMode = "search";
       } else {
         // No search query, filter by tags/pinned (or show all)
@@ -1270,7 +1270,7 @@ class NotesApp extends LitElement {
         const result = await globalThis.NotesApp.getNotes(options);
         this.notes = result.data?.notes || [];
         this.hasMore = result.meta?.hasMore || false;
-        this.total = result.meta?.total ?? this.total;
+        this.total = result.meta?.total ?? null;
         this.viewMode = "list";
       }
       this.requestUpdate(); // Force re-render

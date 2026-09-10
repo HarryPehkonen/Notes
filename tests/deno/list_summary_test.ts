@@ -35,8 +35,17 @@ Deno.test("count: a filtered page still shows the honest numbers", () => {
   assertEquals(formatListCount({ loaded: 20, total: 23 }), "20 of 23 Notes");
 });
 
-Deno.test("remaining: how many are behind the button", () => {
-  assertEquals(remainingLabel({ loaded: 20, total: 65 }), "Show 45 more");
+Deno.test("count label: a stale total never hides the rows on screen", () => {
+  // Seen in the wild: switching the pinned-only filter back off restored 20
+  // notes while `total` was still 0 from the previous query, and the header
+  // read "0 Notes" with a full list underneath it. Trust the rows.
+  assertEquals(formatListCount({ loaded: 20, total: 0 }), "20 Notes");
+  assertEquals(formatListCount({ loaded: 20, total: 5 }), "20 Notes");
+  assertEquals(formatListCount({ loaded: 0, total: 0 }), "0 Notes");
+});
+
+Deno.test("remainingLabel: a stale total falls back to the generic label", () => {
+  assertEquals(remainingLabel({ loaded: 20, total: 0 }), "Load more");
 });
 
 Deno.test("remaining: nothing hidden gives no label", () => {
