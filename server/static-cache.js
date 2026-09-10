@@ -45,3 +45,20 @@ export function cacheControlFor({ filePath = "", ext = null, environment = null 
 
   return `public, max-age=${maxAge}`;
 }
+
+/**
+ * The environment name the cache policy keys off.
+ *
+ * Deliberately a named helper rather than an inline `Deno.env.get` at the call
+ * site: it lets the tests exercise the actual wiring, so reading a variable
+ * that nothing sets cannot silently downgrade every image and font to the
+ * short max-age again.
+ *
+ * `NODE_ENV` is the variable the runtime really exports (systemd
+ * `Notes.service` and `/opt/Notes/.env`).
+ *
+ * @returns {string|null} the value of NODE_ENV, or null when it is unset
+ */
+export function staticCacheEnvironment() {
+  return Deno.env.get("NODE_ENV") ?? null;
+}

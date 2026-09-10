@@ -10,7 +10,7 @@ import { DatabaseClient } from "./database/client.js";
 import { GoogleAuthHandler, isVerifiedOAuthUser, revokeGoogleToken } from "./auth/auth-handler.js";
 import { optionalAuth, redirectIfAuthenticated, requireAuth } from "./auth/middleware.js";
 import { cspMiddleware, injectNonce } from "./security-headers.js";
-import { cacheControlFor } from "./static-cache.js";
+import { cacheControlFor, staticCacheEnvironment } from "./static-cache.js";
 import { createApiRateLimiter, getClientIp } from "./rate-limit.js";
 import {
   DEFAULT_APP_NAME,
@@ -450,7 +450,7 @@ router.get("/static/:path*", async (ctx) => {
     // Policy lives in static-cache.js so it stays under test.
     ctx.response.headers.set(
       "Cache-Control",
-      cacheControlFor({ filePath, ext, environment: Deno.env.get("ENVIRONMENT") }),
+      cacheControlFor({ filePath, ext, environment: staticCacheEnvironment() }),
     );
 
     // ETag based on content hash for stable cache validation
