@@ -7,6 +7,7 @@ import { css, html, LitElement } from "lit";
 import { icons } from "../utils/icons.js";
 import { excludedTagIds, requiredTagIds, tagStateMeta } from "../utils/tag-filter.js";
 import { readAppShortName } from "../utils/branding.js";
+import { APP_VERSION } from "../version.js";
 
 // Read once at module load: the server has already injected the meta tag by
 // the time this module executes (module scripts run after the head parses).
@@ -209,6 +210,19 @@ class NotesApp extends LitElement {
       font-weight: 500;
       color: var(--gray-800);
       padding: 0.3rem 0.5rem 0.6rem;
+      border-bottom: 1px solid var(--gray-200);
+      margin-bottom: 0.4rem;
+    }
+
+    /*
+    * The build number sits under the account name so it can be read out loud
+    * when a device is suspected of running stale code. Small, but legible and
+    * labelled - it is a support tool, not decoration.
+    */
+    .user-popover-version {
+      font-size: 0.75rem;
+      color: var(--gray-500);
+      padding: 0 0.5rem 0.5rem;
       border-bottom: 1px solid var(--gray-200);
       margin-bottom: 0.4rem;
     }
@@ -1731,6 +1745,9 @@ class NotesApp extends LitElement {
               <div class="popover-scrim" @click="${() => this.userMenuOpen = false}"></div>
               <div class="user-popover">
                 <div class="user-popover-name">${this.user?.name}</div>
+                <div class="user-popover-version" title="Client build - bumped with every UI change">
+                  Version ${APP_VERSION}
+                </div>
                 <button class="user-popover-logout" @click="${this.logout}">
                   ${icons.logout} Log out
                 </button>
