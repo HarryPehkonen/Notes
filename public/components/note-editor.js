@@ -10,6 +10,7 @@ import DOMPurify from "dompurify";
 import { icons } from "../utils/icons.js";
 import { parseCheckboxTokens, toggleCheckbox, tokenizeCheckboxes } from "../utils/checkboxes.js";
 import { isSameNoteUpdate, resolveSaveContent } from "../utils/editor-state.js";
+import { describePin, withPinResult } from "../utils/pin-state.js";
 import { checkboxesToPrintGlyphs, printDocumentTitle } from "../utils/print.js";
 import { createInertHtmlRenderer } from "../utils/inert-html.js";
 
@@ -38,6 +39,7 @@ export class NoteEditor extends LitElement {
     loadingVersions: { type: Boolean },
     restoringVersionId: { type: Number },
     printing: { type: Boolean },
+    pinning: { type: Boolean },
   };
 
   static styles = css`
@@ -103,6 +105,24 @@ export class NoteEditor extends LitElement {
     }
 
     .icon-btn.active {
+      background: var(--primary-light);
+      color: var(--primary-dark);
+    }
+
+    /*
+    * The pin toggle keeps its text label and grows wider than the icon-only
+    * buttons: at the top of a note a bare icon is the kind of control that
+    * gets missed, and "Pinned" has to read at a glance.
+    */
+    .pin-btn {
+      width: auto;
+      padding: 0 0.7rem;
+      gap: 0.35rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+
+    .pin-btn.pinned {
       background: var(--primary-light);
       color: var(--primary-dark);
     }
@@ -1157,6 +1177,59 @@ export class NoteEditor extends LitElement {
       JSON.stringify(currentTagIds) !== JSON.stringify(originalTagIds);
   }
 
+  /** What the pin button should show for the note currently open. */
+  get pinState() {
+    return describePin(this.note);
+  }
+
+  /**
+   * Pin or unpin the note that is open.
+   *
+   * Deliberately not routed through the sync manager: pinning is a state
+   * change, not content, so it should not fight the content-conflict logic, and
+   * an offline pin has no useful queue semantics while the user is looking at
+   * the button. The flip is optimistic and reverts if the request fails.
+   */
+  async togglePin() {
+    if (!this.note || this.pinning) return;
+
+    const { nextValue } = describePin(this.note);
+    const optimistic = withPinResult(this.note, { is_pinned: nextValue });
+    this.pinning = true;
+    this.note = optimistic;
+
+    try {
+      const result = await globalThis.NotesApp.updateNote(this.note.id, {
+        is_pinned: nextValue,
+      });
+      const serverNote = result?.data;
+      const settled = serverNote ? { ...optimistic, ...serverNote } : optimistic;
+
+      this.note = settled;
+      // The server bumps updated_at on this change and the save path compares
+      // that timestamp for conflicts - remember the value it actually stored.
+      this.originalNote = this.deepCopy(settled);
+      this.dispatchEvent(
+        new CustomEvent("note-updated", {
+          detail: { note: settled },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+      this.showToast(nextValue ? "Note pinned" : "Note unpinned", "info");
+    } catch (error) {
+      console.error("Failed to toggle pin:", error);
+      // Put the button back rather than leaving a lie on screen.
+      this.note = withPinResult(this.note, { is_pinned: !nextValue });
+      this.showToast(
+        "Could not change the pin - check your connection",
+        "error",
+      );
+    } finally {
+      this.pinning = false;
+    }
+  }
+
   async autoSave() {
     if (!this.note || this._isSaving || !this.hasUnsavedChanges) return;
 
@@ -1683,6 +1756,16 @@ export class NoteEditor extends LitElement {
             : ""}
 
           <div class="topbar-spacer"></div>
+
+          <button
+            class="icon-btn pin-btn ${this.pinState.pinned ? "pinned" : ""}"
+            @click="${this.togglePin}"
+            ?disabled="${this.pinning || !this.note}"
+            title="${this.pinState.title}"
+            aria-pressed="${this.pinState.pinned ? "true" : "false"}"
+          >
+            ${icons.pin}<span>${this.pinState.label}</span>
+          </button>
 
           <div class="save-pill ${this.saveStatus}" title="${this._saveStatusLabel()}">
             <span class="dot"></span>

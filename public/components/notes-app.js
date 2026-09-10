@@ -1524,6 +1524,27 @@ class NotesApp extends LitElement {
   }
 
   /**
+   * The editor changed the open note - content or pin state.
+   *
+   * Keep the list's copy in step too: the list is what the user returns to when
+   * the editor closes, and it sorts pinned notes first, so a stale entry would
+   * show a pinned note in the wrong place until the next fetch.
+   */
+  _handleNoteUpdated(event) {
+    const note = event.detail?.note;
+    if (!note) return;
+
+    this.currentNote = note;
+
+    const index = this.notes.findIndex((n) => n.id === note.id);
+    if (index === -1) return;
+
+    const next = [...this.notes];
+    next[index] = { ...next[index], ...note };
+    this.notes = next;
+  }
+
+  /**
    * Render sync status indicator (libbar)
    */
   _renderSyncStatus() {
@@ -1794,7 +1815,7 @@ class NotesApp extends LitElement {
                 <note-editor
                   .note="${this.currentNote}"
                   .tags="${this.tags}"
-                  @note-updated="${(e) => this.currentNote = e.detail.note}"
+                  @note-updated="${(e) => this._handleNoteUpdated(e)}"
                   @close-editor="${this._handleCloseEditor}"
                 ></note-editor>
               `
