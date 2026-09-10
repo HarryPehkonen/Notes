@@ -4,8 +4,9 @@
  * The filenames there are not content-hashed, so a long max-age on code is how
  * a deploy goes invisible: the browser keeps serving the old component and a
  * shipped button never appears. Code therefore revalidates (the static route
- * sets a content-hash ETag, so an unchanged file costs one 304), while images
- * and fonts keep the long cache - a new image is not a deploy.
+ * sets a content-hash ETag and answers a matching If-None-Match with a real
+ * 304, so an unchanged file costs headers only), while images and fonts keep
+ * the long cache - a new image is not a deploy.
  *
  * Pure and separate from the route so the policy is testable.
  */

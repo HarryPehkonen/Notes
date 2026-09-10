@@ -4,8 +4,9 @@
  * The filenames under /static/ are not content-hashed, so a long max-age on
  * code is how a deploy goes invisible: the phone keeps serving the old
  * component and a shipped button never appears. Code revalidates instead (the
- * route sets a content-hash ETag, so an unchanged file is a cheap 304); images
- * and fonts keep the long cache because a new image is not a deploy.
+ * route sets a content-hash ETag and answers a matching If-None-Match with a
+ * real 304, so an unchanged file costs headers only); images and fonts keep
+ * the long cache because a new image is not a deploy.
  */
 import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { cacheControlFor, staticCacheEnvironment } from "../../server/static-cache.js";

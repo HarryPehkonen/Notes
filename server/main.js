@@ -11,6 +11,7 @@ import { GoogleAuthHandler, isVerifiedOAuthUser, revokeGoogleToken } from "./aut
 import { optionalAuth, redirectIfAuthenticated, requireAuth } from "./auth/middleware.js";
 import { cspMiddleware, injectNonce } from "./security-headers.js";
 import { cacheControlFor, staticCacheEnvironment } from "./static-cache.js";
+import { contentHashEtag, ifNoneMatchMatches } from "./static-conditions.js";
 import { createApiRateLimiter, getClientIp } from "./rate-limit.js";
 import {
   DEFAULT_APP_NAME,
@@ -445,23 +446,29 @@ router.get("/static/:path*", async (ctx) => {
 
     ctx.response.type = contentTypes[ext] || "application/octet-stream";
 
-    // Cache-Control: code revalidates (the ETag below is a content hash, so an
-    // unchanged file costs one 304); images and fonts keep the long cache.
-    // Policy lives in static-cache.js so it stays under test.
+    // Cache-Control: code revalidates while images and fonts keep the long
+    // cache. Policy lives in static-cache.js so it stays under test.
     ctx.response.headers.set(
       "Cache-Control",
       cacheControlFor({ filePath, ext, environment: staticCacheEnvironment() }),
     );
 
-    // ETag based on content hash for stable cache validation
-    const hashBuffer = await crypto.subtle.digest("SHA-1", file);
-    const hashHex = Array.from(new Uint8Array(hashBuffer)).map((b) =>
-      b.toString(16).padStart(2, "0")
-    ).join("");
-    ctx.response.headers.set("ETag", `"${hashHex}"`);
+    // Content-hash ETag, and an If-None-Match that matches it gets a bodiless
+    // 304: a revalidation of an unchanged file costs response headers only.
+    const etag = await contentHashEtag(file);
+    ctx.response.headers.set("ETag", etag);
+
+    if (ifNoneMatchMatches(ctx.request.headers.get("if-none-match"), etag)) {
+      ctx.response.status = 304;
+      ctx.response.body = null; // RFC 9110: a 304 carries no body
+      return;
+    }
 
     ctx.response.body = file;
-  } catch (_error) {
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) {
+      console.error(`Static file read failed for /static/${filePath}:`, error.message);
+    }
     ctx.response.status = 404;
     ctx.response.body = "File not found";
   }

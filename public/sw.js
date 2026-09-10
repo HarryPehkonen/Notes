@@ -4,12 +4,13 @@
  * Strategy:
  * - API/auth routes: network-only (never cached)
  * - Root path (/): network-first (fresh auth state, fallback to cache offline)
- * - Static assets: stale-while-revalidate, with the revalidate fetch bypassing
- *   the browser's HTTP cache so a deploy cannot hide behind an asset's own
- *   max-age. Bump CACHE_NAME with any public/ change.
+ * - Static assets: stale-while-revalidate. The revalidate fetch goes through
+ *   the browser's HTTP cache with `cache: "no-cache"`, so it sends
+ *   If-None-Match and an unchanged file comes back as a 304 with no body.
+ *   Bump CACHE_NAME with any public/ change.
  */
 
-const CACHE_NAME = "notes-app-v18";
+const CACHE_NAME = "notes-app-v19";
 
 self.addEventListener("install", (event) => {
   // Skip waiting so the new SW activates immediately
@@ -62,15 +63,16 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Static assets: stale-while-revalidate. The revalidate fetch bypasses the
-  // browser's HTTP cache (`cache: "reload"`) - an asset stored with a day-long
-  // max-age is otherwise never re-checked, which is exactly how a shipped
-  // change sits unseen on a phone. The server validates against a content-hash
-  // ETag, so this costs a 304 when nothing changed.
+  // Static assets: stale-while-revalidate. The revalidate fetch uses
+  // `cache: "no-cache"`, which revalidates *through* the browser's HTTP cache:
+  // the browser sends If-None-Match against the stored content-hash ETag and an
+  // unchanged file comes back as a 304 with no body. `reload` would instead
+  // skip the cache entirely and re-download the whole body every time - and a
+  // plain fetch would let a day-long max-age hide a shipped change on a phone.
   event.respondWith(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.match(event.request).then((cached) => {
-        const fetched = fetch(event.request, { cache: "reload" }).then((response) => {
+        const fetched = fetch(event.request, { cache: "no-cache" }).then((response) => {
           if (response.ok) {
             cache.put(event.request, response.clone());
           }
