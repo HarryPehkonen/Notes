@@ -10,6 +10,7 @@ import { DatabaseClient } from "./database/client.js";
 import { GoogleAuthHandler, isVerifiedOAuthUser, revokeGoogleToken } from "./auth/auth-handler.js";
 import { optionalAuth, redirectIfAuthenticated, requireAuth } from "./auth/middleware.js";
 import { cspMiddleware, injectNonce } from "./security-headers.js";
+import { cacheControlFor } from "./static-cache.js";
 import { createApiRateLimiter, getClientIp } from "./rate-limit.js";
 import {
   DEFAULT_APP_NAME,
@@ -444,16 +445,13 @@ router.get("/static/:path*", async (ctx) => {
 
     ctx.response.type = contentTypes[ext] || "application/octet-stream";
 
-    // Set caching headers for static assets
-    // Cache for 1 hour in development, 1 day in production
-    const maxAge = Deno.env.get("ENVIRONMENT") === "production" ? 86400 : 3600;
-    // Service worker must always revalidate so the browser detects updates quickly.
-    // ETag makes this cheap (304 Not Modified when unchanged).
-    if (filePath === "sw.js") {
-      ctx.response.headers.set("Cache-Control", "no-cache");
-    } else {
-      ctx.response.headers.set("Cache-Control", `public, max-age=${maxAge}`);
-    }
+    // Cache-Control: code revalidates (the ETag below is a content hash, so an
+    // unchanged file costs one 304); images and fonts keep the long cache.
+    // Policy lives in static-cache.js so it stays under test.
+    ctx.response.headers.set(
+      "Cache-Control",
+      cacheControlFor({ filePath, ext, environment: Deno.env.get("ENVIRONMENT") }),
+    );
 
     // ETag based on content hash for stable cache validation
     const hashBuffer = await crypto.subtle.digest("SHA-1", file);
@@ -461,11 +459,6 @@ router.get("/static/:path*", async (ctx) => {
       b.toString(16).padStart(2, "0")
     ).join("");
     ctx.response.headers.set("ETag", `"${hashHex}"`);
-
-    // Set longer cache for assets that rarely change
-    if (ext === "svg" || ext === "png" || ext === "jpg" || filePath.includes("favicon")) {
-      ctx.response.headers.set("Cache-Control", `public, max-age=${maxAge * 24}`); // 24x longer cache
-    }
 
     ctx.response.body = file;
   } catch (_error) {
