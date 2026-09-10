@@ -5,7 +5,13 @@ import { css, html, LitElement } from "lit";
 import { unsafeHTML } from "https://cdn.jsdelivr.net/npm/lit@3.1.0/directives/unsafe-html.js/+esm";
 import { highlightText } from "../utils/text.js";
 import { icons } from "../utils/icons.js";
-import { formatMatch, hasMatchBadge, isSemanticResults, sortBySimilarity } from "../utils/search-match.js";
+import {
+  formatMatch,
+  hasMatchBadge,
+  isSemanticResults,
+  sortBySimilarity,
+} from "../utils/search-match.js";
+import { formatListCount, remainingLabel } from "../utils/list-summary.js";
 
 export class NoteList extends LitElement {
   static properties = {
@@ -13,6 +19,7 @@ export class NoteList extends LitElement {
     searchQuery: { type: String },
     selectedTags: { type: Array },
     hasMore: { type: Boolean },
+    total: { type: Number }, // server-side total, for "20 of 65"
     loadingMore: { type: Boolean },
     viewType: { type: String }, // 'grid' or 'list'
     sortField: { type: String }, // 'modified', 'created', 'title'
@@ -393,14 +400,20 @@ export class NoteList extends LitElement {
       padding: 1.5rem 0;
     }
 
+    /* Deliberately loud: a subtle control at the end of a long list is a
+      control nobody finds - which is how notes past page one went missing. */
     .load-more button {
-      padding: 0.625rem 1.5rem;
+      width: 100%;
+      max-width: 22rem;
+      min-height: 48px;
+      padding: 0.75rem 1.5rem;
       background: var(--gray-100);
-      border: 1px solid var(--gray-300);
+      border: 2px solid var(--gray-400);
       border-radius: 0.5rem;
       cursor: pointer;
-      font-size: 0.875rem;
-      color: var(--gray-700);
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--gray-800);
       transition: all 0.2s;
     }
 
@@ -424,7 +437,7 @@ export class NoteList extends LitElement {
     }
 
     .load-more button {
-      min-height: 44px;
+      min-height: 48px;
     }
 
     @media (max-width: 768px) {
@@ -752,9 +765,10 @@ export class NoteList extends LitElement {
       <div class="notes-container">
         <div class="notes-header">
           <div class="notes-title">
-            ${filteredNotes.length} ${filteredNotes.length === 1
-              ? "Note"
-              : "Notes"} ${this.searchQuery
+            ${formatListCount({
+              loaded: filteredNotes.length,
+              total: this.total,
+            })} ${this.searchQuery
               ? html`
                 matching "${this.searchQuery}"
               `
@@ -819,7 +833,9 @@ export class NoteList extends LitElement {
                   @click="${this.handleLoadMore}"
                   ?disabled="${this.loadingMore}"
                 >
-                  ${this.loadingMore ? "Loading..." : "Load more"}
+                  ${this.loadingMore
+                    ? "Loading..."
+                    : remainingLabel({ loaded: filteredNotes.length, total: this.total })}
                 </button>
               </div>
             `

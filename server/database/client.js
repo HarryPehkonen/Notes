@@ -197,6 +197,57 @@ export function parsePostgreSQLStatements(sql) {
  * Database client with connection pooling
  */
 /**
+ * The FROM/WHERE half shared by the list and the count query, tag filters and
+ * all.
+ *
+ * Pure and exported so a count can never drift from the filters of the list it
+ * is reporting on: a total that quietly ignores a filter is worse than no
+ * total at all.
+ *
+ * @param {number} userId - Authenticated user id
+ * @param {Object} [options] - Filters (same shape as buildNotesListQuery)
+ * @returns {{fromWhere: string, params: unknown[], nextIndex: number}}
+ */
+export function buildNotesFilter(userId, options = {}) {
+  const { tags, excludeTags, search, pinned, archived } = options;
+
+  let fromWhere = `
+            FROM notes n
+            WHERE n.user_id = $1
+        `;
+  if (archived) {
+    fromWhere += ` AND n.is_archived = true`;
+  } else {
+    fromWhere += ` AND NOT n.is_archived`;
+  }
+  const params = [userId];
+  let paramIndex = 2;
+
+  if (search) {
+    fromWhere += ` AND n.search_vector @@ plainto_tsquery('english', $${paramIndex})`;
+    params.push(search);
+    paramIndex++;
+  }
+
+  if (pinned !== undefined) {
+    fromWhere += ` AND n.is_pinned = $${paramIndex}`;
+    params.push(pinned);
+    paramIndex++;
+  }
+
+  const tagFilter = buildTagFilterClause({
+    tagIds: tags || [],
+    excludeTagIds: excludeTags || [],
+    startIndex: paramIndex,
+  });
+  fromWhere += tagFilter.clause;
+  params.push(...tagFilter.params);
+  paramIndex = tagFilter.nextIndex;
+
+  return { fromWhere, params, nextIndex: paramIndex };
+}
+
+/**
  * Build the notes-list query, tag filters and all.
  *
  * Pure, so the filtering - especially the tri-state tag selection, where a
@@ -215,7 +266,8 @@ export function parsePostgreSQLStatements(sql) {
  * @returns {{query: string, params: unknown[]}}
  */
 export function buildNotesListQuery(userId, options = {}) {
-  const { limit = 20, offset = 0, tags, excludeTags, search, pinned, archived } = options;
+  const { limit = 20, offset = 0 } = options;
+  const { fromWhere, params, nextIndex } = buildNotesFilter(userId, options);
 
   let query = `
             SELECT n.*,
@@ -225,42 +277,29 @@ export function buildNotesListQuery(userId, options = {}) {
                        JOIN note_tags nt ON t.id = nt.tag_id
                        WHERE nt.note_id = n.id
                    ) as tags
-            FROM notes n
-            WHERE n.user_id = $1
-        `;
-  if (archived) {
-    query += ` AND n.is_archived = true`;
-  } else {
-    query += ` AND NOT n.is_archived`;
-  }
-  const params = [userId];
-  let paramIndex = 2;
-
-  if (search) {
-    query += ` AND n.search_vector @@ plainto_tsquery('english', $${paramIndex})`;
-    params.push(search);
-    paramIndex++;
-  }
-
-  if (pinned !== undefined) {
-    query += ` AND n.is_pinned = $${paramIndex}`;
-    params.push(pinned);
-    paramIndex++;
-  }
-
-  const tagFilter = buildTagFilterClause({
-    tagIds: tags || [],
-    excludeTagIds: excludeTags || [],
-    startIndex: paramIndex,
-  });
-  query += tagFilter.clause;
-  params.push(...tagFilter.params);
-  paramIndex = tagFilter.nextIndex;
-
+            `;
+  query += fromWhere;
   query += ` ORDER BY n.is_pinned DESC, n.updated_at DESC`;
-  query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+  query += ` LIMIT $${nextIndex} OFFSET $${nextIndex + 1}`;
   params.push(limit, offset);
 
+  return { query, params };
+}
+
+/**
+ * Build the COUNT query for a page's filters: how many notes exist in total.
+ *
+ * The list endpoint pages at 20, so the client could only ever say how many it
+ * had loaded ("20 Notes") - which reads as though the rest do not exist. No
+ * ORDER BY and no LIMIT: this answers "how many", not "which page".
+ *
+ * @param {number} userId - Authenticated user id
+ * @param {Object} [options] - Same filters as buildNotesListQuery
+ * @returns {{query: string, params: unknown[]}}
+ */
+export function buildNotesCountQuery(userId, options = {}) {
+  const { fromWhere, params } = buildNotesFilter(userId, options);
+  const query = `SELECT COUNT(*)::int as total ` + fromWhere;
   return { query, params };
 }
 
@@ -498,6 +537,22 @@ export class DatabaseClient {
     const { query, params } = buildNotesListQuery(userId, options);
     const result = await this.query(query, params);
     return result.rows;
+  }
+
+  /**
+   * Count the notes matching the same filters as getNotes.
+   *
+   * Used for the "20 of 65" line in the header: the list is paged, the total
+   * is not.
+   *
+   * @param {number} userId - Authenticated user id
+   * @param {Object} [options] - Same filters as getNotes
+   * @returns {Promise<number>}
+   */
+  async countNotes(userId, options = {}) {
+    const { query, params } = buildNotesCountQuery(userId, options);
+    const result = await this.query(query, params);
+    return result.rows[0]?.total ?? 0;
   }
 
   /**

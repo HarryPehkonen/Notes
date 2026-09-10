@@ -120,6 +120,10 @@ export function createNotesRouter() {
 
       const notes = await db.getNotes(user.id, options);
 
+      // The total behind the page: without it the header can only say how many
+      // it happened to load, which reads as though nothing else exists.
+      const total = await db.countNotes(user.id, options);
+
       ctx.response.body = {
         success: true,
         data: { notes },
@@ -127,6 +131,7 @@ export function createNotesRouter() {
           limit: options.limit,
           offset: options.offset,
           hasMore: notes.length === options.limit,
+          total,
           // So the client can see which tag filters really reached the query
           tags: tagIds,
           excludeTags: excludeTagIds,

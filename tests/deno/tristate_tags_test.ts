@@ -38,7 +38,8 @@ function fakeDb(rows: unknown[] = []) {
   const calls: {
     query: Array<{ sql: string; params: unknown[] }>;
     getNotes: unknown[][];
-  } = { query: [], getNotes: [] };
+    countNotes: unknown[][];
+  } = { query: [], getNotes: [], countNotes: [] };
 
   return {
     calls,
@@ -51,6 +52,11 @@ function fakeDb(rows: unknown[] = []) {
     getNotes: async (...args: unknown[]) => {
       calls.getNotes.push(args);
       return rows;
+    },
+    // deno-lint-ignore require-await
+    countNotes: async (...args: unknown[]) => {
+      calls.countNotes.push(args);
+      return rows.length;
     },
   };
 }
@@ -69,6 +75,7 @@ function fakeEmbedder(vector: number[] = [0.1, 0.2]) {
 }
 
 type FilterMeta = {
+  total?: number;
   tags: number[];
   excludeTags: number[];
   tagsApplied: boolean;
@@ -220,6 +227,19 @@ Deno.test("GET /api/notes: meta reports which tag filters were applied", async (
   assertEquals(meta.excludeTags, [4]);
   assertEquals(meta.tagsApplied, true);
   assertEquals(meta.excludeTagsApplied, true);
+});
+
+Deno.test("GET /api/notes: meta carries the total behind the page", async () => {
+  const db = fakeDb([{ id: 1 }, { id: 2 }, { id: 3 }]);
+  const ctx = await runNotesList("?tags=3", db);
+
+  const meta = (ctx.response.body as { meta: FilterMeta }).meta;
+  assertEquals(meta.total, 3, "the header needs a real total, not the page size");
+  assertEquals(
+    db.calls.countNotes[0][1],
+    db.calls.getNotes[0][1],
+    "the count must be asked for exactly the filters the list used",
+  );
 });
 
 Deno.test("GET /api/notes: with no tag filter meta says so rather than lying", async () => {

@@ -27,6 +27,7 @@ class NotesApp extends LitElement {
     flyoutOpen: { type: Boolean }, // desktop tags flyout
     userMenuOpen: { type: Boolean },
     hasMore: { type: Boolean },
+    total: { type: Number }, // total notes matching, from the API meta
     loadingMore: { type: Boolean },
     pendingSyncCount: { type: Number },
     syncStatus: { type: String }, // 'idle', 'syncing', 'pending', 'offline', 'error'
@@ -798,6 +799,7 @@ class NotesApp extends LitElement {
     this.userMenuOpen = false;
     this.toasts = [];
     this.hasMore = false;
+    this.total = null;
     this.loadingMore = false;
     this.pendingSyncCount = 0;
     this.syncStatus = "idle";
@@ -1218,6 +1220,7 @@ class NotesApp extends LitElement {
     try {
       this.loading = true;
       this.hasMore = false;
+      this.total = null;
 
       const hasSearchQuery = this.searchQuery && this.searchQuery.trim();
       const hasTagFilter = this.selectedTags.length > 0;
@@ -1233,6 +1236,7 @@ class NotesApp extends LitElement {
         });
         this.notes = result.data?.results || [];
         this.hasMore = result.meta?.hasMore || false;
+        this.total = result.meta?.total ?? this.total;
         this.viewMode = "search";
       } else if (hasSearchQuery && (hasTagFilter || hasPinnedFilter)) {
         // Search combined with tags and/or pinned - use advanced search
@@ -1244,12 +1248,14 @@ class NotesApp extends LitElement {
         });
         this.notes = result.data?.results || [];
         this.hasMore = result.meta?.hasMore || false;
+        this.total = result.meta?.total ?? this.total;
         this.viewMode = "search";
       } else if (hasSearchQuery) {
         // Just search query
         const result = await globalThis.NotesApp.searchNotes(this.searchQuery);
         this.notes = result.data?.results || [];
         this.hasMore = result.meta?.hasMore || false;
+        this.total = result.meta?.total ?? this.total;
         this.viewMode = "search";
       } else {
         // No search query, filter by tags/pinned (or show all)
@@ -1264,6 +1270,7 @@ class NotesApp extends LitElement {
         const result = await globalThis.NotesApp.getNotes(options);
         this.notes = result.data?.notes || [];
         this.hasMore = result.meta?.hasMore || false;
+        this.total = result.meta?.total ?? this.total;
         this.viewMode = "list";
       }
       this.requestUpdate(); // Force re-render
@@ -1327,6 +1334,7 @@ class NotesApp extends LitElement {
       }
 
       this.hasMore = result.meta?.hasMore || false;
+      this.total = result.meta?.total ?? this.total;
     } catch (error) {
       console.error("Failed to load more notes:", error);
       this.showToast("Failed to load more notes", "error");
@@ -1797,6 +1805,7 @@ class NotesApp extends LitElement {
                   .selectedTags="${this.selectedTags}"
                   .hasMore="${this.hasMore}"
                   .loadingMore="${this.loadingMore}"
+                  .total="${this.total}"
                 ></note-list>
               `}
           </div>
