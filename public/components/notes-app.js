@@ -38,6 +38,10 @@ class NotesApp extends LitElement {
     // `toasts` never triggers a re-render, so a toast whose timer had removed
     // it stayed on screen until something unrelated redrew the app.
     toasts: { type: Array },
+    // Set from the injected `globalThis.user` in the constructor, so it is
+    // correct on the first render. Declared anyway: a field the template reads
+    // must be reactive, or a later update would never repaint it.
+    user: { type: Object },
   };
 
   static styles = css`

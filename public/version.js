@@ -8,6 +8,6 @@
  *
  * A plain counter rather than a git sha: the only consumer is a human on a
  * phone being asked "what does it say?", so it has to be short, readable, and
- * comparable at a glance ("mine says 19, yours says 20").
+ * comparable at a glance ("mine says 22, yours says 23").
  */
-export const APP_VERSION = 22;
+export const APP_VERSION = 23;
