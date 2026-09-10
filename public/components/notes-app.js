@@ -8,6 +8,7 @@ import { icons } from "../utils/icons.js";
 import { excludedTagIds, requiredTagIds, tagStateMeta } from "../utils/tag-filter.js";
 import { readAppShortName } from "../utils/branding.js";
 import { readNotesPage } from "../utils/notes-response.js";
+import { makeToastId } from "../utils/toast-queue.js";
 import { APP_VERSION } from "../version.js";
 
 // Read once at module load: the server has already injected the meta tag by
@@ -33,6 +34,10 @@ class NotesApp extends LitElement {
     loadingMore: { type: Boolean },
     pendingSyncCount: { type: Number },
     syncStatus: { type: String }, // 'idle', 'syncing', 'pending', 'offline', 'error'
+    // Declared because the template renders it. Without this, writing to
+    // `toasts` never triggers a re-render, so a toast whose timer had removed
+    // it stayed on screen until something unrelated redrew the app.
+    toasts: { type: Array },
   };
 
   static styles = css`
@@ -1524,7 +1529,7 @@ class NotesApp extends LitElement {
   }
 
   showToast(message, type = "info") {
-    const toast = { id: Date.now(), message, type };
+    const toast = { id: makeToastId(this.toasts), message, type };
     this.toasts = [...this.toasts, toast];
 
     // Auto-remove after 5 seconds
