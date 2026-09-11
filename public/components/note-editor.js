@@ -110,21 +110,29 @@ export class NoteEditor extends LitElement {
     }
 
     /*
-    * The pin toggle keeps its text label and grows wider than the icon-only
-    * buttons: at the top of a note a bare icon is the kind of control that
-    * gets missed, and "Pinned" has to read at a glance.
+    * Icon-only, and 44px: this is a small control on a phone, so the target
+    * stays finger-sized. The icon set is deliberately stroke-only, so the
+    * pinned state is carried by the app's own "active" treatment (accent
+    * background) plus a heavier stroke - not by a filled glyph, which would
+    * break the one-language rule in utils/icons.js. The wording survives as
+    * the accessible name (aria-label in the template), and the resting colour
+    * is a step darker than the other icon buttons because this icon carries
+    * meaning on its own.
     */
     .pin-btn {
-      width: auto;
-      padding: 0 0.7rem;
-      gap: 0.35rem;
-      font-size: 0.875rem;
-      font-weight: 600;
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      color: var(--gray-700);
     }
 
     .pin-btn.pinned {
       background: var(--primary-light);
       color: var(--primary-dark);
+    }
+
+    .pin-btn.pinned svg {
+      stroke-width: 2.4;
     }
 
     .icon-btn.uploading {
@@ -1762,9 +1770,10 @@ export class NoteEditor extends LitElement {
             @click="${this.togglePin}"
             ?disabled="${this.pinning || !this.note}"
             title="${this.pinState.title}"
+            aria-label="${this.pinState.title}"
             aria-pressed="${this.pinState.pinned ? "true" : "false"}"
           >
-            ${icons.pin}<span>${this.pinState.label}</span>
+            ${icons.pin}
           </button>
 
           <div class="save-pill ${this.saveStatus}" title="${this._saveStatusLabel()}">

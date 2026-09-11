@@ -13,14 +13,17 @@
 /**
  * What the pin button should say for this note.
  *
+ * The control shows only an icon, so there is no visible text: `title` doubles
+ * as the accessible name (aria-label) and the desktop tooltip - the one place
+ * the wording is read.
+ *
  * @param {Object|null} note
- * @returns {{pinned: boolean, label: string, title: string, nextValue: boolean}}
+ * @returns {{pinned: boolean, title: string, nextValue: boolean}}
  */
 export function describePin(note) {
   const pinned = Boolean(note?.is_pinned);
   return {
     pinned,
-    label: pinned ? "Pinned" : "Pin",
     title: pinned ? "Unpin this note" : "Pin this note to the top",
     nextValue: !pinned,
   };
