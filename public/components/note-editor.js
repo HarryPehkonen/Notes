@@ -10,6 +10,7 @@ import DOMPurify from "dompurify";
 import { icons } from "../utils/icons.js";
 import { parseCheckboxTokens, toggleCheckbox, tokenizeCheckboxes } from "../utils/checkboxes.js";
 import { isSameNoteUpdate, resolveSaveContent } from "../utils/editor-state.js";
+import { buildVersionRows } from "../utils/version-list.js";
 import { describePin, withPinResult } from "../utils/pin-state.js";
 import { applyTagToggle } from "../utils/tag-endpoint.js";
 import { checkboxesToPrintGlyphs, printDocumentTitle } from "../utils/print.js";
@@ -39,6 +40,8 @@ export class NoteEditor extends LitElement {
     versions: { type: Array },
     loadingVersions: { type: Boolean },
     restoringVersionId: { type: Number },
+    // The version row being viewed read-only, or null when editing the live note.
+    previewRow: { type: Object },
     printing: { type: Boolean },
     pinning: { type: Boolean },
   };
@@ -256,6 +259,141 @@ export class NoteEditor extends LitElement {
 
     .hidden-file-input {
       display: none;
+    }
+
+    /* ---------- Read-only version preview ---------- */
+    /* Fixed, so the past version fills the screen and cannot be mistaken for the
+      live note; the bar says what it is and offers the only two ways out. */
+    .version-preview {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: flex;
+      flex-direction: column;
+      background: var(--white);
+    }
+
+    .version-preview-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem 0.75rem;
+      padding: 0.75rem 1rem;
+      background: var(--gray-100);
+      border-bottom: 2px solid var(--gray-400);
+    }
+
+    .version-preview-heading {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+
+    .version-preview-label {
+      font-size: 0.9375rem;
+      font-weight: 700;
+      color: var(--gray-900);
+    }
+
+    .version-preview-when {
+      font-size: 0.8125rem;
+      color: var(--gray-700);
+    }
+
+    .version-preview-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-left: auto;
+    }
+
+    .version-btn {
+      min-height: 44px;
+      padding: 0.5rem 0.9rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      border: 1px solid var(--gray-400);
+      border-radius: 8px;
+      background: var(--white);
+      color: var(--gray-900);
+      cursor: pointer;
+    }
+
+    .version-btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--white);
+    }
+
+    .version-preview-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem 1.25rem 2.5rem;
+      background: var(--gray-50, #f8f9fa);
+      /* Greyed out: visible, selectable, obviously not the live note. */
+      color: var(--gray-700);
+    }
+
+    .version-preview-title {
+      margin: 0 0 0.75rem;
+      font-size: 1.25rem;
+      color: var(--gray-700);
+    }
+
+    .version-preview-content {
+      user-select: text;
+    }
+
+    .history-open {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.1rem;
+      min-height: 44px;
+      padding: 0.35rem 0.4rem;
+      background: none;
+      border: none;
+      border-radius: 0.4rem;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .history-open:hover {
+      background: var(--gray-100);
+    }
+
+    .history-row.is-current .history-version {
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .history-row.is-viewing {
+      background: var(--gray-100);
+      border-radius: 0.4rem;
+    }
+
+    .history-current-tag {
+      align-self: center;
+      padding: 0.15rem 0.4rem;
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--white);
+      background: var(--accent);
+      border-radius: 0.5rem;
+    }
+
+    @media (max-width: 640px) {
+      .version-preview-actions {
+        margin-left: 0;
+        width: 100%;
+      }
+
+      .version-btn {
+        flex: 1;
+      }
     }
 
     /* ---------- Version history panel ---------- */
@@ -881,6 +1019,7 @@ export class NoteEditor extends LitElement {
     this.versions = [];
     this.loadingVersions = false;
     this.restoringVersionId = null;
+    this.previewRow = null;
     this.printing = false;
     this._editingContent = null; // Track textarea content across preview toggles
     this._isSaving = false; // Non-reactive guard against concurrent saves
@@ -1050,6 +1189,7 @@ export class NoteEditor extends LitElement {
         this.hasUnsavedChanges = false;
         this.historyOpen = false;
         this.versions = [];
+        this.previewRow = null;
       }
     }
   }
@@ -1219,6 +1359,9 @@ export class NoteEditor extends LitElement {
 
   hasChanges() {
     if (!this.originalNote) return true;
+    // A past version is open read-only, so nothing is being edited and nothing
+    // is unsaved. (The overlay never touches the editable fields at all.)
+    if (this.previewRow) return false;
 
     const titleInput = this.shadowRoot.querySelector(".doc-title");
     const contentTextarea = this.shadowRoot.querySelector(".content-textarea");
@@ -1287,6 +1430,9 @@ export class NoteEditor extends LitElement {
   }
 
   async autoSave() {
+    // Never save while a past version is open: the editor is not on screen, and
+    // a save from here would write content the user cannot see.
+    if (this.previewRow) return;
     if (!this.note || this._isSaving || !this.hasUnsavedChanges) return;
 
     const titleInput = this.shadowRoot.querySelector(".doc-title");
@@ -1459,7 +1605,7 @@ export class NoteEditor extends LitElement {
   async restoreVersion(version) {
     if (
       !confirm(
-        `Restore version ${version.version_number}? This replaces the current title and content.`,
+        `Restore version ${version.versionNumber}? This replaces the current title and content.`,
       )
     ) {
       return;
@@ -1475,6 +1621,8 @@ export class NoteEditor extends LitElement {
 
       this._editingContent = null;
       this.selectedTags = updatedNote.tags || [];
+      // Restoring is what turns the content editable again.
+      this.previewRow = null;
 
       this.dispatchEvent(
         new CustomEvent("note-updated", {
@@ -1489,13 +1637,89 @@ export class NoteEditor extends LitElement {
       this.saveStatus = "saved";
       this.historyOpen = false;
       this.versions = [];
-      this.showToast(`Restored version ${version.version_number}`, "success");
+      this.showToast(`Restored version ${version.versionNumber}`, "success");
     } catch (error) {
       console.error("Failed to restore version:", error);
       this.showToast("Failed to restore version", "error");
     } finally {
       this.restoringVersionId = null;
     }
+  }
+
+  /**
+   * Open a recorded version read-only, over the editor.
+   *
+   * The Current row closes the preview instead of opening it: that row *is* the
+   * live note, so "viewing" it means going back to editing it.
+   */
+  openVersionPreview(row) {
+    if (!row) return;
+    if (row.isCurrent) {
+      this.closeVersionPreview();
+      return;
+    }
+    this.previewRow = row;
+    this.historyOpen = false;
+  }
+
+  /**
+   * Leave the read-only view and go back to the live note.
+   */
+  closeVersionPreview() {
+    this.previewRow = null;
+  }
+
+  /**
+   * Copy a version's title and Markdown body to the clipboard - opening an old
+   * version is usually about lifting something out of it.
+   */
+  async copyVersionText() {
+    if (!this.previewRow) return;
+    const text = `${this.previewRow.title}\n\n${this.previewRow.content}`.trim();
+    try {
+      await navigator.clipboard.writeText(text);
+      this.showToast("Copied this version", "success");
+    } catch (error) {
+      console.error("Clipboard write failed:", error);
+      this.showToast("Could not copy - select the text instead", "error");
+    }
+  }
+
+  /**
+   * A past version, drawn as an overlay rather than as a read-only flag on the
+   * real inputs. That way the editable fields never hold another version's text,
+   * so no stray save can write it back.
+   */
+  _renderVersionPreview() {
+    const row = this.previewRow;
+    if (!row) return "";
+
+    return html`
+      <div class="version-preview" role="dialog" aria-label="${row.label} - read only">
+        <div class="version-preview-bar">
+          <div class="version-preview-heading">
+            <span class="version-preview-label">${row.label} - read only</span>
+            <span class="version-preview-when">
+              ${row.when ? this.formatDate(row.when) : "date unknown"}
+            </span>
+          </div>
+          <div class="version-preview-actions">
+            <button class="version-btn" @click="${this.copyVersionText}">Copy text</button>
+            <button class="version-btn primary" @click="${() => this.restoreVersion(row)}">
+              Restore - make editable
+            </button>
+            <button class="version-btn" @click="${this
+              .closeVersionPreview}">Back to current</button>
+          </div>
+        </div>
+        <div class="version-preview-body">
+          <h2 class="version-preview-title">${row.title || "(no title)"}</h2>
+          <div class="version-preview-content">
+            ${unsafeHTML(this.renderMarkdown(row.content || ""))}
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   /**
@@ -1765,27 +1989,46 @@ export class NoteEditor extends LitElement {
           ? html`
             <div class="history-empty">Loading…</div>
           `
-          : this.versions.length === 0
-          ? html`
-            <div class="history-empty">No earlier versions yet</div>
-          `
-          : this.versions.map((version) =>
-            html`
-              <div class="history-row">
-                <div class="history-info">
-                  <div class="history-version">Version ${version.version_number}</div>
-                  <div class="history-date">${this.formatDate(version.created_at)}</div>
-                </div>
-                <button
-                  class="history-restore-btn"
-                  ?disabled="${this.restoringVersionId === version.id}"
-                  @click="${() => this.restoreVersion(version)}"
+          : html`
+            ${buildVersionRows(this.note, this.versions).map((row) =>
+              html`
+                <div
+                  class="history-row ${row.isCurrent
+                    ? "is-current"
+                    : ""} ${this.previewRow && this.previewRow.id === row.id ? "is-viewing" : ""}"
                 >
-                  ${this.restoringVersionId === version.id ? "Restoring…" : "Restore"}
-                </button>
-              </div>
-            `
-          )}
+                  <button
+                    class="history-open"
+                    title="${row.isCurrent
+                      ? "Back to the current note"
+                      : "View this version (read only)"}"
+                    @click="${() => this.openVersionPreview(row)}"
+                  >
+                    <span class="history-version">${row.label}</span>
+                    <span class="history-date">${row.when ? this.formatDate(row.when) : ""}</span>
+                  </button>
+                  ${row.isCurrent
+                    ? html`
+                      <span class="history-current-tag">Latest</span>
+                    `
+                    : html`
+                      <button
+                        class="history-restore-btn"
+                        ?disabled="${this.restoringVersionId === row.id}"
+                        @click="${() => this.restoreVersion(row)}"
+                      >
+                        ${this.restoringVersionId === row.id ? "Restoring…" : "Restore"}
+                      </button>
+                    `}
+                </div>
+              `
+            )}
+            ${this.versions.length === 0
+              ? html`
+                <div class="history-empty">No earlier versions yet</div>
+              `
+              : ""}
+          `}
       </div>
     `;
   }
@@ -1926,6 +2169,7 @@ export class NoteEditor extends LitElement {
           </div>
         </div>
 
+        ${this.previewRow ? this._renderVersionPreview() : ""}
         ${this.printing ? this._renderPrintDoc() : ""}
       </div>
     `;
