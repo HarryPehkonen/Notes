@@ -47,10 +47,19 @@ Deno.test("the old version is shown read-only, with its date and title", () => {
   assertStringIncludes(editor, "version-preview-title");
 });
 
-Deno.test("three labelled ways out exist: copy, restore, back", () => {
-  assertStringIncludes(editor, "Copy text");
+Deno.test("two labelled ways out exist: restore and back", () => {
   assertStringIncludes(editor, "Restore - make editable");
   assertStringIncludes(editor, "Back to current");
+});
+
+Deno.test("copying is selecting: no Copy button, and the body is selectable", () => {
+  // His call: "Copy text doesn't need to be a button. I'll just select and copy
+  // myself." So the affordance that must exist is selectable text - not a button
+  // that could rot away from the design.
+  assertEquals(/>Copy text</.test(editor), false);
+  assertEquals(/copyVersionText/.test(editor), false);
+  assertStringIncludes(editor, "user-select: text;");
+  assertStringIncludes(editor, "-webkit-user-select: text;");
 });
 
 Deno.test("restoring clears the preview, so the content is editable again", () => {

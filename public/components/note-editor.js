@@ -330,8 +330,12 @@ export class NoteEditor extends LitElement {
       overflow-y: auto;
       padding: 1rem 1.25rem 2.5rem;
       background: var(--gray-50, #f8f9fa);
-      /* Greyed out: visible, selectable, obviously not the live note. */
+      /* Greyed out: visible, obviously not the live note. */
       color: var(--gray-700);
+      /* Selectable on purpose: copying out of a version is done by selecting it,
+        so this must stay text even if a future rule dims the editor's chrome. */
+      user-select: text;
+      -webkit-user-select: text;
     }
 
     .version-preview-title {
@@ -342,6 +346,7 @@ export class NoteEditor extends LitElement {
 
     .version-preview-content {
       user-select: text;
+      -webkit-user-select: text;
     }
 
     .history-open {
@@ -1670,25 +1675,13 @@ export class NoteEditor extends LitElement {
   }
 
   /**
-   * Copy a version's title and Markdown body to the clipboard - opening an old
-   * version is usually about lifting something out of it.
-   */
-  async copyVersionText() {
-    if (!this.previewRow) return;
-    const text = `${this.previewRow.title}\n\n${this.previewRow.content}`.trim();
-    try {
-      await navigator.clipboard.writeText(text);
-      this.showToast("Copied this version", "success");
-    } catch (error) {
-      console.error("Clipboard write failed:", error);
-      this.showToast("Could not copy - select the text instead", "error");
-    }
-  }
-
-  /**
    * A past version, drawn as an overlay rather than as a read-only flag on the
    * real inputs. That way the editable fields never hold another version's text,
    * so no stray save can write it back.
+   *
+   * Deliberately no Copy button: the body is selectable, and copying a version
+   * out is just selecting it (his call - "Copy text doesn't need to be a
+   * button. I'll just select and copy myself").
    */
   _renderVersionPreview() {
     const row = this.previewRow;
@@ -1704,7 +1697,6 @@ export class NoteEditor extends LitElement {
             </span>
           </div>
           <div class="version-preview-actions">
-            <button class="version-btn" @click="${this.copyVersionText}">Copy text</button>
             <button class="version-btn primary" @click="${() => this.restoreVersion(row)}">
               Restore - make editable
             </button>
