@@ -15,6 +15,7 @@ screenshots/
 
 # Database backups
 backup.sql
+backups/
 
 # Scratch files
 notes.txt
