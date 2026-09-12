@@ -98,12 +98,19 @@ Before 2026-09-10 the same wrong input got four different answers:
 | `PUT /api/notes/:id` `tags: "c++"` | **200, every tag silently wiped** | 400 |
 | `PUT /api/notes/:id` `tags: [999]` | 200, silently ignored | 400 |
 
-## Still to come
+## Enforced since client version 26
 
-`PUT /api/notes/:id` still *accepts* a validated `tags` field, because the
-deployed client used to send one. It starts rejecting the field with a 400 once
-the client is known to have stopped sending it — staged so no save can break
-mid-rollout.
+`PUT /api/notes/:id` **refuses** a `tags` field outright:
+
+```
+400 {"success": false, "error": "tags is not accepted here - use PUT or DELETE /api/notes/:id/tags/:tagId"}
+```
+
+That includes `tags: []` — an empty list is still a tags field. The refusal was
+staged: the field was accepted (but validated) while a deployed client might
+still send one, and the client stopped sending it in version 25. From version 26
+the contract is closed — a note's tags are written **only** as per-tag
+operations, or as an id array when the note is created.
 
 **Parked** (see the Parked Proposals note for the criteria): a database-level
 `CHECK (name = lower(btrim(name)))` backstop on `tags`, so a write that bypasses
