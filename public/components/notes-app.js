@@ -230,11 +230,13 @@ class NotesApp extends LitElement {
     * labelled - it is a support tool, not decoration.
     */
     .user-popover-version {
-      font-size: 0.75rem;
-      color: var(--gray-500);
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--gray-700);
       padding: 0 0.5rem 0.5rem;
       border-bottom: 1px solid var(--gray-200);
       margin-bottom: 0.4rem;
+      font-variant-numeric: tabular-nums;
     }
 
     .user-popover-logout {
@@ -486,6 +488,25 @@ class NotesApp extends LitElement {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    /*
+    * Build number, in the drawer as well as the account popover.
+    *
+    * On a phone the popover is not how the menu opens - the hamburger is - so
+    * a version that only lived there was invisible on mobile, which is exactly
+    * where "what does your phone say?" gets asked. Deliberately larger and
+    * darker than the popover's line: it is read at arm's length, and it is the
+    * whole diagnosis when a device is on stale code.
+    */
+    .drawer-version {
+      margin-top: 0.6rem;
+      padding-top: 0.6rem;
+      border-top: 1px solid var(--gray-200);
+      font-size: 0.9375rem;
+      font-weight: 600;
+      color: var(--gray-900);
+      font-variant-numeric: tabular-nums;
     }
 
     /* ---------- Library bar (always visible, mobile + desktop) ---------- */
@@ -1716,6 +1737,9 @@ class NotesApp extends LitElement {
                 </button>
               `
               : ""}
+            <div class="drawer-version" title="Client build - bumped with every UI change">
+              Version ${APP_VERSION}
+            </div>
           </div>
         </aside>
 

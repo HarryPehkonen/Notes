@@ -59,3 +59,15 @@ Deno.test("routes: tag names are normalized through one helper", () => {
     "inline normalization should be replaced by the shared helper",
   );
 });
+
+Deno.test("routes: the note PUT refuses a tags field outright", () => {
+  // Tags are operations now. A note save carrying a whole tag list is a
+  // read-modify-write, so the field is rejected rather than interpreted - and
+  // the error says where tag changes belong.
+  assert(
+    !notesSource.includes("updates.tags"),
+    "the PUT handler must not assign tags at all",
+  );
+  assertStringIncludes(notesSource, "tags is not accepted here");
+  assertStringIncludes(notesSource, "/tags/:tagId");
+});

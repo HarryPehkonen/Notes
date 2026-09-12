@@ -368,32 +368,19 @@ export function createNotesRouter() {
       const fields = normalizeNoteFields({ title, content });
       if (fields.title !== undefined) updates.title = fields.title;
       if (fields.content !== undefined) updates.content = fields.content;
-      // A `tags` field must be an array of tag ids. This line used to coerce
-      // anything else to [] - so `tags: "c++"` cleared every tag on the note and
-      // still answered 200. Now it is a 400, and an unknown id is named instead
-      // of being silently skipped by the ownership filter in the SQL.
-      const tagCheck = parseTagIds(tags);
-      if (!tagCheck.ok) {
+      // Tags are no longer accepted here at all. A note save carrying a whole
+      // tag list is a read-modify-write - a client holding a list it read a
+      // minute ago silently drops tags another device just added - so the field
+      // is refused rather than interpreted. Tag changes are operations against
+      // their own endpoints; the error says so, because a caller that gets a
+      // 400 should not have to read the source to find out where to go.
+      if (tags !== undefined) {
         ctx.response.status = 400;
-        ctx.response.body = { success: false, error: tagCheck.error };
+        ctx.response.body = {
+          success: false,
+          error: "tags is not accepted here - use PUT or DELETE /api/notes/:id/tags/:tagId",
+        };
         return;
-      }
-      if (tagCheck.ids !== null) {
-        if (tagCheck.ids.length > 0) {
-          const unknown = findUnknownTagIds(
-            tagCheck.ids,
-            await db.getOwnedTagIds(user.id, tagCheck.ids),
-          );
-          if (unknown.length > 0) {
-            ctx.response.status = 400;
-            ctx.response.body = {
-              success: false,
-              error: `unknown tag id ${unknown[0]}`,
-            };
-            return;
-          }
-        }
-        updates.tags = tagCheck.ids;
       }
       if (is_pinned !== undefined) updates.is_pinned = Boolean(is_pinned);
       if (is_archived !== undefined) updates.is_archived = Boolean(is_archived);
