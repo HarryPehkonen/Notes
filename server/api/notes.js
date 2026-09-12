@@ -8,6 +8,7 @@ import { broadcastToUser } from "../services/ws-connections.js";
 import { queueNoteEmbedding } from "./semantic.js";
 import { parseTagFilterParams } from "./tag-filter.js";
 import { normalizeNoteFields } from "./note-fields.js";
+import { findUnknownTagIds, parseTagIds } from "./tag-input.js";
 
 /**
  * Extract image filenames from note content
@@ -247,13 +248,38 @@ export function createNotesRouter() {
         return;
       }
 
+      // Tag ids are validated BEFORE anything is written: a bad id is a 400
+      // naming it, not a 500 from the foreign key, and never a silently
+      // untagged note.
+      const tagCheck = parseTagIds(tags);
+      if (!tagCheck.ok) {
+        ctx.response.status = 400;
+        ctx.response.body = { success: false, error: tagCheck.error };
+        return;
+      }
+      const tagIds = tagCheck.ids ?? [];
+      if (tagIds.length > 0) {
+        const unknown = findUnknownTagIds(
+          tagIds,
+          await db.getOwnedTagIds(user.id, tagIds),
+        );
+        if (unknown.length > 0) {
+          ctx.response.status = 400;
+          ctx.response.body = {
+            success: false,
+            error: `unknown tag id ${unknown[0]}`,
+          };
+          return;
+        }
+      }
+
       const fields = normalizeNoteFields({ title, content });
 
       const note = await db.createNote({
         userId: user.id,
         title: fields.title,
         content: fields.content,
-        tags: Array.isArray(tags) ? tags : [],
+        tags: tagIds,
       });
 
       // Keep semantic search fresh - never blocks or fails the write
@@ -342,7 +368,33 @@ export function createNotesRouter() {
       const fields = normalizeNoteFields({ title, content });
       if (fields.title !== undefined) updates.title = fields.title;
       if (fields.content !== undefined) updates.content = fields.content;
-      if (tags !== undefined) updates.tags = Array.isArray(tags) ? tags : [];
+      // A `tags` field must be an array of tag ids. This line used to coerce
+      // anything else to [] - so `tags: "c++"` cleared every tag on the note and
+      // still answered 200. Now it is a 400, and an unknown id is named instead
+      // of being silently skipped by the ownership filter in the SQL.
+      const tagCheck = parseTagIds(tags);
+      if (!tagCheck.ok) {
+        ctx.response.status = 400;
+        ctx.response.body = { success: false, error: tagCheck.error };
+        return;
+      }
+      if (tagCheck.ids !== null) {
+        if (tagCheck.ids.length > 0) {
+          const unknown = findUnknownTagIds(
+            tagCheck.ids,
+            await db.getOwnedTagIds(user.id, tagCheck.ids),
+          );
+          if (unknown.length > 0) {
+            ctx.response.status = 400;
+            ctx.response.body = {
+              success: false,
+              error: `unknown tag id ${unknown[0]}`,
+            };
+            return;
+          }
+        }
+        updates.tags = tagCheck.ids;
+      }
       if (is_pinned !== undefined) updates.is_pinned = Boolean(is_pinned);
       if (is_archived !== undefined) updates.is_archived = Boolean(is_archived);
 
@@ -397,6 +449,117 @@ export function createNotesRouter() {
         success: false,
         error: "Failed to update note",
       };
+    }
+  });
+
+  // PUT /api/notes/:id/tags/:tagId - Attach one tag (idempotent)
+  //
+  // One tag per request, by design: the UI adds a tag per tap, and this
+  // operation ASSERTS the tag exists, so an unknown id - or another user's - is
+  // a 400 rather than a silent no-op. Attaching a tag that is already attached
+  // is success: retrying on a flaky connection is safe.
+  router.put("/:id/tags/:tagId", async (ctx) => {
+    const { user, db } = ctx.state;
+    const noteId = parseInt(ctx.params.id);
+    const tagId = parseInt(ctx.params.tagId);
+
+    if (!noteId || !tagId) {
+      ctx.response.status = 400;
+      ctx.response.body = {
+        success: false,
+        error: "Invalid note or tag ID",
+      };
+      return;
+    }
+
+    try {
+      const existing = await db.query(
+        `SELECT id, updated_at FROM notes WHERE id = $1 AND user_id = $2`,
+        [noteId, user.id],
+      );
+      if (existing.rows.length === 0) {
+        ctx.response.status = 404;
+        ctx.response.body = { success: false, error: "Note not found" };
+        return;
+      }
+
+      const owned = await db.getOwnedTagIds(user.id, [tagId]);
+      if (owned.length === 0) {
+        ctx.response.status = 400;
+        ctx.response.body = {
+          success: false,
+          error: `unknown tag id ${tagId}`,
+        };
+        return;
+      }
+
+      await db.addNoteTag(noteId, tagId, user.id);
+
+      // Return the note's full tag list so the client re-renders from the
+      // server's answer rather than guessing. Tag edits deliberately do NOT
+      // touch notes.updated_at: a tag tap must not look like a content edit to
+      // an open editor's optimistic lock.
+      const tags = await db.getNoteTags(noteId);
+      broadcastToUser(user.id, {
+        type: "note-updated",
+        noteId,
+        updatedAt: existing.rows[0].updated_at,
+      });
+
+      ctx.response.body = { success: true, data: { id: noteId, tags } };
+    } catch (error) {
+      console.error("Error attaching tag:", error);
+      ctx.response.status = 500;
+      ctx.response.body = { success: false, error: "Failed to attach tag" };
+    }
+  });
+
+  // DELETE /api/notes/:id/tags/:tagId - Detach one tag (idempotent)
+  //
+  // No request body: RFC 9110 9.3.5 gives content in a DELETE no generally
+  // defined semantics (intermediaries may reject it), so the id travels in the
+  // path. Detaching something that is not attached - an unknown tag, another
+  // user's tag, a link that does not exist - is a no-op reported as success,
+  // which also keeps this from being an oracle for other users' tag ids.
+  router.delete("/:id/tags/:tagId", async (ctx) => {
+    const { user, db } = ctx.state;
+    const noteId = parseInt(ctx.params.id);
+    const tagId = parseInt(ctx.params.tagId);
+
+    if (!noteId || !tagId) {
+      ctx.response.status = 400;
+      ctx.response.body = {
+        success: false,
+        error: "Invalid note or tag ID",
+      };
+      return;
+    }
+
+    try {
+      const existing = await db.query(
+        `SELECT id, updated_at FROM notes WHERE id = $1 AND user_id = $2`,
+        [noteId, user.id],
+      );
+      if (existing.rows.length === 0) {
+        ctx.response.status = 404;
+        ctx.response.body = { success: false, error: "Note not found" };
+        return;
+      }
+
+      await db.removeNoteTag(noteId, tagId);
+
+      const tags = await db.getNoteTags(noteId);
+      broadcastToUser(user.id, {
+        type: "note-updated",
+        noteId,
+        updatedAt: existing.rows[0].updated_at,
+      });
+
+      ctx.response.body = { success: true, data: { id: noteId, tags } };
+    } catch (error) {
+      console.error("Error detaching tag:", error);
+      ctx.response.status = 500;
+      ctx.response.body = { success: false, error: "Failed to detach tag" };
     }
   });
 

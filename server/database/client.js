@@ -714,6 +714,84 @@ export class DatabaseClient {
     return result.rows;
   }
 
+  /**
+   * The tags attached to a note.
+   * @param {number} noteId
+   * @returns {Promise<Array<{id: number, name: string, color: string}>>}
+   */
+  async getNoteTags(noteId) {
+    const result = await this.query(
+      `SELECT t.id, t.name, t.color
+             FROM tags t
+             JOIN note_tags nt ON t.id = nt.tag_id
+             WHERE nt.note_id = $1
+             ORDER BY t.name`,
+      [noteId],
+    );
+    return result.rows;
+  }
+
+  /**
+   * The subset of `tagIds` this user actually owns.
+   *
+   * Callers compare it with what was requested so a would-be silent skip (or a
+   * raw foreign-key error) becomes a 400 naming the offending id instead.
+   * @param {number} userId
+   * @param {number[]} tagIds
+   * @returns {Promise<number[]>}
+   */
+  async getOwnedTagIds(userId, tagIds) {
+    if (tagIds.length === 0) return [];
+    const result = await this.query(
+      `SELECT id FROM tags WHERE user_id = $1 AND id = ANY($2::int[])`,
+      [userId, tagIds],
+    );
+    return result.rows.map((row) => row.id);
+  }
+
+  /**
+   * Attach one tag to one note. Idempotent: attaching it twice changes nothing.
+   * @param {number} noteId
+   * @param {number} tagId
+   * @param {number} userId - ownership guard; another user's tag inserts nothing
+   * @returns {Promise<boolean>} True when the link exists (was or already was)
+   */
+  async addNoteTag(noteId, tagId, userId) {
+    const inserted = await this.query(
+      `INSERT INTO note_tags (note_id, tag_id)
+             SELECT $1, id FROM tags WHERE id = $2 AND user_id = $3
+             ON CONFLICT DO NOTHING
+             RETURNING tag_id`,
+      [noteId, tagId, userId],
+    );
+    if (inserted.rows.length > 0) return true;
+
+    // Nothing inserted: either the link was already there (fine), or the tag is
+    // not this user's. Distinguish so the caller can keep the ownership guard
+    // honest without turning a repeat call into an error.
+    const existing = await this.query(
+      `SELECT 1 FROM note_tags nt
+             JOIN tags t ON t.id = nt.tag_id
+             WHERE nt.note_id = $1 AND nt.tag_id = $2 AND t.user_id = $3`,
+      [noteId, tagId, userId],
+    );
+    return existing.rows.length > 0;
+  }
+
+  /**
+   * Detach one tag from one note. Idempotent: removing a link that is not there
+   * is a no-op, which the caller reports as success.
+   * @param {number} noteId
+   * @param {number} tagId
+   * @returns {Promise<void>}
+   */
+  async removeNoteTag(noteId, tagId) {
+    await this.query(
+      `DELETE FROM note_tags WHERE note_id = $1 AND tag_id = $2`,
+      [noteId, tagId],
+    );
+  }
+
   // Version History
 
   /**

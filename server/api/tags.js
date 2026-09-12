@@ -4,6 +4,7 @@
  */
 
 import { Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
+import { normalizeTagName } from "./tag-input.js";
 
 export function createTagsRouter() {
   const router = new Router();
@@ -46,11 +47,14 @@ export function createTagsRouter() {
       const body = await ctx.request.body({ type: "json" }).value;
       const { name, color = "#667eea" } = body;
 
-      if (!name || name.trim().length === 0) {
+      // Trimmed, lower-cased and length-checked in one place: an over-long name
+      // would otherwise reach the VARCHAR(100) column and come back a 500.
+      const normalized = normalizeTagName(name);
+      if (!normalized.ok) {
         ctx.response.status = 400;
         ctx.response.body = {
           success: false,
-          error: "Tag name is required",
+          error: normalized.error,
         };
         return;
       }
@@ -66,7 +70,7 @@ export function createTagsRouter() {
         return;
       }
 
-      const tag = await db.createTag(user.id, name.trim().toLowerCase(), color);
+      const tag = await db.createTag(user.id, normalized.name, color);
 
       ctx.response.status = 201;
       ctx.response.body = {
@@ -126,16 +130,17 @@ export function createTagsRouter() {
       let paramIndex = 3;
 
       if (name !== undefined) {
-        if (name.trim().length === 0) {
+        const normalized = normalizeTagName(name);
+        if (!normalized.ok) {
           ctx.response.status = 400;
           ctx.response.body = {
             success: false,
-            error: "Tag name cannot be empty",
+            error: normalized.error,
           };
           return;
         }
         updates.push(`name = $${paramIndex++}`);
-        params.push(name.trim().toLowerCase());
+        params.push(normalized.name);
       }
 
       if (color !== undefined) {
