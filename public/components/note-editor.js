@@ -11,6 +11,7 @@ import { icons } from "../utils/icons.js";
 import { parseCheckboxTokens, toggleCheckbox, tokenizeCheckboxes } from "../utils/checkboxes.js";
 import { isSameNoteUpdate, resolveSaveContent } from "../utils/editor-state.js";
 import { describePin, withPinResult } from "../utils/pin-state.js";
+import { applyTagToggle } from "../utils/tag-endpoint.js";
 import { checkboxesToPrintGlyphs, printDocumentTitle } from "../utils/print.js";
 import { createInertHtmlRenderer } from "../utils/inert-html.js";
 
@@ -1053,21 +1054,70 @@ export class NoteEditor extends LitElement {
     }
   }
 
-  toggleTag(tagId) {
-    const index = this.selectedTags.findIndex((t) => t && t.id === tagId);
-    if (index === -1) {
-      const tag = this.tags.find((t) => t && t.id === tagId);
-      if (tag) {
-        this.selectedTags = [...this.selectedTags, tag];
-      } else {
-        console.error("Tag not found with ID:", tagId);
-        return;
-      }
-    } else {
-      this.selectedTags = this.selectedTags.filter((t) => t && t.id !== tagId);
+  /**
+   * Put a tag on, or take it off, the open note - one tag per tap.
+   *
+   * The tag is persisted the moment it is tapped, against its own endpoint,
+   * instead of riding along in the note's save payload. Two reasons: the
+   * operation is idempotent (retrying on a flaky connection is safe), and a
+   * whole-list rewrite in a save is how concurrent tag edits used to clobber
+   * each other. Like the pin, this stays out of the sync manager - queueing a
+   * tap offline has no sensible meaning while the user is looking at the chip.
+   *
+   * Optimistic: the chip flips immediately and reverts if the request fails.
+   */
+  async toggleTag(tagId) {
+    if (!this.note?.id || this._tagBusy) return;
+
+    const tag = this.tags?.find((t) => t && t.id === tagId);
+    if (!tag) {
+      console.error("Tag not found with ID:", tagId);
+      return;
     }
-    this.markAsChanged();
-    this.requestUpdate();
+
+    const attach = !this.selectedTags.some((t) => t && t.id === tagId);
+    const previous = this.selectedTags;
+    this._tagBusy = true;
+    this.selectedTags = applyTagToggle(previous, tag, attach);
+
+    try {
+      const result = await globalThis.NotesApp.setNoteTag(
+        this.note.id,
+        tagId,
+        attach,
+      );
+
+      // Re-render from the server's full list rather than trusting the guess.
+      const serverTags = result?.data?.tags;
+      if (Array.isArray(serverTags)) {
+        this.selectedTags = serverTags;
+        this.note = { ...this.note, tags: serverTags };
+        // Keep the conflict baseline in step: tag edits do not move updated_at,
+        // so the content session stays valid.
+        if (this.originalNote) {
+          this.originalNote = { ...this.originalNote, tags: serverTags };
+        }
+        this.dispatchEvent(
+          new CustomEvent("note-updated", {
+            detail: { note: this.note },
+            bubbles: true,
+            composed: true,
+          }),
+        );
+      }
+    } catch (error) {
+      console.error("Failed to update tag:", error);
+      this.selectedTags = previous;
+      this.showToast(
+        attach
+          ? "Could not add the tag - check your connection"
+          : "Could not remove the tag - check your connection",
+        "error",
+      );
+    } finally {
+      this._tagBusy = false;
+      this.requestUpdate();
+    }
   }
 
   setupAutoSave() {
@@ -1177,12 +1227,10 @@ export class NoteEditor extends LitElement {
 
     const currentTitle = titleInput ? titleInput.value.trim() : this.note.title;
     const currentContent = contentTextarea.value;
-    const currentTagIds = this.selectedTags.map((t) => t.id).sort();
-    const originalTagIds = (this.originalNote.tags || []).map((t) => t.id).sort();
-
+    // Tags are NOT part of this comparison any more: a tag tap persists itself
+    // immediately, so it must never leave the editor showing "unsaved".
     return currentTitle !== this.originalNote.title ||
-      currentContent !== this.originalNote.content ||
-      JSON.stringify(currentTagIds) !== JSON.stringify(originalTagIds);
+      currentContent !== this.originalNote.content;
   }
 
   /** What the pin button should show for the note currently open. */
@@ -1244,10 +1292,9 @@ export class NoteEditor extends LitElement {
     const titleInput = this.shadowRoot.querySelector(".doc-title");
     const contentTextarea = this.shadowRoot.querySelector(".content-textarea");
 
-    // In preview mode there is no textarea, and if the user only clicked a tag
-    // chip there is no editing buffer either -- fall back to the persisted
-    // content so a tag-only change still gets saved instead of leaving the
-    // note stuck on "unsaved" forever.
+    // In preview mode there is no textarea, so fall back to the persisted
+    // content rather than leaving the note stuck on "unsaved" forever. (Tag
+    // chips no longer need this path: they persist on tap.)
     const content = resolveSaveContent(
       contentTextarea?.value,
       this._editingContent,
@@ -1255,10 +1302,11 @@ export class NoteEditor extends LitElement {
     );
     if (content === null) return;
 
+    // Tags are deliberately absent: they persist on tap through
+    // /api/notes/:id/tags/:tagId, so a save can never rewrite (or clobber) them.
     const updates = {
       title: titleInput ? titleInput.value.trim() : this.note.title,
       content: content,
-      tags: this.selectedTags.filter((t) => t && t.id).map((t) => t.id),
     };
 
     this.saveStatus = "saving";

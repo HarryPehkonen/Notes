@@ -8,6 +8,7 @@ import { syncManager } from "./services/sync-manager.js";
 import { liveSync } from "./services/live-sync.js";
 import { buildSearchParams } from "./utils/search-mode.js";
 import { buildNotesParams } from "./utils/notes-query.js";
+import { tagEndpoint } from "./utils/tag-endpoint.js";
 
 // Import all components
 import "./components/notes-app.js";
@@ -132,6 +133,22 @@ globalThis.NotesApp = {
       body: updates,
       ...options,
     });
+  },
+
+  /**
+   * Attach or detach ONE tag on a note, immediately.
+   *
+   * Deliberately outside the sync manager: a tag tap is small and idempotent,
+   * and queueing it offline would fight the optimistic UI already showing the
+   * result. `attach` selects the verb - PUT to attach, DELETE to detach (no
+   * body; the id travels in the path).
+   * @param {number} noteId
+   * @param {number} tagId
+   * @param {boolean} attach
+   */
+  setNoteTag(noteId, tagId, attach) {
+    const { method, path } = tagEndpoint(noteId, tagId, attach);
+    return this.request(path, { method });
   },
 
   /**
