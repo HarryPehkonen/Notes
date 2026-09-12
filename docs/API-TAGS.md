@@ -104,3 +104,8 @@ Before 2026-09-10 the same wrong input got four different answers:
 deployed client used to send one. It starts rejecting the field with a 400 once
 the client is known to have stopped sending it — staged so no save can break
 mid-rollout.
+
+**Parked** (see the Parked Proposals note for the criteria): a database-level
+`CHECK (name = lower(btrim(name)))` backstop on `tags`, so a write that bypasses
+the API cannot create `CPP` alongside `cpp`. The API already normalizes; this
+would make the invariant structural.
