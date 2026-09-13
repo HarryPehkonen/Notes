@@ -10,7 +10,7 @@ import DOMPurify from "dompurify";
 import { icons } from "../utils/icons.js";
 import { parseCheckboxTokens, toggleCheckbox, tokenizeCheckboxes } from "../utils/checkboxes.js";
 import { isSameNoteUpdate, resolveSaveContent } from "../utils/editor-state.js";
-import { buildVersionRows } from "../utils/version-list.js";
+import { buildVersionRows, stepVersionRow } from "../utils/version-list.js";
 import { describePin, withPinResult } from "../utils/pin-state.js";
 import { applyTagToggle } from "../utils/tag-endpoint.js";
 import { checkboxesToPrintGlyphs, printDocumentTitle } from "../utils/print.js";
@@ -262,15 +262,21 @@ export class NoteEditor extends LitElement {
     }
 
     /* ---------- Read-only version preview ---------- */
-    /* Fixed, so the past version fills the screen and cannot be mistaken for the
-      live note; the bar says what it is and offers the only two ways out. */
+    /* A sibling of .canvas inside the editor column rather than a fixed overlay:
+      it fills the space BELOW the topbar, so the clock - and the version list it
+      opens - stays reachable while an old version is on screen. It is static, and
+      the topbar is positioned, so the topbar and its dropdown paint above it. */
     .version-preview {
-      position: fixed;
-      inset: 0;
-      z-index: 40;
+      flex: 1;
+      min-height: 0;
       display: flex;
       flex-direction: column;
       background: var(--white);
+    }
+
+    /* hidden must beat the layout rule above when the preview replaces the canvas */
+    .canvas[hidden] {
+      display: none;
     }
 
     .version-preview-bar {
@@ -323,6 +329,15 @@ export class NoteEditor extends LitElement {
       background: var(--accent);
       border-color: var(--accent);
       color: var(--white);
+    }
+
+    /* A dead end, not an invisible control: still readable, obviously inactive. */
+    .version-btn:disabled {
+      opacity: 0.6;
+      background: var(--gray-100);
+      color: var(--gray-600);
+      border-color: var(--gray-300);
+      cursor: not-allowed;
     }
 
     .version-preview-body {
@@ -1651,6 +1666,44 @@ export class NoteEditor extends LitElement {
     }
   }
 
+  /** The rows the Older / Newer arrows move through: Current, then newest first. */
+  get _versionRows() {
+    return buildVersionRows(this.note, this.versions);
+  }
+
+  /** False at the newest recorded version: the arrows never land on Current. */
+  get canStepNewer() {
+    return !!stepVersionRow(this._versionRows, this.previewRow?.id, "newer");
+  }
+
+  /** False at the oldest recorded version. */
+  get canStepOlder() {
+    return !!stepVersionRow(this._versionRows, this.previewRow?.id, "older");
+  }
+
+  /**
+   * Move to the neighbouring version, keeping the reading position.
+   *
+   * The scroll offset is captured before the swap and re-applied after the
+   * re-render so stepping shows the SAME part of the note - that is the point of
+   * comparing versions. If the next version is shorter the browser clamps the
+   * offset and you land at its end; the aim is the simplest thing that usually
+   * works ("I can always scroll again if I need to").
+   */
+  async stepVersion(direction) {
+    const next = stepVersionRow(this._versionRows, this.previewRow?.id, direction);
+    if (!next) return;
+
+    const body = this.shadowRoot?.querySelector(".version-preview-body");
+    const scrollTop = body ? body.scrollTop : 0;
+
+    this.previewRow = next;
+    await this.updateComplete;
+
+    const after = this.shadowRoot?.querySelector(".version-preview-body");
+    if (after) after.scrollTop = scrollTop;
+  }
+
   /**
    * Open a recorded version read-only, over the editor.
    *
@@ -1697,11 +1750,25 @@ export class NoteEditor extends LitElement {
             </span>
           </div>
           <div class="version-preview-actions">
+            <button
+              class="version-btn"
+              ?disabled="${!this.canStepNewer}"
+              @click="${() => this.stepVersion("newer")}"
+            >
+              Newer
+            </button>
+            <button
+              class="version-btn"
+              ?disabled="${!this.canStepOlder}"
+              @click="${() => this.stepVersion("older")}"
+            >
+              Older
+            </button>
             <button class="version-btn primary" @click="${() => this.restoreVersion(row)}">
-              Restore - make editable
+              Restore This Version
             </button>
             <button class="version-btn" @click="${this
-              .closeVersionPreview}">Back to current</button>
+              .closeVersionPreview}">Back to Current</button>
           </div>
         </div>
         <div class="version-preview-body">
@@ -2104,7 +2171,7 @@ export class NoteEditor extends LitElement {
           ${this._renderHistoryPanel()}
         </div>
 
-        <div class="canvas">
+        <div class="canvas" ?hidden="${!!this.previewRow}">
           <div class="canvas-col">
             <input
               type="text"

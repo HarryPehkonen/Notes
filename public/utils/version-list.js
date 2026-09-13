@@ -55,3 +55,27 @@ export function buildVersionRows(note, versions) {
 function numberOrZero(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
+
+/**
+ * Step to the neighbouring recorded version, for the Older / Newer arrows.
+ *
+ * Index 0 of a row list is Current, so the arrows deliberately stop at index 1:
+ * moving "newer" from the newest recorded version is a dead end rather than a
+ * quiet switch into read/write editing. Getting back to the live note is "Back to
+ * Current" - an explicit choice.
+ *
+ * @param {Array<object>} rows - from buildVersionRows
+ * @param {number|string} currentId - id of the row being viewed
+ * @param {"newer"|"older"} direction
+ * @returns {object|null} the row to show, or null when there is nowhere to go
+ */
+export function stepVersionRow(rows, currentId, direction) {
+  if (!Array.isArray(rows)) return null;
+  const index = rows.findIndex((row) => row && row.id === currentId);
+  if (index === -1) return null;
+
+  const next = direction === "newer" ? index - 1 : direction === "older" ? index + 1 : -1;
+  // next < 1 keeps the arrows inside the recorded versions (0 is Current).
+  if (next < 1 || next >= rows.length) return null;
+  return rows[next];
+}

@@ -5,7 +5,7 @@
  * had BEFORE a change, so the newest recorded version is never the note you are
  * looking at. A list that implied "newest = now" would be lying by one edit.
  */
-import { assert, assertEquals } from "jsr:@std/assert@1";
+import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { buildVersionRows, CURRENT_ROW_ID } from "../../public/utils/version-list.js";
 
 const note = {

@@ -1,15 +1,18 @@
 /**
- * Read-only version preview + the Current row: structural guards.
+ * Version browsing: structural guards.
  *
- * The behavior worth locking down is not "does it look right" but these:
- *   - a past version can never be saved (the editor bails out while viewing one)
- *   - the overlay does not put another version's text into the editable fields
- *   - the three labelled ways out exist, because a full-screen read-only view
- *     with no escape route is a trap
- * The row data itself (Current first, newest-first ordering) is unit-tested in
- * version_list_test.ts.
+ * What must stay true (each of these was a decision, not an accident):
+ *   - an old version can never be saved over the live note
+ *   - the editable fields never hold another version's text
+ *   - the bar is labelled: Newer / Older / Restore This Version / Back to Current
+ *   - Newer sits LEFT of Older (his call, opposite to my first guess)
+ *   - the arrows dead-end at the oldest/newest recorded version instead of
+ *     silently dropping him into read/write Current
+ *   - stepping keeps the reading position
+ *   - tapping the read-only body does nothing (there is no tap-to-close any more)
+ * Row data and stepping arithmetic live in version_list_test.ts / version_step_test.ts.
  */
-import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
+import { assert, assertEquals, assertStringIncludes } from "https://deno.land/std@0.208.0/assert/mod.ts";
 
 const editor = await Deno.readTextFile(
   new URL("../../public/components/note-editor.js", import.meta.url),
@@ -20,7 +23,7 @@ Deno.test("previewRow is a reactive property, or the view would never re-render"
 });
 
 Deno.test("the history panel builds rows through the pure helper", () => {
-  assertStringIncludes(editor, 'import { buildVersionRows } from "../utils/version-list.js"');
+  assertStringIncludes(editor, 'from "../utils/version-list.js"');
   assertStringIncludes(editor, "buildVersionRows(this.note, this.versions)");
 });
 
@@ -30,44 +33,67 @@ Deno.test("a past version can never be saved: both save paths bail out", () => {
 });
 
 Deno.test("the editable fields never hold another version's text", () => {
-  // The preview is an overlay: no binding writes version content into .doc-title
-  // or .content-textarea, so no stray save can write it back.
   assertEquals(/.value="\$\{this\.previewRow/.test(editor), false);
 });
 
-Deno.test("the preview is rendered by the component", () => {
-  assertStringIncludes(editor, "_renderVersionPreview()");
-  assertStringIncludes(editor, 'class="version-preview"');
-  assertStringIncludes(editor, 'role="dialog"');
+Deno.test("the canvas steps aside so the preview sits below the topbar", () => {
+  // Below the topbar - not over it - so the clock stays reachable while an old
+  // version is on screen. Static flex child, so the positioned topbar paints above.
+  assertStringIncludes(editor, '?hidden="${!!this.previewRow}"');
+  assertStringIncludes(editor, ".canvas[hidden]");
+  assertEquals(/\.version-preview\s*\{[^}]*position:\s*fixed/.test(editor), false);
 });
 
-Deno.test("the old version is shown read-only, with its date and title", () => {
-  assertStringIncludes(editor, "read only");
+Deno.test("the bar carries the four labelled controls", () => {
+  assertStringIncludes(editor, "Restore This Version");
+  assertStringIncludes(editor, "Back to Current");
+  assert(/>\s*Newer\s*</.test(editor), "Newer button label missing");
+  assert(/>\s*Older\s*</.test(editor), "Older button label missing");
+});
+
+Deno.test("Newer is left of Older, as he specified", () => {
+  const bar = editor.slice(
+    editor.indexOf('class="version-preview-actions"'),
+    editor.indexOf("</div>", editor.indexOf('class="version-preview-actions"')),
+  );
+  assert(bar.length > 0, "version-preview-actions block not found");
+  const newer = bar.indexOf("Newer");
+  const older = bar.indexOf("Older");
+  assert(newer !== -1 && older !== -1, "both arrows must be inside the actions block");
+  assert(newer < older, `expected Newer before Older, got Newer@${newer} Older@${older}`);
+});
+
+Deno.test("the arrows dead-end rather than jumping into read/write Current", () => {
+  assertStringIncludes(editor, '?disabled="${!this.canStepNewer}"');
+  assertStringIncludes(editor, '?disabled="${!this.canStepOlder}"');
+  assertStringIncludes(editor, 'stepVersionRow(this._versionRows, this.previewRow?.id, "newer")');
+  assertStringIncludes(editor, 'stepVersionRow(this._versionRows, this.previewRow?.id, "older")');
+});
+
+Deno.test("stepping keeps the reading position", () => {
+  assertStringIncludes(editor, "const scrollTop = body ? body.scrollTop : 0;");
+  assertStringIncludes(editor, "if (after) after.scrollTop = scrollTop;");
+});
+
+Deno.test("tapping the read-only body does nothing (no tap-to-close)", () => {
+  const bodyStart = editor.indexOf('class="version-preview-body"');
+  assert(bodyStart !== -1, "preview body not found");
+  const bodyTag = editor.slice(bodyStart, editor.indexOf(">", bodyStart) + 1);
+  assertEquals(bodyTag.includes("@click"), false, "body must not be clickable any more");
+  // And the old gesture must not linger anywhere in the preview.
+  assertEquals(/version-preview-body[\s\S]{0,200}?@click/.test(editor), false);
+});
+
+Deno.test("the old version is rendered read-only, greyed, and selectable", () => {
   assertStringIncludes(editor, 'renderMarkdown(row.content || "")');
-  assertStringIncludes(editor, "version-preview-title");
-});
-
-Deno.test("two labelled ways out exist: restore and back", () => {
-  assertStringIncludes(editor, "Restore - make editable");
-  assertStringIncludes(editor, "Back to current");
-});
-
-Deno.test("copying is selecting: no Copy button, and the body is selectable", () => {
-  // His call: "Copy text doesn't need to be a button. I'll just select and copy
-  // myself." So the affordance that must exist is selectable text - not a button
-  // that could rot away from the design.
-  assertEquals(/>Copy text</.test(editor), false);
-  assertEquals(/copyVersionText/.test(editor), false);
   assertStringIncludes(editor, "user-select: text;");
   assertStringIncludes(editor, "-webkit-user-select: text;");
+  assertStringIncludes(editor, "read only");
 });
 
 Deno.test("restoring clears the preview, so the content is editable again", () => {
   const clears = editor.match(/this\.previewRow = null;/g) ?? [];
-  assert(
-    clears.length >= 3,
-    `expected at least 3 previewRow resets (close, restore, note switch), found ${clears.length}`,
-  );
+  assert(clears.length >= 3, `expected >= 3 previewRow resets, found ${clears.length}`);
 });
 
 Deno.test("the Current row is labelled by the helper and offers no Restore", () => {
