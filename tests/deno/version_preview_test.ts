@@ -12,7 +12,11 @@
  *   - tapping the read-only body does nothing (there is no tap-to-close any more)
  * Row data and stepping arithmetic live in version_list_test.ts / version_step_test.ts.
  */
-import { assert, assertEquals, assertStringIncludes } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import {
+  assert,
+  assertEquals,
+  assertStringIncludes,
+} from "https://deno.land/std@0.208.0/assert/mod.ts";
 
 const editor = await Deno.readTextFile(
   new URL("../../public/components/note-editor.js", import.meta.url),
@@ -100,4 +104,42 @@ Deno.test("the Current row is labelled by the helper and offers no Restore", () 
   assertStringIncludes(editor, "row.label");
   assertStringIncludes(editor, "history-current-tag");
   assertStringIncludes(editor, "this.previewRow && this.previewRow.id === row.id");
+});
+
+// --- the reported bug: a read-only version that could still write ------------
+// The editor's input/change listeners are on the HOST element, so a native
+// checkbox toggle anywhere inside the component reaches them. While a past
+// version was on screen, tapping a checkbox flagged the note "unsaved".
+
+Deno.test("checkboxes in the read-only preview are disabled at the source", () => {
+  assertStringIncludes(editor, "disableCheckboxInputs(this.renderMarkdown(row.content");
+  assertStringIncludes(editor, '} from "../utils/checkboxes.js"');
+});
+
+Deno.test("no dirty path can run while a past version is on screen", () => {
+  // markAsChanged is the choke point every "changed" path goes through...
+  assertStringIncludes(editor, "  markAsChanged() {\n    //");
+  // ...and the host-level listeners bail before doing anything.
+  const inputHandler = editor.slice(
+    editor.indexOf("handleInputChange(e) {"),
+    editor.indexOf("handleInputChange(e) {") + 400,
+  );
+  assert(inputHandler.includes("if (this.previewRow) return;"), "handleInputChange must bail");
+  const previewClick = editor.slice(
+    editor.indexOf("_handlePreviewClick(event) {"),
+    editor.indexOf("_handlePreviewClick(event) {") + 300,
+  );
+  assert(previewClick.includes("if (this.previewRow) return;"), "_handlePreviewClick must bail");
+  const markAsChanged = editor.slice(
+    editor.indexOf("markAsChanged() {"),
+    editor.indexOf("markAsChanged() {") + 300,
+  );
+  assert(markAsChanged.includes("if (this.previewRow) return;"), "markAsChanged must bail");
+});
+
+Deno.test("the disabled checkboxes take no pointer events", () => {
+  assertStringIncludes(
+    editor,
+    '.version-preview-content input[type="checkbox"] {\n      pointer-events: none;',
+  );
 });

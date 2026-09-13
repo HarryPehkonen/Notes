@@ -185,3 +185,26 @@ export function toggleCheckbox(markdown, index) {
     (match.checked ? "[ ]" : "[x]") +
     markdown.slice(match.index + MARKER_LENGTH);
 }
+
+/**
+ * Strip interactivity from rendered checkbox inputs.
+ *
+ * The editor listens for `input`/`change` on ITSELF (see note-editor), so a
+ * native checkbox toggle anywhere inside the component marks the note dirty.
+ * In the read-only version preview that is wrong: a read-only view that can
+ * still change something is worse than no read-only view. Disabling the inputs
+ * removes the event at its source; the guards in markAsChanged/handleInputChange
+ * are the backstop.
+ *
+ * @param {string} html - rendered markdown
+ * @returns {string} the same html with every checkbox input disabled
+ */
+export function disableCheckboxInputs(html) {
+  if (typeof html !== "string") return html;
+
+  return html.replace(/<input\b[^>]*>/gi, (tag) => {
+    if (!/\btype\s*=\s*["']checkbox["']/i.test(tag)) return tag;
+    if (/\bdisabled\b/i.test(tag)) return tag;
+    return tag.replace(/\s*\/?>$/, (end) => (end.trim() === "/>" ? " disabled />" : " disabled>"));
+  });
+}

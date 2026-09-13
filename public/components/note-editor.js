@@ -8,7 +8,12 @@ import { unsafeHTML } from "https://cdn.jsdelivr.net/npm/lit@3.1.0/directives/un
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { icons } from "../utils/icons.js";
-import { parseCheckboxTokens, toggleCheckbox, tokenizeCheckboxes } from "../utils/checkboxes.js";
+import {
+  disableCheckboxInputs,
+  parseCheckboxTokens,
+  toggleCheckbox,
+  tokenizeCheckboxes,
+} from "../utils/checkboxes.js";
 import { isSameNoteUpdate, resolveSaveContent } from "../utils/editor-state.js";
 import { buildVersionRows, stepVersionRow } from "../utils/version-list.js";
 import { describePin, withPinResult } from "../utils/pin-state.js";
@@ -362,6 +367,12 @@ export class NoteEditor extends LitElement {
     .version-preview-content {
       user-select: text;
       -webkit-user-select: text;
+    }
+
+    /* The checkboxes are disabled at the source; this makes them feel inert too
+      (no hover/cursor feedback) while leaving the text selectable. */
+    .version-preview-content input[type="checkbox"] {
+      pointer-events: none;
     }
 
     .history-open {
@@ -1287,6 +1298,11 @@ export class NoteEditor extends LitElement {
   }
 
   handleInputChange(e) {
+    // These listeners are on the host element, so a tap on anything rendered
+    // inside the component arrives here - including a checkbox in the read-only
+    // version preview, which used to flag the note unsaved (the reported bug).
+    if (this.previewRow) return;
+
     if (e?.target?.classList?.contains("content-textarea")) {
       this._editingContent = e.target.value;
       this._autoGrowTextarea();
@@ -1352,6 +1368,10 @@ export class NoteEditor extends LitElement {
   }
 
   markAsChanged() {
+    // A past version is on screen: nothing here is the live note, so nothing can
+    // be dirty. This is the choke point every "changed" path runs through.
+    if (this.previewRow) return;
+
     if (!this.hasUnsavedChanges) {
       this.hasUnsavedChanges = true;
       this.saveStatus = "unsaved";
@@ -1774,7 +1794,7 @@ export class NoteEditor extends LitElement {
         <div class="version-preview-body">
           <h2 class="version-preview-title">${row.title || "(no title)"}</h2>
           <div class="version-preview-content">
-            ${unsafeHTML(this.renderMarkdown(row.content || ""))}
+            ${unsafeHTML(disableCheckboxInputs(this.renderMarkdown(row.content || "")))}
           </div>
         </div>
       </div>
@@ -2000,6 +2020,9 @@ export class NoteEditor extends LitElement {
    * @param {MouseEvent} event
    */
   _handlePreviewClick(event) {
+    // Only the live note's preview may toggle checkboxes.
+    if (this.previewRow) return;
+
     const target = /** @type {HTMLElement} */ (event.target);
     if (!target?.matches?.('input[type="checkbox"][data-cb-index]')) return;
 
