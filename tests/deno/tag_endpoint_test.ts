@@ -13,14 +13,14 @@ import { applyTagToggle, tagEndpoint } from "../../public/utils/tag-endpoint.js"
 Deno.test("tagEndpoint: attaching is a PUT of the tag's own URL", () => {
   assertEquals(tagEndpoint(42, 6, true), {
     method: "PUT",
-    path: "/api/notes/42/tags/6",
+    path: "/notes/42/tags/6",
   });
 });
 
 Deno.test("tagEndpoint: detaching is a DELETE of the same URL, no body", () => {
   assertEquals(tagEndpoint(42, 6, false), {
     method: "DELETE",
-    path: "/api/notes/42/tags/6",
+    path: "/notes/42/tags/6",
   });
 });
 

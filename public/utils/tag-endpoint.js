@@ -8,6 +8,10 @@
  *
  * The id lives in the path on purpose: RFC 9110 9.3.5 gives content in a DELETE
  * no generally defined semantics, so a detach carries no body.
+ *
+ * The path returned here is relative to `NotesApp.apiUrl` ("/api") because
+ * `app.js#request()` prepends it - the "/api" prefix must never appear in a
+ * `path` from this module, or the composed URL doubles to "/api/api/...".
  */
 
 /**
@@ -19,7 +23,7 @@
 export function tagEndpoint(noteId, tagId, attach) {
   return {
     method: attach ? "PUT" : "DELETE",
-    path: `/api/notes/${noteId}/tags/${tagId}`,
+    path: `/notes/${noteId}/tags/${tagId}`,
   };
 }
 
