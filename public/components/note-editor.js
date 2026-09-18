@@ -17,6 +17,7 @@ import {
 import { isSameNoteUpdate, resolveSaveContent } from "../utils/editor-state.js";
 import { buildVersionRows, stepVersionRow } from "../utils/version-list.js";
 import { describePin, withPinResult } from "../utils/pin-state.js";
+import { formatNoteRef } from "../utils/note-ref.js";
 import { applyTagToggle } from "../utils/tag-endpoint.js";
 import { checkboxesToPrintGlyphs, printDocumentTitle } from "../utils/print.js";
 import { createInertHtmlRenderer } from "../utils/inert-html.js";
@@ -555,6 +556,10 @@ export class NoteEditor extends LitElement {
       font-size: 0.72rem;
       color: var(--gray-400);
       margin-bottom: 1rem;
+    }
+
+    .note-id {
+      margin-right: 0.4rem;
     }
 
     .doc-tags {
@@ -2123,6 +2128,7 @@ export class NoteEditor extends LitElement {
     }
 
     const primaryTag = this.selectedTags?.[0];
+    const noteRef = formatNoteRef(this.note);
 
     return html`
       <div class="editor-container">
@@ -2205,7 +2211,11 @@ export class NoteEditor extends LitElement {
             />
 
             <div class="doc-meta">
-              ${this.note.updated_at
+              ${noteRef
+                ? html`
+                  <span class="note-id">${noteRef}</span>
+                `
+                : ""} ${this.note.updated_at
                 ? html`
                   Updated ${this.formatDate(this.note.updated_at)}
                 `

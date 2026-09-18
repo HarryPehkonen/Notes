@@ -12,6 +12,7 @@ import {
   sortBySimilarity,
 } from "../utils/search-match.js";
 import { formatListCount, remainingLabel } from "../utils/list-summary.js";
+import { formatNoteRef } from "../utils/note-ref.js";
 
 export class NoteList extends LitElement {
   static properties = {
@@ -370,6 +371,11 @@ export class NoteList extends LitElement {
       color: var(--gray-500);
     }
 
+    .note-id {
+      margin-left: 0.4rem;
+      white-space: nowrap;
+    }
+
     .empty-state {
       text-align: center;
       padding: 3rem 1.5rem;
@@ -654,6 +660,7 @@ export class NoteList extends LitElement {
 
   renderNoteCard(note) {
     const isListView = this.viewType === "list";
+    const ref = formatNoteRef(note);
 
     if (isListView) {
       return html`
@@ -698,7 +705,11 @@ export class NoteList extends LitElement {
               : ""}
 
             <div class="note-date">
-              ${this.formatDate(note.updated_at || note.created_at)}
+              ${this.formatDate(note.updated_at || note.created_at)}${ref
+                ? html`
+                  <span class="note-id">${ref}</span>
+                `
+                : ""}
             </div>
           </div>
         </div>
@@ -751,7 +762,11 @@ export class NoteList extends LitElement {
             `}
 
           <div class="note-date">
-            ${this.formatDate(note.updated_at || note.created_at)}
+            ${this.formatDate(note.updated_at || note.created_at)}${ref
+              ? html`
+                <span class="note-id">${ref}</span>
+              `
+              : ""}
           </div>
         </div>
       </div>
