@@ -64,6 +64,10 @@ base="$(git merge-base HEAD origin/main 2>/dev/null || git rev-parse HEAD)"
 touched="$(
   { git diff --name-only --diff-filter=ACMR "$base" HEAD
     git diff --name-only --diff-filter=ACMR HEAD
+    # New files are invisible to `git diff` until they are staged, so without
+    # this line a brand-new file's formatting is never checked at the moment it
+    # is written - only after it has already been committed.
+    git ls-files --others --exclude-standard
   } | sort -u
 )"
 # A clean checkout (the nightly job, or any clone sitting exactly on origin/main)

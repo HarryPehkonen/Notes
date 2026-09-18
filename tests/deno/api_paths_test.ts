@@ -8,7 +8,11 @@
  * `/api/api/notes/63/tags/9` and 404'd on every tag tap in the browser while
  * the unit tests, which asserted the buggy value in isolation, stayed green.
  */
-import { assert, assertEquals, assertStringIncludes } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import {
+  assert,
+  assertEquals,
+  assertStringIncludes,
+} from "https://deno.land/std@0.208.0/assert/mod.ts";
 
 import { tagEndpoint } from "../../public/utils/tag-endpoint.js";
 
