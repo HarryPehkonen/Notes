@@ -211,10 +211,13 @@ involved, and nothing leaves the machine to make it work:
 
    `.githooks/pre-push` simply runs `scripts/gate.sh`, so a push that fails the
    gate is stopped before it leaves. Deliberate bypass: `git push --no-verify`.
-3. **On a clean checkout** *(planned)* — a nightly job on the Pi cloning the
-   repo into a temp directory and running the same script. That is the piece
-   which catches "it passed on my machine because of a file I never committed",
-   and it is silent unless something is wrong.
+3. **On a clean checkout** — the nightly job on the Pi (`notes-gate-watch`,
+   daily 07:30) clones the repo into a temp directory and runs the same script,
+   then probes harrisnotes.ca for the invariants that exist only on the wire:
+   `APP_VERSION` matching `CACHE_NAME`, the tag route answering 401 rather than
+   404, and the main static assets serving 200. That is the piece which catches
+   "it passed on my machine because of a file I never committed", and it is
+   silent unless something is wrong.
 
 ### Database Management
 
