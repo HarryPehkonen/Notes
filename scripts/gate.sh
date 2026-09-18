@@ -66,6 +66,14 @@ touched="$(
     git diff --name-only --diff-filter=ACMR HEAD
   } | sort -u
 )"
+# A clean checkout (the nightly job, or any clone sitting exactly on origin/main)
+# is not "ahead of" anything, so the two diffs above are empty and the checks
+# below would silently pass on files nobody looked at. Fall back to the last
+# commit that landed: on a daily cadence that is "what went in yesterday".
+if [ -z "$touched" ]; then
+  touched="$(git show --name-only --pretty=format: HEAD | sed '/^$/d')"
+  late_note=" (last commit, since this checkout is level with origin/main)"
+fi
 files="$(printf '%s\n' "$touched" | grep -E '\.(js|ts|css|html)$' || true)"
 step "format ($(printf '%s\n' "$files" | grep -c . ) changed js/ts/css/html file(s))"
 if [ -n "$files" ]; then
@@ -93,7 +101,7 @@ else
 fi
 
 if [ "$status" -eq 0 ]; then
-  printf '\nGATE PASSED\n'
+  printf '\nGATE PASSED%s\n' "${late_note:-}"
 else
   printf '\nGATE FAILED - do not push this\n' >&2
 fi
