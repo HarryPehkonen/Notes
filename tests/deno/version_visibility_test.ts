@@ -31,7 +31,8 @@ Deno.test("it appears in the desktop account popover", () => {
 });
 
 Deno.test("it appears in the mobile drawer, where the popover is out of reach", () => {
-  const drawer = app.slice(app.indexOf('class="drawer '), app.indexOf('class="drawer '));
+  // Anchor on the drawer's footer, which is what the user actually sees when
+  // the hamburger menu opens on a phone.
   const footerStart = app.indexOf('class="drawer-footer"');
   assert(footerStart > -1, "drawer footer not found");
   const footer = app.slice(footerStart, footerStart + 1600);

@@ -188,6 +188,34 @@ deno task fmt
 | `start`   | localhost | No    | Production behind Caddy |
 | `staging` | 0.0.0.0   | No    | Direct external access  |
 
+### The gate (run it before you push)
+
+```bash
+scripts/gate.sh
+```
+
+One script, one meaning: lint, the whole test suite (including the
+wire-contract guards that compare client URLs against server routes), `deno fmt
+--check` on the files this branch touched, and the version-bump invariant — if
+anything under `public/` changed, `public/version.js` must have moved too.
+
+It runs in three places, and that is the point — no third-party CI service is
+involved, and nothing leaves the machine to make it work:
+
+1. **By hand**, as above.
+2. **By git, on push** — opt in once per clone:
+
+   ```bash
+   git config core.hooksPath .githooks
+   ```
+
+   `.githooks/pre-push` simply runs `scripts/gate.sh`, so a push that fails the
+   gate is stopped before it leaves. Deliberate bypass: `git push --no-verify`.
+3. **On a clean checkout** *(planned)* — a nightly job on the Pi cloning the
+   repo into a temp directory and running the same script. That is the piece
+   which catches "it passed on my machine because of a file I never committed",
+   and it is silent unless something is wrong.
+
 ### Database Management
 
 The server uses a single schema file (`schema.sql`) with `IF NOT EXISTS` for idempotent execution.

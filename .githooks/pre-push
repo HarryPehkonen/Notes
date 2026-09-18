@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+#
+# git runs this before a push leaves this machine - but only if the clone has
+# been told where to look, once:
+#
+#     git config core.hooksPath .githooks
+#
+# Nothing leaves the machine to make this work: no GitHub, no service, no
+# account. It is the same gate a human runs by hand and the nightly clean
+# checkout runs, so a passing push means the same thing everywhere.
+#
+# Deliberate bypass when you need one:  git push --no-verify
+#
+exec "$(git rev-parse --show-toplevel)/scripts/gate.sh"

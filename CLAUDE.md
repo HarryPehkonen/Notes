@@ -36,6 +36,14 @@ deno task fmt
 deno task test
 ```
 
+**Before committing or pushing, run the gate:** `scripts/gate.sh` — lint, the
+full suite, `deno fmt --check` on the files this branch touched, and the
+version-bump invariant (a `public/` change must move `public/version.js`).
+Arm it as a pre-push hook once per clone with
+`git config core.hooksPath .githooks`; see README "The gate" for the three
+places it runs. A new test file must be named `*_test.ts` or `deno test
+tests/deno/` silently never discovers it.
+
 ### Database Operations
 
 The server uses a single schema file:
