@@ -477,8 +477,28 @@ class NotesApp extends LitElement {
       gap: 0.6rem;
     }
 
+    /*
+    * The drawer's logout buttons, written out rather than icon-only.
+    *
+    * The single-device logout used to be a 44px icon with a title-attribute
+    * tooltip and no visible word - fine with a mouse, invisible on a phone,
+    * where there is no hover to reveal it (reported 2026-09-18: "I don't see
+    * on mobile"). Both actions are now labelled text with a 44px minimum
+    * height, dark enough to read at arm's length.
+    */
     .drawer-footer .user-popover-logout {
       margin-top: 0.5rem;
+      min-height: 44px;
+      padding: 0.6rem 0.75rem;
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: var(--gray-900);
+    }
+
+    .drawer-footer .user-popover-logout svg {
+      width: 18px;
+      height: 18px;
+      color: var(--gray-700);
     }
 
     .drawer-user .user-name {
@@ -1724,14 +1744,16 @@ class NotesApp extends LitElement {
                 <div class="drawer-user">
                   ${this._renderDrawerAvatar()}
                   <span class="user-name">${this.user.name}</span>
-                  <button class="icon-btn" @click="${this.logout}" title="Log out">
-                    ${icons.logout}
-                  </button>
                 </div>
                 <button
                   class="user-popover-logout"
+                  @click="${this.logout}"
+                >
+                  ${icons.logout} Log out
+                </button>
+                <button
+                  class="user-popover-logout"
                   @click="${this.logoutAllDevices}"
-                  title="Log out from all devices"
                 >
                   ${icons.logout} Log out from all devices
                 </button>
