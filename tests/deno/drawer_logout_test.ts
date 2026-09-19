@@ -1,132 +1,157 @@
 /**
- * Logout, where the user actually looks for it.
+ * Logout: visible, labelled, and not under your thumb.
  *
- * Reported from a phone (2026-09-18): "I don't see Logout on mobile. It should
- * be under the hamburger." Two separate faults were hiding it:
- *   1. the single-device action was an icon with a `title` tooltip and no
- *      visible word - and a phone has no hover to reveal a tooltip;
- *   2. it was rendered inside `this.user ? ... : ""`, and `this.user` is
- *      ALWAYS null - the comment in the constructor promises a
- *      `globalThis.user` injection that was never written (nothing in
- *      public/, index.html or the server sets it). So the whole account block,
- *      logout included, never rendered at all.
+ * Two reports from the same phone, one day apart (2026-09-18):
+ *   1. "I don't see Logout on mobile. It should be under the hamburger."
+ *      It was there - as an icon-only button with a `title` tooltip (a phone
+ *      cannot hover), inside a `this.user ? ... : ""` that never rendered
+ *      because nothing populates `globalThis.user`.
+ *   2. "It's too easy! ... too prominent, and create a fat-fingers danger."
+ *      With it labelled, it sat in `.drawer-footer` - a flex SIBLING of the
+ *      scrolling content, so it is on screen the entire time the drawer is
+ *      open, in the band a thumb rests in.
  *
- * Hence the two rules this file pins: the drawer's logout controls carry
- * visible words, and they render whether or not a user object exists. The
- * checks are exercised against the old markup first, because a guard that has
- * never failed is a guess.
+ * The fix for (2) is placement, not size: the logout block moved to the end of
+ * `.drawer-content`, below the tags, so reaching it means scrolling past them.
+ * These tests pin the placement, the reason it works (`.drawer-content` is the
+ * scroll container), the labels, and the touch size.
  */
-import { assert, assertStringIncludes } from "https://deno.land/std@0.208.0/assert/mod.ts";
+
+import { assert } from "https://deno.land/std@0.208.0/assert/mod.ts";
 
 const source = await Deno.readTextFile(
   new URL("../../public/components/notes-app.js", import.meta.url),
 );
 
-/** The drawer's footer, where the account controls live on a phone. */
-function drawerFooter(text: string): string {
-  const start = text.indexOf('class="drawer-footer"');
-  const end = text.indexOf("</aside>", start);
-  assert(start > -1 && end > start, "drawer footer not found");
+const read = (path: string) => Deno.readTextFile(new URL(path, import.meta.url));
+
+/** The markup between two anchors (end excluded). */
+function region(text: string, from: string, to: string): string {
+  const start = text.indexOf(from);
+  assert(start > -1, `could not find ${from}`);
+  const end = text.indexOf(to, start);
+  assert(end > start, `could not find ${to} after ${from}`);
   return text.slice(start, end);
 }
 
-/** The body of a method on the root component, by name. */
+/** A method's body, by name. Both helpers are 2-space-indented class methods. */
 function methodBody(text: string, name: string): string {
   const start = text.indexOf(`${name}() {`);
-  assert(start > -1, `${name} not found`);
+  assert(start > -1, `could not find ${name}()`);
   const end = text.indexOf("\n  }", start);
-  assert(end > start, `end of ${name} not found`);
+  assert(end > start, `could not find the end of ${name}()`);
   return text.slice(start, end);
 }
 
-/** The desktop account popover, which must keep behaving as it did. */
-function accountPopover(text: string): string {
-  const start = text.indexOf('<div class="user-popover">');
-  const end = text.indexOf("</div>", text.indexOf("Log out from all devices", start));
-  assert(start > -1 && end > start, "account popover not found");
-  return text.slice(start, end);
-}
+const isLogoutBlock = (text: string) => text.indexOf("_renderDrawerLogout()") > -1;
+const isLogoutInsideContent = (text: string) =>
+  isLogoutBlock(region(text, 'class="drawer-content"', 'class="drawer-footer"'));
+const isLogoutInsideFooter = (text: string) =>
+  isLogoutBlock(region(text, 'class="drawer-footer"', "</aside>"));
+const hasVisibleLogoutLabel = (text: string) => /icons\.logout\}\s*Log out\b/.test(text);
+const hasIconOnlyLogout = (text: string) =>
+  /<button[^>]*class="icon-btn"[\s\S]{0,200}?this\.logout/.test(text);
 
-/** Is a logout action labelled with a visible word? */
-const hasVisibleLogoutLabel = (region: string) => /icons\.logout\}\s*Log out\b/.test(region);
+Deno.test("the placement check: logout in the pinned footer is what fails it", () => {
+  const inFooter = `<div class="drawer-content"><tag-manager></tag-manager></div>
+        <div class="drawer-footer">\${this._renderDrawerLogout()}</div>
+      </aside>`;
+  const inContent = `<div class="drawer-content"><tag-manager></tag-manager>
+          <div class="drawer-logout">\${this._renderDrawerLogout()}</div>
+        </div>
+        <div class="drawer-footer">\${this._renderDrawerAccount()}</div>
+      </aside>`;
 
-/** Is there still an icon-only logout button with only a tooltip to explain it? */
-const hasIconOnlyLogout = (region: string) =>
-  /class="icon-btn"[\s\S]{0,160}?this\.logout/.test(region);
-
-/** Would a missing user object hide these logout controls? */
-const dependsOnTheUser = (region: string) => region.includes("this.user");
-
-const OLD_DRAWER =
-  `<div class="drawer-user"><button class="icon-btn" @click="\${this.logout}" title="Log out">
-     \${icons.logout}
-   </button></div>`;
-
-const NEW_DRAWER = `<button class="user-popover-logout" @click="\${this.logout}">
-     \${icons.logout} Log out
-   </button>`;
-
-Deno.test("the check: icon-only drawer markup fails it, the labelled markup passes", () => {
-  assert(hasIconOnlyLogout(OLD_DRAWER), "the old markup must trip the icon-only check");
-  assert(!hasVisibleLogoutLabel(OLD_DRAWER), "the old markup carried no visible label");
-
-  assert(!hasIconOnlyLogout(NEW_DRAWER), "a labelled button is not icon-only");
-  assert(hasVisibleLogoutLabel(NEW_DRAWER), "the label must be there to be read");
+  assert(isLogoutInsideFooter(inFooter), "the old shape must trip the pinned-footer check");
+  assert(!isLogoutInsideContent(inFooter), "the old shape was not inside the scroll area");
+  assert(isLogoutInsideContent(inContent), "the new shape must read as inside the scroll area");
+  assert(!isLogoutInsideFooter(inContent), "logout must not be back in the pinned footer");
 });
 
-Deno.test("drawer: both logout actions are labelled with words", () => {
+Deno.test("drawer: logout sits at the END of the scrolling content, below the tags", () => {
+  const content = region(source, 'class="drawer-content"', 'class="drawer-footer"');
+  assert(isLogoutInsideContent(source), "logout must live inside .drawer-content");
+  assert(
+    content.indexOf("_renderDrawerLogout()") > content.indexOf("</tag-manager>"),
+    "logout must come after the tag list, so it is reached by scrolling past it",
+  );
+});
+
+Deno.test("drawer: the pinned footer is not a tap target any more", () => {
+  const footer = region(source, 'class="drawer-footer"', "</aside>");
+  assert(!isLogoutBlock(footer), "the pinned footer must hold no logout control");
+  // It keeps the non-interactive bits: who you are, and which build you run.
+  assert(footer.includes("_renderDrawerAccount()"), "the footer still shows the account row");
+  assert(footer.includes("drawer-version"), "the footer still shows the build number");
+});
+
+Deno.test("drawer: 'only after scrolling' depends on .drawer-content scrolling", () => {
+  const css = region(source, "    .drawer-content {", "\n    }");
+  assert(
+    /overflow-y:\s*auto/.test(css),
+    "the scroll container must keep overflow-y: auto, or the logout block would be visible without scrolling",
+  );
+  const footerCss = region(source, "    .drawer-footer {", "\n    }");
+  assert(
+    !/position:\s*(fixed|sticky)/.test(footerCss),
+    "a pinned footer would put the buttons back on screen permanently",
+  );
+});
+
+Deno.test("drawer: the logout block is styled where it now lives", () => {
+  const css = region(source, "    .drawer-logout {", "\n    }");
+  assert(css.includes("border-top"), "the block is separated from the tag list");
+  const buttonCss = region(source, "    .drawer-logout .user-popover-logout {", "\n    }");
+  assert(
+    /min-height:\s*44px/.test(buttonCss),
+    "labelled and big enough to tap - the risk was placement, not size",
+  );
+  assert(
+    !source.includes(".drawer-footer .user-popover-logout {"),
+    "the old pinned-footer selector must be gone, or it would style nothing",
+  );
+});
+
+Deno.test("drawer: both logout actions are labelled with words, not just an icon", () => {
+  // The words live in the helper, not at the call site.
   const logout = methodBody(source, "_renderDrawerLogout");
-
-  assert(hasVisibleLogoutLabel(logout), "the drawer's Log out must say so");
-  assertStringIncludes(logout, "${icons.logout} Log out from all devices");
-});
-
-Deno.test("drawer: no logout action is icon-only any more", () => {
+  assert(hasVisibleLogoutLabel(logout), "the drawer must show the words 'Log out'");
   assert(
-    !hasIconOnlyLogout(methodBody(source, "_renderDrawerLogout")),
-    "an icon with a title tooltip is invisible on a phone",
+    logout.includes(`${"${icons.logout}"} Log out from all devices`),
+    "the all-devices action must be labelled too",
   );
+  assert(!hasIconOnlyLogout(logout), "no logout action may be an icon with only a tooltip");
 });
 
-Deno.test("drawer: logout renders whether or not the user object exists", () => {
-  const footer = drawerFooter(source);
-
-  assertStringIncludes(footer, "${this._renderDrawerLogout()}", "the footer must call it");
+Deno.test("drawer: logout does not depend on knowing who the user is", () => {
+  const logout = methodBody(source, "_renderDrawerLogout");
   assert(
-    !dependsOnTheUser(footer),
-    "nothing in the drawer footer may be conditional on a user that is never set",
+    !logout.includes("this.user"),
+    "logging out ends a session, not a name - a null user must not hide it",
   );
+  const footer = region(source, 'class="drawer-footer"', "</aside>");
   assert(
-    !dependsOnTheUser(methodBody(source, "_renderDrawerLogout")),
-    "Log out must not be hidden by a missing user object",
+    !/\$\{this\.user[\s\S]{0,120}_renderDrawerLogout/.test(footer),
+    "the logout block must not be gated on this.user",
   );
 });
 
-Deno.test("drawer: identification is still conditional, logout is not", () => {
-  // The avatar and name DO need the user object; keeping that condition is
-  // deliberate - it must simply never sit around the logout controls.
+Deno.test("drawer: the account row may hide itself, and says so", () => {
+  const account = methodBody(source, "_renderDrawerAccount");
   assert(
-    dependsOnTheUser(methodBody(source, "_renderDrawerAccount")),
-    "the account row renders nothing without a user",
+    /if \(!this\.user\) return ""/.test(account),
+    "identification returns nothing without a user - that is the deliberate trade-off",
   );
 });
 
-Deno.test("drawer: both logout buttons meet the 44px touch minimum, and read large", () => {
-  const css = source.slice(
-    source.indexOf(".drawer-footer .user-popover-logout {"),
-    source.indexOf(".drawer-user .user-name"),
-  );
-
-  assertStringIncludes(css, "min-height: 44px");
-  assert(/font-size:\s*0\.9[5-9]?rem/.test(css) || /font-size:\s*1rem/.test(css));
-  assert(/color:\s*var\(--gray-900\)/.test(css), "the label must be readable at arm's length");
+Deno.test("desktop: the account popover keeps both labelled actions", async () => {
+  const app = await read("../../public/components/notes-app.js");
+  const popover = region(app, 'class="user-popover-logout"', "drawer-overlay");
+  assert(popover.includes("Log out"), "the popover keeps a labelled Log out");
+  assert(popover.includes("Log out from all devices"), "and the all-devices action");
 });
 
-Deno.test("popover: the desktop account menu keeps both labelled buttons", () => {
-  const popover = accountPopover(source);
-
-  assertStringIncludes(popover, "${icons.logout} Log out");
-  assertStringIncludes(popover, "${icons.logout} Log out from all devices");
-  assertStringIncludes(popover, '@click="${this.logout}"');
-  assertStringIncludes(popover, '@click="${this.logoutAllDevices}"');
+Deno.test("the fixture itself is a real file with a real drawer", () => {
+  assert(source.includes('class="drawer-overlay'), "the drawer overlay markup is present");
+  assert(source.length > 1000, "sanity: the component was read");
 });

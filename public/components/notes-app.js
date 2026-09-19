@@ -478,16 +478,26 @@ class NotesApp extends LitElement {
     }
 
     /*
-    * The drawer's logout buttons, written out rather than icon-only.
+    * The logout block: the end of the scrollable drawer content, BELOW the
+    * tags, and deliberately not in the pinned footer.
     *
-    * The single-device logout used to be a 44px icon with a title-attribute
-    * tooltip and no visible word - fine with a mouse, invisible on a phone,
-    * where there is no hover to reveal it (reported 2026-09-18: "I don't see
-    * on mobile"). Both actions are now labelled text with a 44px minimum
-    * height, dark enough to read at arm's length.
+    * First reported as "I don't see Logout on mobile" (2026-09-18), then, once
+    * it was visible and labelled, as "It's too easy! ... too prominent, and
+    * create a fat-fingers danger". Both complaints were about the same thing:
+    * the footer is a flex sibling of the scrolling content, so it is on screen
+    * the whole time the drawer is open, sitting in the band a thumb rests in.
+    * Inside .drawer-content it is reached only by scrolling past the tag list -
+    * which is what the reader asked for. Labels and the 44px minimum stay: the
+    * risk was placement, not size.
     */
-    .drawer-footer .user-popover-logout {
-      margin-top: 0.5rem;
+    .drawer-logout {
+      margin-top: 1.5rem;
+      border-top: 1px solid var(--gray-200);
+      padding-top: 0.75rem;
+    }
+
+    .drawer-logout .user-popover-logout {
+      margin-top: 0.25rem;
       min-height: 44px;
       padding: 0.6rem 0.75rem;
       font-size: 0.95rem;
@@ -495,7 +505,7 @@ class NotesApp extends LitElement {
       color: var(--gray-900);
     }
 
-    .drawer-footer .user-popover-logout svg {
+    .drawer-logout .user-popover-logout svg {
       width: 18px;
       height: 18px;
       color: var(--gray-700);
@@ -1774,11 +1784,14 @@ class NotesApp extends LitElement {
               .selectedTags="${this.selectedTags}"
               .offline="${this.syncStatus === "offline"}"
             ></tag-manager>
+
+            <div class="drawer-logout">
+              ${this._renderDrawerLogout()}
+            </div>
           </div>
 
           <div class="drawer-footer">
             ${this._renderDrawerAccount()}
-            ${this._renderDrawerLogout()}
             <div class="drawer-version" title="Client build - bumped with every UI change">
               Version ${APP_VERSION}
             </div>
