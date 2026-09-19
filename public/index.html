@@ -18,6 +18,10 @@
     <meta name="app-name" content="{{APP_NAME}}">
     <meta name="app-short-name" content="{{APP_SHORT_NAME}}">
 
+    <!-- Who is signed in, injected server-side (server/session-user.js) and read
+         by public/utils/session-user.js. Empty when there is no session. -->
+    <meta name="session-user-name" content="{{SESSION_USER_NAME}}">
+
     <!-- PWA manifest -->
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#2b6e63">

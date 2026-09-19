@@ -30,11 +30,12 @@ export function resolveAppName(rawValue, fallback) {
 /**
  * Escape text for safe use inside HTML content or a "..." attribute value.
  * Deliberately self-contained (mirrors public/utils/text.js) rather than
- * importing across the server/public boundary.
+ * importing across the server/public boundary. Exported so other server-side
+ * injections (server/session-user.js) escape by the same rules.
  * @param {string} text - Raw text
  * @returns {string} HTML-escaped text
  */
-function escapeHtml(text) {
+export function escapeHtml(text) {
   return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

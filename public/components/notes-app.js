@@ -7,6 +7,7 @@ import { css, html, LitElement } from "lit";
 import { icons } from "../utils/icons.js";
 import { excludedTagIds, requiredTagIds, tagStateMeta } from "../utils/tag-filter.js";
 import { readAppShortName } from "../utils/branding.js";
+import { readSessionUser } from "../utils/session-user.js";
 import { readNotesPage } from "../utils/notes-response.js";
 import { makeToastId } from "../utils/toast-queue.js";
 import { APP_VERSION } from "../version.js";
@@ -14,6 +15,11 @@ import { APP_VERSION } from "../version.js";
 // Read once at module load: the server has already injected the meta tag by
 // the time this module executes (module scripts run after the head parses).
 const APP_SHORT_NAME = readAppShortName();
+
+// Same mechanism, and the reason it matters: until 2026-09-18 this came from
+// `globalThis.user`, which nothing ever set, so the avatar and name never
+// rendered - and the desktop avatar button is what opens the account menu.
+const SESSION_USER = readSessionUser();
 
 class NotesApp extends LitElement {
   static properties = {
@@ -173,6 +179,12 @@ class NotesApp extends LitElement {
       }
     }
 
+    /*
+    * The avatar: a circle holding the name's initial. It used to hold an <img>
+    * from Google's CDN, which the page's img-src ('self' data: blob:) never
+    * allowed - so it could only ever render broken or not at all. No backticks
+    * in here: this comment lives inside a Lit css template literal.
+    */
     .avatar-btn {
       width: 34px;
       height: 34px;
@@ -183,13 +195,14 @@ class NotesApp extends LitElement {
       overflow: hidden;
       background: var(--primary-light);
       flex-shrink: 0;
-    }
-
-    .avatar-btn img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.95rem;
+      font-weight: 600;
+      line-height: 1;
+      color: var(--primary-dark);
+      user-select: none;
     }
 
     .avatar-btn.sm {
@@ -198,7 +211,6 @@ class NotesApp extends LitElement {
     }
 
     .avatar-btn.static {
-      display: block;
       cursor: default;
     }
 
@@ -879,8 +891,9 @@ class NotesApp extends LitElement {
     this.pendingSyncCount = 0;
     this.syncStatus = "idle";
 
-    // Get user info from global context (set by server)
-    this.user = globalThis.user || null;
+    // The signed-in user the server injected into the document head, or null
+    // when there is no session. See public/utils/session-user.js.
+    this.user = SESSION_USER;
 
     // Store bound handlers for proper cleanup
     this._boundHandleBeforeUnload = this._handleBeforeUnload.bind(this);
@@ -1673,6 +1686,10 @@ class NotesApp extends LitElement {
   /**
    * Render the user's avatar button for the desktop rail footer. Clicking it
    * opens the account popover, which is rendered inside the rail.
+   *
+   * The initial, not a photo: the picture would come from Google's CDN, which
+   * the page's img-src ('self' data: blob:) does not allow - widening the CSP
+   * and phoning Google on every load to decorate a button is a bad trade.
    */
   _renderAvatar() {
     if (!this.user) return "";
@@ -1682,23 +1699,21 @@ class NotesApp extends LitElement {
         @click="${this.toggleUserMenu}"
         title="${this.user.name}"
       >
-        <img src="${this.user.picture}" alt="${this.user.name}">
+        ${this.user.initial}
       </button>
     `;
   }
 
   /**
-   * Avatar for the mobile drawer footer. Deliberately not a button: the
-   * account popover it used to open lives inside the rail, which is
-   * display:none on mobile, so tapping it did nothing at all. Log out sits
-   * next to it in the same footer, so this is just identification.
+   * Avatar for the mobile drawer footer - identification only, same initial.
+   *
+   * Deliberately not a button: the account popover it used to open lives inside
+   * the rail, which is display:none on mobile, so tapping it did nothing at all.
    */
   _renderDrawerAvatar() {
     if (!this.user) return "";
     return html`
-      <span class="avatar-btn sm static">
-        <img src="${this.user.picture}" alt="">
-      </span>
+      <span class="avatar-btn sm static" title="${this.user.name}">${this.user.initial}</span>
     `;
   }
 

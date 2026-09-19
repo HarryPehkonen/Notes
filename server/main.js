@@ -20,6 +20,7 @@ import {
   injectAppNameIntoManifest,
   resolveAppName,
 } from "./branding.js";
+import { injectSessionUser } from "./session-user.js";
 
 // Import API routes
 import { createNotesRouter } from "./api/notes.js";
@@ -343,12 +344,15 @@ router.get("/", optionalAuth, async (ctx) => {
     return;
   }
 
-  // Serve main app. The CSP nonce and app name are stamped in here so the
-  // files on disk stay free of per-request/per-deployment values.
+  // Serve main app. The CSP nonce, app name and signed-in user are stamped in
+  // here so the files on disk stay free of per-request/per-deployment values.
   ctx.response.type = "text/html";
-  ctx.response.body = injectAppName(
-    injectNonce(await Deno.readTextFile("./public/index.html"), ctx.state.cspNonce),
-    appNames,
+  ctx.response.body = injectSessionUser(
+    injectAppName(
+      injectNonce(await Deno.readTextFile("./public/index.html"), ctx.state.cspNonce),
+      appNames,
+    ),
+    await ctx.state.session.get("user"),
   );
 });
 
