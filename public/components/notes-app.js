@@ -1692,6 +1692,44 @@ class NotesApp extends LitElement {
     `;
   }
 
+  /**
+   * Avatar and name for the mobile drawer footer - identification only.
+   *
+   * Returns nothing when no user is known. That is why the drawer's logout
+   * controls are rendered by a SEPARATE function: they were inside this
+   * condition, `globalThis.user` is never populated (the injection the
+   * constructor's comment promises was never written), and so the whole
+   * account block - logout included - silently never rendered. Log out must
+   * not depend on knowing who you are.
+   */
+  _renderDrawerAccount() {
+    if (!this.user) return "";
+    return html`
+      <div class="drawer-user">
+        ${this._renderDrawerAvatar()}
+        <span class="user-name">${this.user.name}</span>
+      </div>
+    `;
+  }
+
+  /**
+   * Log out, in the mobile drawer: this device, and every device.
+   *
+   * Deliberately unconditional - it renders whether or not `this.user` is
+   * known, because the session is what a logout ends, not the name on it.
+   * (Reported twice from a phone, 2026-09-18: "I don't see Logout on mobile.")
+   */
+  _renderDrawerLogout() {
+    return html`
+      <button class="user-popover-logout" @click="${this.logout}">
+        ${icons.logout} Log out
+      </button>
+      <button class="user-popover-logout" @click="${this.logoutAllDevices}">
+        ${icons.logout} Log out from all devices
+      </button>
+    `;
+  }
+
   render() {
     return html`
       <div class="app-layout">
@@ -1739,26 +1777,8 @@ class NotesApp extends LitElement {
           </div>
 
           <div class="drawer-footer">
-            ${this.user
-              ? html`
-                <div class="drawer-user">
-                  ${this._renderDrawerAvatar()}
-                  <span class="user-name">${this.user.name}</span>
-                </div>
-                <button
-                  class="user-popover-logout"
-                  @click="${this.logout}"
-                >
-                  ${icons.logout} Log out
-                </button>
-                <button
-                  class="user-popover-logout"
-                  @click="${this.logoutAllDevices}"
-                >
-                  ${icons.logout} Log out from all devices
-                </button>
-              `
-              : ""}
+            ${this._renderDrawerAccount()}
+            ${this._renderDrawerLogout()}
             <div class="drawer-version" title="Client build - bumped with every UI change">
               Version ${APP_VERSION}
             </div>
