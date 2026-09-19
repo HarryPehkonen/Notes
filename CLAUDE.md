@@ -44,6 +44,14 @@ Arm it as a pre-push hook once per clone with
 places it runs. A new test file must be named `*_test.ts` or `deno test
 tests/deno/` silently never discovers it.
 
+**The URL contract is tested, not assumed.** `tests/deno/route_contract_test.ts`
+reads every client call site in `public/app.js` and every server route (with
+each router's mount prefix, derived from `server/main.js`) and fails if a call
+has no route — by name, with the URL. Add a client call and it must resolve.
+Exactly two call sites (`getNotes`, `setNoteTag`) build their path dynamically
+and are counted explicitly; the tag one's composed URL is pinned in
+`tests/deno/api_paths_test.ts`.
+
 ### Database Operations
 
 The server uses a single schema file:
