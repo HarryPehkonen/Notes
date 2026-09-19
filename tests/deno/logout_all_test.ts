@@ -1,5 +1,4 @@
 import {
-  assert,
   assertEquals,
   assertMatch,
   assertStringIncludes,
@@ -244,13 +243,10 @@ Deno.test("POST /logout-all: a failing Google revoke does not fail the logout", 
   assertEquals(sessionDeletions.length, 1);
 });
 
-Deno.test("POST /logout-all: the auth router mounts exactly one route", () => {
+Deno.test("the auth router mounts exactly two routes: this device, and all devices", () => {
   const router = createAuthRouter({ sessionStore: fakeSessionStore() }) as unknown as Iterable<
     RouteLike
   >;
-  const paths = [...router].map((route) => `${route.methods.join(",")} ${route.path}`);
-  assert(
-    paths.some((p) => p.includes("POST") && p.endsWith("/logout-all")),
-    `expected a POST /logout-all route, got ${JSON.stringify(paths)}`,
-  );
+  const paths = [...router].map((route) => `${route.methods.join(",")} ${route.path}`).sort();
+  assertEquals(paths, ["POST /logout", "POST /logout-all"]);
 });

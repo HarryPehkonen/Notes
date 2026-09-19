@@ -22,6 +22,34 @@ export function createAuthRouter({ sessionStore }) {
   const router = new Router();
 
   /**
+   * Log out of THIS device: drop the session making the request.
+   *
+   * This route was missing until 2026-09-18. The client's `logout()` posts to
+   * `/api/auth/logout` (its API helper composes everything onto `/api`), while
+   * the only handler lived at the page-level `/auth/logout` - so the request
+   * 404'd, the client redirected to `/login` anyway, and the still-valid session
+   * bounced it straight back into the app. The route-contract test in
+   * tests/deno/route_contract_test.ts now derives this by reading both sides.
+   */
+  router.post("/logout", async (ctx) => {
+    const user = ctx.state.user;
+
+    if (!user?.id) {
+      ctx.response.status = 401;
+      ctx.response.body = { ...UNAUTHORIZED_BODY };
+      return;
+    }
+
+    // Fire-and-forget: Google's revoke endpoint must never delay or fail logout
+    revokeGoogleToken(ctx.state.db, ctx.state.authHandler, user.id)
+      .catch((error) => console.error("Google token revocation failed:", error));
+
+    await ctx.state.session.deleteSession();
+
+    ctx.response.body = { success: true, redirectTo: "/" };
+  });
+
+  /**
    * Log out from all devices: drop every session this user owns, including the
    * one making the request. This is the kill-switch that makes the 7-day
    * sliding session safe to keep — a stolen cookie stops working the moment the
