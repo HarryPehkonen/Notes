@@ -37,12 +37,26 @@ deno task test
 ```
 
 **Before committing or pushing, run the gate:** `scripts/gate.sh` — lint, the
-full suite, `deno fmt --check` on the files this branch touched, and the
-version-bump invariant (a `public/` change must move `public/version.js`).
-Arm it as a pre-push hook once per clone with
-`git config core.hooksPath .githooks`; see README "The gate" for the three
-places it runs. A new test file must be named `*_test.ts` or `deno test
+full suite (currently 705 tests passing), `deno fmt --check` on the files this
+branch touched, and the version-bump invariant (a `public/` change must move
+`public/version.js`, checked by `tests/deno/app_version_test.ts` keeping
+`APP_VERSION` and `CACHE_NAME` equal). It runs in three places: by hand, as a
+pre-push hook (arm once per clone with `git config core.hooksPath
+.githooks` — `.githooks/pre-push` just execs `scripts/gate.sh`), and nightly on
+a clean checkout (`notes-gate-watch`, 07:30, clones fresh and also probes
+harrisnotes.ca for wire-only invariants — 401 not 404 on a protected route,
+static assets serving 200; silent unless something is wrong). See README "The
+gate" for detail. A new test file must be named `*_test.ts` or `deno test
 tests/deno/` silently never discovers it.
+
+**Guard suites worth knowing by name** — each exists because something broke
+in production first: `route_contract_test.ts` (client/server URL contract, see
+below), `session_user_injection_test.ts` (the `{{SESSION_USER_NAME}}` HTML
+injection is escaped and empty-safe), `drawer_logout_test.ts` (logout is
+labelled, reachable, and not in the pinned footer), `auth_logout_test.ts`
+(`POST /api/auth/logout(-all)` exist and behave), `api_paths_test.ts` (the two
+dynamically-built client URLs), and `note_ref_test.ts` (note id display
+formatting).
 
 **The URL contract is tested, not assumed.** `tests/deno/route_contract_test.ts`
 reads every client call site in `public/app.js` and every server route (with
@@ -80,7 +94,8 @@ psql -U notes_user -d notes_app
 ### Technology Stack
 
 - **Backend**: Deno runtime with Oak framework
-- **Database**: PostgreSQL with full-text search (pg_trgm extension)
+- **Database**: PostgreSQL with native `tsvector`/GIN full-text search, plus
+  `pgvector` for semantic search over note embeddings
 - **Frontend**: Lit Web Components v3.1.0 (CDN imports, no npm)
 - **Authentication**: Google OAuth 2.0
 - **Deployment**: Self-hosted with systemd + Caddy
@@ -97,46 +112,92 @@ psql -U notes_user -d notes_app
 
 ```
 ├── server/
-│   ├── main.js              # Oak server, routes, and initialization
+│   ├── main.js               # Oak server, routes, and initialization
+│   ├── session-user.js       # Injects the signed-in user's name into index.html
+│   ├── branding.js           # Injects APP_NAME/APP_SHORT_NAME; escapeHtml()
+│   ├── security-headers.js   # CSP middleware (per-request nonce; img-src has no photo host)
+│   ├── session-store.js      # PostgresSessionStore (oak_sessions backed by Postgres)
+│   ├── rate-limit.js         # In-memory sliding-window rate limiting
+│   ├── static-cache.js       # Cache-Control policy for /static/
+│   ├── static-conditions.js  # ETag / If-None-Match helpers for /static/
 │   ├── auth/
-│   │   ├── auth-handler.js  # Google OAuth 2.0 implementation
-│   │   ├── api-tokens.js    # Personal API token generation/hashing/extraction
-│   │   └── middleware.js    # requireAuth, optionalAuth, redirectIfAuthenticated
+│   │   ├── auth-handler.js   # Google OAuth 2.0 implementation
+│   │   ├── api-tokens.js     # Personal API token generation/hashing/extraction
+│   │   └── middleware.js     # requireAuth, optionalAuth, redirectIfAuthenticated
 │   ├── cli/
-│   │   ├── args.js          # Pure arg parsing for the token CLI
-│   │   └── tokens.js        # token:create / token:list / token:revoke
+│   │   ├── args.js           # Pure arg parsing for the token CLI
+│   │   └── tokens.js         # token:create / token:list / token:revoke
 │   ├── database/
-│   │   ├── client.js        # PostgreSQL connection and query wrapper
-│   │   └── schema.sql       # Database schema (auto-applied on startup)
+│   │   ├── client.js         # PostgreSQL connection and query wrapper
+│   │   └── schema.sql        # Database schema (auto-applied on startup)
+│   ├── services/
+│   │   └── ws-connections.js # Per-user WebSocket registry for live-sync broadcasts
 │   └── api/
-│       ├── notes.js         # CRUD endpoints for notes
-│       ├── tags.js          # Tag management endpoints
-│       └── search.js        # Full-text search with PostgreSQL
+│       ├── notes.js          # CRUD endpoints for notes
+│       ├── note-fields.js    # Normalizes note fields before persisting
+│       ├── tags.js           # Tag management endpoints
+│       ├── tag-filter.js     # buildTagFilterClause - shared by notes/search/semantic
+│       ├── tag-input.js      # Tag input validation and name normalization
+│       ├── search.js         # Full-text search with PostgreSQL
+│       ├── search-query.js   # Splits a query into text tokens and '#tag' tokens
+│       ├── semantic.js       # Embedding (semantic) search over note_embeddings
+│       ├── embed.js          # Embedding client (local llama.cpp server)
+│       ├── auth.js           # /api/auth: logout, logout-all
+│       └── images.js         # Note image upload/serve/delete
 ├── public/
-│   ├── index.html           # Main app shell (served to authenticated users)
-│   ├── app.js               # Main application logic
-│   ├── components/          # Lit Web Components (loaded via ES modules)
-│   │   ├── notes-app.js     # Root component orchestrating the app
-│   │   ├── note-editor.js   # Markdown note editing interface
-│   │   ├── note-list.js     # Notes listing with filtering
-│   │   ├── search-bar.js    # Search interface with live results
-│   │   └── tag-manager.js   # Tag CRUD and color management
-│   ├── utils/
-│   │   └── text.js          # HTML escaping and search highlighting
+│   ├── index.html            # Main app shell (served to authenticated users)
+│   ├── app.js                # Main application logic
+│   ├── version.js            # APP_VERSION/CACHE_NAME - gate fails if public/ moves without it
+│   ├── components/           # Lit Web Components (loaded via ES modules)
+│   │   ├── notes-app.js      # Root component orchestrating the app
+│   │   ├── note-editor.js    # Markdown note editing interface
+│   │   ├── note-list.js      # Notes listing with filtering
+│   │   ├── search-bar.js     # Search interface with live results
+│   │   └── tag-manager.js    # Tag CRUD and color management
+│   ├── services/
+│   │   ├── live-sync.js      # WebSocket client for live updates
+│   │   ├── persistence.js    # Local/offline persistence
+│   │   └── sync-manager.js   # Reconciles local state with the server
+│   ├── utils/                # Pure, unit-tested helpers - one concern each
+│   │   ├── text.js           # HTML escaping and search highlighting
+│   │   ├── icons.js          # Shared inline SVG icon set
+│   │   ├── branding.js       # Reads injected app-name/app-short-name meta tags
+│   │   ├── session-user.js   # Reads the injected session-user-name meta tag
+│   │   ├── note-ref.js       # Note id, formatted for on-screen display
+│   │   ├── notes-query.js    # GET /api/notes request shape (tag-only list)
+│   │   ├── notes-response.js # Parses a notes payload: rows, total, hasMore
+│   │   ├── tag-endpoint.js   # Routes a single tag attach/detach edit
+│   │   ├── tag-filter.js     # Tri-state tag filtering (any/required/excluded)
+│   │   ├── search-mode.js    # Search request shape; semantic-mode toggle
+│   │   ├── search-match.js   # Match-badge helpers for semantic search results
+│   │   ├── pin-state.js      # Pin toggle wording and note pin state
+│   │   ├── version-list.js   # Version-history rows: Current, then newest-first
+│   │   ├── editor-state.js   # Pure editor state decisions (no DOM)
+│   │   ├── checkboxes.js     # Clickable checkbox markers in markdown notes
+│   │   ├── inert-html.js     # Inerts raw HTML embedded in the markdown preview
+│   │   ├── list-summary.js   # Notes-header count/summary text
+│   │   ├── toast-queue.js    # Toast id/queue management
+│   │   └── print.js          # Pure helpers for printing a note
 │   ├── styles/
-│   │   └── app.css          # Mobile-first CSS (no frameworks)
-│   └── sw.js                # Service worker for PWA functionality
+│   │   └── app.css           # Mobile-first CSS (no frameworks)
+│   └── sw.js                 # Service worker for PWA functionality
 ├── tests/
-│   └── deno/                # Deno unit tests for pure functions
-└── poc/                     # Proof-of-concept projects (not part of main app)
-    ├── dropbox-poc/         # Dropbox API integration testing
-    ├── google-auth-poc/     # Google OAuth flow prototyping
-    └── postgres-poc/        # PostgreSQL full-text search experiments
+│   └── deno/                 # ~54 *_test.ts files, plus setup.ts and
+│                              # route_contract.ts (shared, not itself a test)
+├── scripts/
+│   ├── gate.sh                # lint + test + fmt + version-bump gate (see Testing)
+│   └── embed-notes.ts         # Backfills note_embeddings for semantic search
+├── .githooks/
+│   └── pre-push                # Runs scripts/gate.sh; opt in with core.hooksPath
+└── poc/                      # Proof-of-concept projects (not part of main app)
+    ├── dropbox-poc/          # Dropbox API integration testing
+    ├── google-auth-poc/      # Google OAuth flow prototyping
+    └── postgres-poc/         # PostgreSQL full-text search experiments
 ```
 
 ### Request Flow
 
-1. **Unauthenticated user** → `/` → Redirected to `/login` (inline HTML with Google OAuth button)
+1. **Unauthenticated user** → `/` → Redirected to `/login` (serves `public/login.html`)
 2. **Login** → `/auth/login` → Redirects to Google OAuth → `/auth/callback` → Creates/updates user in database → Creates session → Redirects to `/`
 3. **Authenticated user** → `/` → Serves `public/index.html` → Loads Lit components from `/components/` → Components make API calls to `/api/*`
 4. **API requests** → Pass through `requireAuth` middleware (checks session) → Routed to appropriate handler → Database operations via `DatabaseClient`
@@ -182,6 +243,10 @@ PostgreSQL with the following key tables:
 - **tags**: User-specific tags with colors
 - **note_tags**: Many-to-many relationship between notes and tags
 - **note_versions**: Automatic version history (created via database trigger)
+- **sessions**: Server-side session storage for `oak_sessions`; `last_seen_at`
+  slides on every request so active logins never expire
+- **images**: Uploaded note images (`UNIQUE(user_id, filename)`)
+- **note_embeddings**: One BGE-M3 vector (`vector(1024)`) per note for semantic search
 - **api_tokens**: Personal API tokens for machine clients (SHA-256 digest only, `UNIQUE(user_id, name)`)
 
 **Key features**:
@@ -194,8 +259,8 @@ PostgreSQL with the following key tables:
 
 **Database triggers**:
 
-- `update_note_timestamp` - Automatically sets `updated_at` on note modifications
-- `save_note_version` - Creates version history entry before note updates
+- `update_notes_updated_at` - Automatically sets `updated_at` on note modifications
+- `create_note_version_trigger` - Creates version history entry before note updates
 
 ## Important Implementation Details
 
@@ -203,12 +268,35 @@ PostgreSQL with the following key tables:
 
 - Uses Google OAuth 2.0 (no local passwords)
 - OAuth flow in `server/auth/auth-handler.js` using standard authorization code flow
-- Sessions managed by `oak_sessions` middleware
+- Sessions managed by `oak_sessions`, backed by `server/session-store.js`
+  (`PostgresSessionStore`, the `sessions` table); cookie is `httpOnly`,
+  `sameSite: "lax"`, 7-day sliding expiry. `secure` is deliberately `false` even
+  in production — Caddy terminates TLS and forwards plain HTTP, and Oak's
+  `SecureCookieMap` rejects a secure cookie over that non-TLS hop; Caddy's HSTS
+  header is what keeps the browser from ever sending it over plain HTTP
 - User data stored in session: `{ id, email, name, picture }`
+- `POST /auth/logout` (page-level, this device only) sits alongside two
+  session-scoped routes at `/api/auth`: `POST /api/auth/logout` (this device)
+  and `POST /api/auth/logout-all` (every session the user owns — the kill
+  switch that makes the 7-day sliding session safe to keep)
 - Middleware functions in `server/auth/middleware.js`:
   - `requireAuth`: Protects API routes (returns 401 if not authenticated)
   - `optionalAuth`: Allows anonymous + authenticated access
   - `redirectIfAuthenticated`: For login page (redirects to `/` if already logged in)
+
+### Session User & Avatar
+
+The page learns who is signed in from an injected `<meta name="session-user-name">`
+tag in `public/index.html`, filled per request by `server/session-user.js` from
+the session (same mechanism as `APP_NAME`) and read by
+`public/utils/session-user.js`. **There is no `globalThis.user`** — a comment
+promised one for months and nothing ever wrote it, which is why the drawer
+avatar/name and the desktop-only route to Log out silently never rendered
+until 2026-09-18. Only the display name is injected: no email, no picture.
+
+The avatar is the name's initial in a circle, not the Google photo: the page's
+CSP `img-src` is `'self' data: blob:` (`server/security-headers.js`), so a
+photo would mean widening the CSP and calling Google on every load.
 
 ### Frontend Component Architecture
 
@@ -419,6 +507,27 @@ async updateNoteWithTags(noteId, updates, tagIds) {
    - Users may need to clear site data or hard refresh to get updates
    - The service worker uses `skipWaiting()` and `clients.claim()` for faster updates
 
+6. **The Lit backtick trap**:
+   - Never write a backtick inside a `css\`` / `html\`` template literal — not
+     even inside a comment. It ends the template early and the file becomes a
+     `SyntaxError`
+   - No component test can catch this (tests read components as text, not as
+     parsed JS) — `deno lint` in the gate and the pre-push hook are what catch it
+   - See the comment at the top of the avatar CSS in `notes-app.js` for a
+     worked example of writing around it
+
+7. **UI conventions** (mobile-first; see `drawer_logout_test.ts` for the
+   incident that established these):
+   - Every control needs a visible word label — a `title` tooltip is invisible
+     on a phone (no hover)
+   - Touch targets are ≥44px
+   - No control may be gated on `this.user`: display data (name, avatar) can
+     hide when there's no user, but a session-level action (Log out) must not
+     — a null user must never remove the only way to end the session
+   - The drawer's logout actions live at the end of `.drawer-content` (the
+     scrolling area), not in the pinned `.drawer-footer` — an always-on-screen
+     destructive control in the thumb band was a reported hazard
+
 ## API Documentation
 
 ### Health Check
@@ -442,7 +551,9 @@ Response:
 ```http
 GET  /auth/login              # Redirect to Google OAuth
 GET  /auth/callback           # OAuth callback handler
-POST /auth/logout             # End session
+POST /auth/logout             # Page-level: end this device's session
+POST /api/auth/logout         # Same, behind requireAuth (401 JSON if not authenticated)
+POST /api/auth/logout-all     # End every session this user owns, this one included
 ```
 
 ### API Tokens (machine access)
@@ -562,7 +673,12 @@ DELETE /api/tags/:id          # Soft delete tag
 
 ## Testing Strategy
 
-- **Unit tests**: Deno tests in `tests/deno/` for pure functions (text utils, SQL parser, markdown stripping, auth handler)
+- **Unit tests**: ~54 `*_test.ts` files in `tests/deno/` for pure functions
+  (text utils, SQL parser, markdown stripping, auth handler, tag filtering,
+  version history, and more)
+- **Guard/contract tests**: wire-level checks that catch a client/server
+  mismatch no pure-function test can — see "Guard suites worth knowing by
+  name" under Testing above
 - **API testing**: Use `curl` or test scripts
 - **Database testing**: Use separate test database (update `.env` when running tests)
 
@@ -615,7 +731,11 @@ The application is primarily designed for mobile phone browsers:
 - **No password storage**: OAuth-only authentication
 - **SQL injection prevention**: All queries use parameterized statements
 - **XSS prevention**: Lit templates automatically escape user content
-- **Session security**: HTTP-only cookies with secure flag in production
+- **Session security**: HTTP-only, `sameSite: "lax"` cookies. `secure` is
+  `false` even in production, deliberately — Caddy terminates TLS and forwards
+  plain HTTP, and its HSTS header is what keeps the cookie HTTPS-only in the
+  browser instead (see Authentication Flow)
 - **Row-level security**: All database queries filter by authenticated user ID
-- **CORS**: Configured in Oak middleware for same-origin by default
+- **CORS**: No CORS headers are set anywhere in the app — cross-origin requests
+  are blocked by the browser's same-origin default, not by explicit config
 - **Environment secrets**: Never commit `.env` file (use `.env.example` template)
