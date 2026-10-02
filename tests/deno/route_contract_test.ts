@@ -215,6 +215,7 @@ const serverSources = [
   { file: "server/api/search.js", source: await read("server/api/search.js") },
   { file: "server/api/images.js", source: await read("server/api/images.js") },
   { file: "server/api/auth.js", source: await read("server/api/auth.js") },
+  { file: "server/api/waiting.js", source: await read("server/api/waiting.js") },
 ];
 
 Deno.test("contract: the app composes every path onto the apiUrl prefix", () => {
@@ -277,6 +278,7 @@ Deno.test("contract: the families the app actually depends on are all present", 
       "DELETE /images/:param",
       "POST /auth/logout",
       "POST /auth/logout-all",
+      "GET /waiting-on",
     ]
   ) {
     assert(found.has(expected), `expected the app to call ${expected}`);

@@ -28,6 +28,8 @@ import { createTagsRouter } from "./api/tags.js";
 import { createSearchRouter } from "./api/search.js";
 import { createImagesRouter } from "./api/images.js";
 import { createAuthRouter } from "./api/auth.js";
+import { createWaitingRouter } from "./api/waiting.js";
+import { DEFAULT_STALE_MINUTES, DEFAULT_TIMEOUT_MS, DEFAULT_WAITING_ON_URL } from "./waiting-on.js";
 import {
   addConnection,
   closeAll as closeAllWs,
@@ -41,7 +43,23 @@ const config = {
   googleClientId: Deno.env.get("GOOGLE_CLIENT_ID"),
   googleClientSecret: Deno.env.get("GOOGLE_CLIENT_SECRET"),
   googleRedirectUri: Deno.env.get("GOOGLE_REDIRECT_URI"),
+
+  // media-watch "waiting on" projection. URL, timeout and staleness window are
+  // configuration (env, then the defaults in server/waiting-on.js) - never
+  // hardcoded in a component. Dev and prod point at the same mesh endpoint
+  // today; the env override is what keeps a future move from being a code edit.
+  waitingOnUrl: Deno.env.get("WAITING_ON_URL") || DEFAULT_WAITING_ON_URL,
+  waitingOnTimeoutMs: envInt("WAITING_ON_TIMEOUT_MS", DEFAULT_TIMEOUT_MS),
+  waitingOnStaleMinutes: envInt("WAITING_ON_STALE_MINUTES", DEFAULT_STALE_MINUTES),
 };
+
+/** A positive integer from the environment, or the fallback. */
+function envInt(name, fallback) {
+  const raw = Deno.env.get(name);
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 // Display name shown in the tab title, PWA install name, login screen and
 // sidebar. Optional; unset keeps the current product name everywhere.
@@ -379,11 +397,17 @@ const tagsRouter = createTagsRouter();
 const searchRouter = createSearchRouter();
 const imagesRouter = createImagesRouter();
 const apiAuthRouter = createAuthRouter({ sessionStore });
+const waitingRouter = createWaitingRouter({
+  url: config.waitingOnUrl,
+  timeoutMs: config.waitingOnTimeoutMs,
+  staleMinutes: config.waitingOnStaleMinutes,
+});
 router.use("/api/notes", requireAuth, notesRouter.routes(), notesRouter.allowedMethods());
 router.use("/api/auth", requireAuth, apiAuthRouter.routes(), apiAuthRouter.allowedMethods());
 router.use("/api/tags", requireAuth, tagsRouter.routes(), tagsRouter.allowedMethods());
 router.use("/api/search", requireAuth, searchRouter.routes(), searchRouter.allowedMethods());
 router.use("/api/images", requireAuth, imagesRouter.routes(), imagesRouter.allowedMethods());
+router.use("/api/waiting-on", requireAuth, waitingRouter.routes(), waitingRouter.allowedMethods());
 
 // WebSocket endpoint for live sync
 router.get("/ws", async (ctx) => {

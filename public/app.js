@@ -16,6 +16,7 @@ import "./components/note-editor.js";
 import "./components/note-list.js";
 import "./components/search-bar.js";
 import "./components/tag-manager.js";
+import "./components/waiting-on.js";
 
 // Global app state and utilities
 globalThis.NotesApp = {
@@ -276,6 +277,15 @@ globalThis.NotesApp = {
       method: "POST",
       body: criteria,
     });
+  },
+
+  /**
+   * The media-watch "waiting on" projection. Fetched SERVER-side by the app
+   * (a browser fetch to the private http endpoint would be mixed-content
+   * blocked); this call is the app's own session-protected API route.
+   */
+  getWaitingOn() {
+    return this.request("/waiting-on");
   },
 
   // Logout

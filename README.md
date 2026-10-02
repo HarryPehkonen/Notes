@@ -13,6 +13,7 @@ A complete, production-ready notes application built with the minimal web stack 
 - ✓ **Full-Text Search** - PostgreSQL native search with ranking
 - ✓ **Tag System** - Organize notes with colored tags
 - ✓ **Version History** - Automatic versioning with restore capability
+- ✓ **Waiting on** - read-only page showing what the home media-watch pipeline is waiting for (server-side fetch; see below)
 
 ### Technical Features
 
@@ -147,7 +148,38 @@ GOOGLE_REDIRECT_URI=http://localhost:8000/auth/callback
 
 # Session Configuration
 SESSION_SECRET=your_super_secret_session_key
+
+# media-watch "waiting on" projection (optional; defaults in server/waiting-on.js)
+WAITING_ON_URL=http://10.99.0.6:8787/waiting-on.json
+WAITING_ON_TIMEOUT_MS=2500
+WAITING_ON_STALE_MINUTES=90
 ```
+
+### The "Waiting on" page
+
+The `Waiting on` nav entry (drawer and desktop rail) shows what the home
+media-watch pipeline is currently waiting for: title, type, what it is waiting
+on, and how long it has been waiting, sorted by state and then longest-waiting
+first.
+
+- **Source.** A read-only projection of `~/hermes-workspace/media-watch/watch.db`
+  on host hermes, served by the `media-watch-json.service` systemd `--user` unit
+  at `WAITING_ON_URL`, bound to the WireGuard address only. The JSON is
+  generated every 30 min; it is never a second editable source and the app never
+  writes back.
+- **Fetch is server-side.** A browser fetch to a private plain-http URL would be
+  mixed-content blocked, so `GET /api/waiting-on` (behind `requireAuth`) reads it
+  with a 2.5 s timeout and returns a normalized view. The URL, timeout and
+  staleness window live in configuration (`WAITING_ON_*`), never in a component;
+  `GET/HEAD` only, no new auth on the endpoint.
+- **Three distinct states, honestly.** `ok` (items, or "Nothing waiting on right
+  now" when the list is empty), `stale` (>90 min old — the last known list is
+  shown behind a warning, never passed off as live) and `error` (unreachable,
+  non-200, malformed JSON or an unexpected shape — a visible error, never an
+  empty list). The route always answers 200; the verdict is in the body.
+- **Staleness (`generated_at`) is the freshness marker.** More than three missed
+  30-min cycles (90 min) counts as stale; change it with
+  `WAITING_ON_STALE_MINUTES`.
 
 ### Google OAuth Setup
 

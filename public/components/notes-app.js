@@ -48,6 +48,11 @@ class NotesApp extends LitElement {
     // correct on the first render. Declared anyway: a field the template reads
     // must be reactive, or a later update would never repaint it.
     user: { type: Object },
+    // The media-watch "waiting on" page: the projection view, its in-flight
+    // state and a transport error (which is rendered, not swallowed).
+    waitingOn: { type: Object },
+    waitingOnLoading: { type: Boolean },
+    waitingOnError: { type: String },
   };
 
   static styles = css`
@@ -895,6 +900,11 @@ class NotesApp extends LitElement {
     // when there is no session. See public/utils/session-user.js.
     this.user = SESSION_USER;
 
+    // media-watch "waiting on" page state
+    this.waitingOn = null;
+    this.waitingOnLoading = false;
+    this.waitingOnError = null;
+
     // Store bound handlers for proper cleanup
     this._boundHandleBeforeUnload = this._handleBeforeUnload.bind(this);
     this._boundHandleSyncPending = this._handleSyncPending.bind(this);
@@ -1461,6 +1471,47 @@ class NotesApp extends LitElement {
   }
 
   /**
+   * Show the media-watch "waiting on" page. Saves any in-progress edit first,
+   * then switches to the page and reads the projection.
+   *
+   * The fetch is server-side (`/api/waiting-on`); the browser never talks to the
+   * private endpoint. A failed read is kept as `waitingOnError` and rendered as
+   * an error state - never as an empty list.
+   */
+  async showWaitingOn() {
+    if (this.viewMode === "edit" && this.currentNote) {
+      const editor = this.shadowRoot.querySelector("note-editor");
+      if (editor && editor.hasUnsavedChanges) {
+        await editor.autoSave();
+      }
+    }
+
+    this.viewMode = "waiting";
+    this.currentNote = null;
+    this.flyoutOpen = false;
+    this.userMenuOpen = false;
+    this.sidebarOpen = false;
+    await this.loadWaitingOn();
+  }
+
+  /** (Re)read the waiting-on projection and store view, loading and error. */
+  async loadWaitingOn() {
+    this.waitingOnLoading = true;
+    this.waitingOnError = null;
+    try {
+      const response = await globalThis.NotesApp.getWaitingOn();
+      this.waitingOn = response?.data ?? null;
+    } catch (error) {
+      // 401 is handled inside NotesApp.request (redirect to /login); anything
+      // else is a real read failure and must be visible.
+      this.waitingOn = null;
+      this.waitingOnError = error?.message || "The request failed";
+    } finally {
+      this.waitingOnLoading = false;
+    }
+  }
+
+  /**
    * Open or close a desktop-only flyout panel by name (currently just "tags").
    * Passing the same name again closes it; opening one closes the user menu
    * so only one popover is ever visible at a time.
@@ -1780,7 +1831,9 @@ class NotesApp extends LitElement {
 
             <nav class="nav-list">
               <button
-                class="nav-row ${!this.hasActiveFilters() ? "active" : ""}"
+                class="nav-row ${this.viewMode !== "waiting" && !this.hasActiveFilters()
+                  ? "active"
+                  : ""}"
                 @click="${this.showAllNotes}"
               >
                 ${icons.home}<span>Home</span><span class="cnt">${this.notes.length}</span>
@@ -1790,6 +1843,12 @@ class NotesApp extends LitElement {
                 @click="${this.togglePinnedFilter}"
               >
                 ${icons.pin}<span>Pinned</span>
+              </button>
+              <button
+                class="nav-row ${this.viewMode === "waiting" ? "active" : ""}"
+                @click="${this.showWaitingOn}"
+              >
+                ${icons.clock}<span>Waiting on</span>
               </button>
             </nav>
 
@@ -1816,7 +1875,9 @@ class NotesApp extends LitElement {
         <nav class="rail">
           <span class="logo-mark">n</span>
           <button
-            class="rail-btn ${!this.hasActiveFilters() ? "active" : ""}"
+            class="rail-btn ${this.viewMode !== "waiting" && !this.hasActiveFilters()
+              ? "active"
+              : ""}"
             @click="${this.showAllNotes}"
             title="Home"
           >
@@ -1828,6 +1889,13 @@ class NotesApp extends LitElement {
             title="Pinned"
           >
             ${icons.pin}
+          </button>
+          <button
+            class="rail-btn ${this.viewMode === "waiting" ? "active" : ""}"
+            @click="${this.showWaitingOn}"
+            title="Waiting on"
+          >
+            ${icons.clock}
           </button>
           <button
             class="rail-btn ${this.flyoutOpen === "tags" ? "active" : ""}"
@@ -1895,17 +1963,21 @@ class NotesApp extends LitElement {
                 >
                   ${icons.menu}
                 </button>
-                <span class="crumb">${this._libraryLabel()}</span>
-                <search-bar
-                  .query="${this.searchQuery}"
-                  .tags="${this.tags}"
-                  .selectedTags="${this.selectedTags}"
-                  @search-query="${(e) => {
-                    this.searchQuery = e.detail.query;
-                    this.semanticMode = e.detail.semantic === true;
-                    this.performSearch();
-                  }}"
-                ></search-bar>
+                <span class="crumb">${this.viewMode === "waiting"
+                  ? "Waiting on"
+                  : this._libraryLabel()}</span>
+                ${this.viewMode === "waiting" ? "" : html`
+                  <search-bar
+                    .query="${this.searchQuery}"
+                    .tags="${this.tags}"
+                    .selectedTags="${this.selectedTags}"
+                    @search-query="${(e) => {
+                      this.searchQuery = e.detail.query;
+                      this.semanticMode = e.detail.semantic === true;
+                      this.performSearch();
+                    }}"
+                  ></search-bar>
+                `}
                 ${this.hasActiveFilters()
                   ? html`
                     <button
@@ -1946,6 +2018,15 @@ class NotesApp extends LitElement {
                   @note-updated="${(e) => this._handleNoteUpdated(e)}"
                   @close-editor="${this._handleCloseEditor}"
                 ></note-editor>
+              `
+              : this.viewMode === "waiting"
+              ? html`
+                <waiting-on
+                  .data="${this.waitingOn}"
+                  .loading="${this.waitingOnLoading}"
+                  .error="${this.waitingOnError}"
+                  @waiting-refresh="${this.loadWaitingOn}"
+                ></waiting-on>
               `
               : html`
                 <note-list
