@@ -91,32 +91,32 @@ if [ -n "$files" ]; then
 else
   echo "nothing to check"
 fi
-    # The check above reads files from the WORKING TREE, and a commit records the INDEX. Stage an
-    # unformatted file, then format it on disk -- what anyone does right after this check fails --
-    # and everything above passes while the commit records the unformatted text. Kit fix
-    # `format-checks-staged-deno` (docs/KIT-FIXES.md, kit 9e73c6c).
-    #
-    # deno fmt has no --check for stdin (`deno fmt --check --ext ts -` returns 0 for unformatted
-    # input, measured on 2.9.6), so the test is the formatter as a pure function: a file is
-    # formatted iff formatting its text returns that text unchanged. deno fmt reads deno.json from
-    # the current directory -- the repo root here -- so this project's own options apply.
-    staged_bad=""
-    staged="$(git diff --cached --name-only --diff-filter=ACMR \
-      | grep -E '\.(js|ts|css|html)$' || true)"
-    for sf in $staged; do
-      blob="$(mktemp)"
-      if git show ":$sf" > "$blob" 2>/dev/null; then
-        if ! deno fmt --ext "${sf##*.}" - < "$blob" | diff -q - "$blob" >/dev/null 2>&1; then
-          staged_bad="$staged_bad $sf"
-        fi
-      fi
-      rm -f "$blob"
-    done
-    if [ -n "$staged_bad" ]; then
-      printf '    the STAGED copy is not formatted (that is what a commit would record):\n'
-      for sf in $staged_bad; do printf '      %s\n' "$sf"; done
-      fail "deno fmt on the STAGED copy (fix: deno fmt$staged_bad && git add$staged_bad)"
+# The check above reads files from the WORKING TREE, and a commit records the INDEX. Stage an
+# unformatted file, then format it on disk -- what anyone does right after this check fails --
+# and everything above passes while the commit records the unformatted text. Kit fix
+# `format-checks-staged-deno` (docs/KIT-FIXES.md, kit 9e73c6c).
+#
+# deno fmt has no --check for stdin (`deno fmt --check --ext ts -` returns 0 for unformatted
+# input, measured on 2.9.6), so the test is the formatter as a pure function: a file is
+# formatted iff formatting its text returns that text unchanged. deno fmt reads deno.json from
+# the current directory -- the repo root here -- so this project's own options apply.
+staged_bad=""
+staged="$(git diff --cached --name-only --diff-filter=ACMR \
+  | grep -E '\.(js|ts|css|html)$' || true)"
+for sf in $staged; do
+  blob="$(mktemp)"
+  if git show ":$sf" > "$blob" 2>/dev/null; then
+    if ! deno fmt --ext "${sf##*.}" - < "$blob" | diff -q - "$blob" >/dev/null 2>&1; then
+      staged_bad="$staged_bad $sf"
     fi
+  fi
+  rm -f "$blob"
+done
+if [ -n "$staged_bad" ]; then
+  printf '    the STAGED copy is not formatted (that is what a commit would record):\n'
+  for sf in $staged_bad; do printf '      %s\n' "$sf"; done
+  fail "deno fmt on the STAGED copy (fix: deno fmt$staged_bad && git add$staged_bad)"
+fi
 
 # ------------------------------------------------------- 4. version bump
 # A public/ change without a version bump is a deploy that stays invisible on a
@@ -134,14 +134,6 @@ if [ -n "$changed_public" ]; then
 else
   echo "no public/ changes"
 fi
-
-if [ "$status" -eq 0 ]; then
-  printf '\nGATE PASSED%s\n' "${late_note:-}"
-else
-  printf '\nGATE FAILED - do not push this\n' >&2
-fi
-
-exit "$status"
 
 # ---------------------------------------------------------------- 5. kit probes
 # A fix that must propagate ships a probe: each script in tools/kit-probes/ holds this gate to one kit
@@ -161,3 +153,11 @@ else
     fi
   done
 fi
+
+if [ "$status" -eq 0 ]; then
+  printf '\nGATE PASSED%s\n' "${late_note:-}"
+else
+  printf '\nGATE FAILED - do not push this\n' >&2
+fi
+
+exit "$status"
