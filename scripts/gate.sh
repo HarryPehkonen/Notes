@@ -64,6 +64,11 @@ base="$(git merge-base HEAD origin/main 2>/dev/null || git rev-parse HEAD)"
 touched="$(
   { git diff --name-only --diff-filter=ACMR "$base" HEAD
     git diff --name-only --diff-filter=ACMR HEAD
+    # `git diff HEAD` compares the WORKING TREE and skips the index, so a file whose staged copy
+    # differs from its working-tree copy (staged, then formatted on disk) appeared in neither it
+    # nor the untracked list, and its formatting went unchecked at the moment a commit would
+    # have recorded it.
+    git diff --cached --name-only --diff-filter=ACMR
     # New files are invisible to `git diff` until they are staged, so without
     # this line a brand-new file's formatting is never checked at the moment it
     # is written - only after it has already been committed.
@@ -86,6 +91,32 @@ if [ -n "$files" ]; then
 else
   echo "nothing to check"
 fi
+    # The check above reads files from the WORKING TREE, and a commit records the INDEX. Stage an
+    # unformatted file, then format it on disk -- what anyone does right after this check fails --
+    # and everything above passes while the commit records the unformatted text. Kit fix
+    # `format-checks-staged-deno` (docs/KIT-FIXES.md, kit 9e73c6c).
+    #
+    # deno fmt has no --check for stdin (`deno fmt --check --ext ts -` returns 0 for unformatted
+    # input, measured on 2.9.6), so the test is the formatter as a pure function: a file is
+    # formatted iff formatting its text returns that text unchanged. deno fmt reads deno.json from
+    # the current directory -- the repo root here -- so this project's own options apply.
+    staged_bad=""
+    staged="$(git diff --cached --name-only --diff-filter=ACMR \
+      | grep -E '\.(js|ts|css|html)$' || true)"
+    for sf in $staged; do
+      blob="$(mktemp)"
+      if git show ":$sf" > "$blob" 2>/dev/null; then
+        if ! deno fmt --ext "${sf##*.}" - < "$blob" | diff -q - "$blob" >/dev/null 2>&1; then
+          staged_bad="$staged_bad $sf"
+        fi
+      fi
+      rm -f "$blob"
+    done
+    if [ -n "$staged_bad" ]; then
+      printf '    the STAGED copy is not formatted (that is what a commit would record):\n'
+      for sf in $staged_bad; do printf '      %s\n' "$sf"; done
+      fail "deno fmt on the STAGED copy (fix: deno fmt$staged_bad && git add$staged_bad)"
+    fi
 
 # ------------------------------------------------------- 4. version bump
 # A public/ change without a version bump is a deploy that stays invisible on a
@@ -111,3 +142,22 @@ else
 fi
 
 exit "$status"
+
+# ---------------------------------------------------------------- 5. kit probes
+# A fix that must propagate ships a probe: each script in tools/kit-probes/ holds this gate to one kit
+# fix's contract -- name and behaviour, not bytes -- and exits non-zero when the fix is absent.
+# Offline, no kit checkout, no build, about a second.
+step "kit probes (the fixes this copy claims to carry)"
+self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+if [ ! -d tools/kit-probes ]; then
+  echo "  no tools/kit-probes/ - this copy carries no kit probe yet"
+else
+  for probe in tools/kit-probes/*.sh; do
+    [ -f "$probe" ] || continue
+    if bash "$probe" "$self" "$PWD"; then
+      echo "  ok   $(basename "$probe")"
+    else
+      fail "$(basename "$probe")"
+    fi
+  done
+fi
