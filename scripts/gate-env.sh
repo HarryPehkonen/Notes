@@ -21,6 +21,18 @@ export PATH="$HOME/.deno/bin:$PATH"
 export NO_COLOR=1
 export DENO_NO_UPDATE_CHECK=1
 
+# git exports GIT_INDEX_FILE to a hook when the commit is made with a PATHSPEC
+# (`git commit -- <path>`): it names git's TEMPORARY index for that one commit, not this
+# repo's index, and every process the hook starts inherits it. Any `git` command the gate
+# runs inside ANOTHER repository then reads this repo's index entries against that
+# repository's object store and dies on the first blob it does not have. Unset once, here,
+# so it reaches every stage. This is the kit fix f9c3300, whose guarantee now lives in
+# docs/KIT-FIXES.md -> "Retired fixes" (the probe that held it was retired 2026-10-07 and no
+# repo on this fleet carries it any more). Latent for this repo, not live: every git call
+# this gate makes reads its own repo. scripts/gate.sh unsets it too, for a caller that never
+# sources this file. Added 2026-10-07, card t_c50bed30.
+unset GIT_INDEX_FILE
+
 if [ -f .ci.env ]; then
     # shellcheck disable=SC1091
     . ./.ci.env

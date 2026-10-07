@@ -27,6 +27,11 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.." || exit 1
 
+# git's TEMPORARY index (exported by `git commit -- <path>`) must reach no stage: the long
+# note is in scripts/gate-env.sh, where it also lives. Here as well because kit-ci itself is
+# started from this script and never sources that file.
+unset GIT_INDEX_FILE
+
 # A gate that cannot find its engine must fail loudly rather than read as green.
 if ! command -v kit-ci >/dev/null 2>&1; then
     printf 'gate: kit-ci is not installed. Build KitCI, then: cmake --install build --prefix ~/.local\n' >&2
