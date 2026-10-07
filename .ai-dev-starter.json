@@ -1,0 +1,41 @@
+{
+  "kit": "AI-DEV-STARTER",
+  "url": "https://github.com/HarryPehkonen/AI-DEV-STARTER",
+  "revision": "c0a0c41c187168ca12cb1a27a5d35233997e69f8",
+  "recorded_at": "2026-10-07",
+  "record_kind": "at-copy",
+  "record_note": "First record for this repo, written 2026-10-07 (card t_a21efc0f). Notes' process is the kit's L3 shape: it was wired to KitCI on 2026-10-06 (commit 283bb05, card t_075c0a6f), when the 163-line scripts/gate.sh became gate.toml — the policy (stages lint/tests/format/version, tiers fast/full) — run by kit-ci, the engine installed once per machine, with scripts/gate.sh reduced to a thin wrapper that unsets GIT_INDEX_FILE and execs the engine and scripts/*.sh holding the work of each stage. `revision` is therefore the kit's L3 commit c0a0c41, the state this wiring actually matches — not the historical 951608c the pre-KitCI deno-gate copy was taken from: this record starts from right now and does not document pre-KitCI copy history. The shape is the post-L3 one: no `files[]`, because a KitCI-era repo copies no kit file (the gate is its own gate.toml, the engine is a binary installed per machine, the hooks are this repo's), so there is nothing to fingerprint; `record_kind` is `at-copy` for the same reason. `declined_fixes` records the kit fixes this copy does not take, with the reason — the C++ and deno-gate watches are not applicable, because this repo's gate is gate.toml run by kit-ci and the single gate script they grep or source does not exist here. The one fix that WAS taken, `unset GIT_INDEX_FILE` (kit f9c3300), is recorded there too rather than in `adopted_fixes`, because its probe was retired kit-side on 2026-10-07 and an adopted claim must carry the probe verbatim and run it green.",
+  "adopted_fixes": [],
+  "declined_fixes": [
+    {
+      "name": "tidy-baseline",
+      "from_revision": "a6ad2ea6951c66eb5b7c2eea8757ab8d3311174e",
+      "probe": "probes/tidy-baseline.sh",
+      "why": "not applicable: tidy-baseline guards the kit's templates/cpp/ci.sh and this repo's gate is the deno one, so there is no C++ gate here for it to guard -- no stage to port and no decline to weigh."
+    },
+    {
+      "name": "gate-stage-guards",
+      "from_revision": "951608c2675a2f5c2d0b59d9c19c632d23a043af",
+      "probe": "probes/gate-stage-guards.sh",
+      "why": "not applicable: gate-stage-guards guards the kit's templates/cpp/ci.sh and this repo's gate is the deno one, so there is no C++ gate here for it to guard -- no stage to port and no decline to weigh."
+    },
+    {
+      "name": "optimized-build-stage",
+      "from_revision": "d531a110184125ed108c3eabc36834bb803404bb",
+      "probe": "probes/optimized-stage.sh",
+      "why": "not applicable: optimized-build-stage guards the kit's templates/cpp/ci.sh and this repo's gate is the deno one, so there is no C++ gate here for it to guard -- no stage to port and no decline to weigh."
+    },
+    {
+      "name": "git-index-file",
+      "from_revision": "f9c33005d880df095d7a5ab300d1ec5349c59aea",
+      "probe": "probes/git-index-file.sh",
+      "why": "TAKEN 2026-10-07 (card t_c50bed30): `unset GIT_INDEX_FILE` is a line in scripts/gate.sh (the entry point all three callers run, so kit-ci and every stage it starts inherit the unset) and in scripts/gate-env.sh. It stays listed under declined_fixes rather than adopted_fixes because the probe it names (probes/git-index-file.sh) was RETIRED kit-side on 2026-10-07 (docs/KIT-FIXES.md, 'Retired fixes'): its subject, a copied gate script, exists nowhere on the fleet, so an adopted_fixes entry -- which must carry the probe verbatim and run it green -- is no longer possible. Measured around the fix with the kit's own retired probe: before, PROBE FAILED against this gate (2 ok, 3 failed); after, PROBE VERIFIED (5 ok, 0 failed)."
+    },
+    {
+      "name": "format-checks-staged-deno",
+      "from_revision": "9e73c6c51f440c2d12a05c0b63c25f1e3ec07920",
+      "probe": "probes/format-checks-staged-deno.sh",
+      "why": "not applicable: it guards the kit's templates/deno/gate.sh, and this repo no longer carries a copy of it -- the gate is gate.toml (stages lint/tests/format/version, tiers fast/full) run by kit-ci, and the probe is written against the shape of a single gate script, which it greps or sources. Measured 2026-10-06 after the conversion: run against the new entry point scripts/gate.sh it reads GREEN. The contract it held did not go: it is in scripts/format.sh, and INCIDENTS.md records it entry by entry."
+    }
+  ]
+}
