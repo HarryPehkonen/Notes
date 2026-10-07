@@ -11,4 +11,9 @@
 #
 # Deliberate bypass when you need one:  git push --no-verify
 #
-exec "$(git rev-parse --show-toplevel)/scripts/gate.sh"
+# 2026-10-06 (card t_075c0a6f): the gate IS gate.toml now, run by kit-ci, so this hook NAMES
+# A TIER instead of leaving the tier implicit — the stage list lives in one place, gate.toml,
+# and a hook that names the tier cannot drift from it. This repo pushes with the whole gate
+# (its checks are seconds); .githooks/ carries no pre-commit, so nothing names the fast tier
+# yet.
+exec "$(git rev-parse --show-toplevel)/scripts/gate.sh" --tier full
