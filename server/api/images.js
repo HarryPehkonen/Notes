@@ -300,8 +300,9 @@ export function createImagesRouter() {
         }
       }
 
+      // 204 carries no body - setting one makes Oak throw when it builds the
+      // DOM response, which kills the process instead of answering the request.
       ctx.response.status = 204;
-      ctx.response.body = "";
     } catch (error) {
       console.error("Error deleting image:", error);
       ctx.response.status = 500;
