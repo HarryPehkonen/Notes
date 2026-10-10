@@ -79,6 +79,42 @@ const context = await browser.newContext({
 });
 const page = await context.newPage();
 
+/**
+ * A cold dev boot can answer 500 for a static module (`/static/services/sync-manager.js` was
+ * the observed one). That aborts the module graph, the page renders nothing, and the check
+ * below times out on the hamburger — a failure with nothing to do with the tap-through. Record
+ * those responses so the timeout says what it was instead of looking like a product bug.
+ */
+const staticFailures = [];
+page.on("response", (response) => {
+  const path = new URL(response.url()).pathname;
+  if (response.status() >= 400 && path.startsWith("/static/")) {
+    staticFailures.push(`${response.status()} ${path}`);
+  }
+});
+
+/** Open the app and wait until it has rendered. */
+async function openApp() {
+  await page.goto(`${BASE}/`, { waitUntil: "load" });
+  try {
+    await page.waitForSelector('button[aria-label="Open menu"]', {
+      state: "visible",
+      timeout: 30000,
+    });
+  } catch (error) {
+    if (staticFailures.length) {
+      throw new Error(
+        `${error.message}\nThis is a dev-server boot failure, not the tap-through: the ` +
+          `page never rendered because these static modules came back\n  ${
+            staticFailures.join("\n  ")
+          }\nRestart the dev server and run again.`,
+      );
+    }
+    throw error;
+  }
+  await page.waitForTimeout(2500); // let the components fetch and render
+}
+
 /** What is under (x, y) right now: the element chain, its tag-row ancestry, the form it is
  *  inside of, and the drawer's geometry and filter state. */
 const probe = ([x, y]) =>
@@ -125,7 +161,6 @@ const probe = ([x, y]) =>
     let scrollTop = null;
     let swatch = null;
     let selection = [];
-    let rowTops = [];
     {
       const host = document.querySelector("notes-app");
       const drawer = host?.shadowRoot?.querySelector(".drawer-content") ?? null;
@@ -142,11 +177,6 @@ const probe = ([x, y]) =>
           const state = [...r.classList].find((c) => c.startsWith("state-")) ?? "state-any";
           return `${name}:${state}`;
         });
-        rowTops = rows.map((r) => ({
-          name: r.querySelector(".tag-name")?.textContent?.trim() ?? "(All Notes)",
-          top: r.getBoundingClientRect().top,
-          height: r.getBoundingClientRect().height,
-        }));
         const colorInput = root.querySelector(".color-input");
         if (colorInput) {
           const r = colorInput.getBoundingClientRect();
@@ -167,7 +197,6 @@ const probe = ([x, y]) =>
       scrollTop,
       swatch,
       selection,
-      rowTops,
     };
   }, [x, y]);
 
@@ -175,9 +204,7 @@ const box = async (selector) => await page.locator(selector).first().boundingBox
 const centre = (b) => [b.x + b.width / 2, b.y + b.height / 2];
 const short = (p) => JSON.stringify(p.chain.slice(-3));
 
-await page.goto(`${BASE}/`, { waitUntil: "load" });
-await page.waitForSelector('button[aria-label="Open menu"]', { state: "visible", timeout: 30000 });
-await page.waitForTimeout(2500); // let the components fetch and render
+await openApp();
 await page.click('button[aria-label="Open menu"]');
 await page.waitForTimeout(1200);
 
@@ -245,9 +272,27 @@ check(
 await page.locator(".tag-form .btn-secondary").first().click();
 await page.waitForTimeout(300);
 
-const targetIndex = 2; // a row in the middle of the list, not the one under the phone's thumb
-const editBox = await page.locator('[title="Edit tag"]').nth(targetIndex).boundingBox();
-const targetRow = second.rowTops[targetIndex + 1]; // rows[0] is the "All Notes" option
+// Measure the target row and its edit control NOW, immediately before the tap. Coordinates
+// captured earlier belong to a layout that no longer exists (the create form was open when
+// they were taken, and closing it moved every row), so reusing them aims the tap where the
+// row *used to* be and the check reports a failure that is not real. Keep this measurement
+// adjacent to the tap; the check's verdict must not depend on when the snapshot was taken,
+// nor on how much content the drawer happens to hold.
+// Rows that carry an edit control; "All Notes" is not one of them. Selecting the row by the
+// control it holds (rather than by an index into a snapshot) is what keeps this check from
+// depending on how much content the drawer happens to hold.
+const editableRows = page.locator("tag-manager .tag-item")
+  .filter({ has: page.locator('[title="Edit tag"]') });
+// A row in the middle of the list, not the one under the phone's thumb — clamped, so a drawer
+// holding fewer than three tags still names a row that exists. (With no tags at all there is
+// no edit half to check.)
+const targetIndex = Math.max(0, Math.min(2, (await editableRows.count()) - 1));
+const targetRowLocator = editableRows.nth(targetIndex);
+await targetRowLocator.scrollIntoViewIfNeeded(); // the row must be on screen to be tappable
+await page.waitForTimeout(400); // let the drawer's scroll settle before measuring it
+const editBox = await targetRowLocator.locator('[title="Edit tag"]').boundingBox();
+const targetRowName = (await targetRowLocator.locator(".tag-name").innerText()).trim();
+const targetRowTop = (await targetRowLocator.boundingBox()).y;
 const [ex, ey] = centre(editBox);
 await page.touchscreen.tap(ex, ey);
 await page.waitForTimeout(300);
@@ -257,8 +302,8 @@ await page.screenshot({ path: `${OUT}/tap-through-edit-open.png` });
 check(
   "opening a tag's edit form puts it in that row's place",
   editing.formSubmit === "Update" && editing.formTop !== null &&
-    Math.abs(editing.formTop - targetRow.top) <= 4,
-  `row ${targetRow.name} top ${targetRow.top}, form top ${editing.formTop}`,
+    Math.abs(editing.formTop - targetRowTop) <= 4,
+  `row ${targetRowName} top ${targetRowTop}, form top ${editing.formTop}`,
 );
 check(
   "the edit tap point belongs to that form, not to another row",
