@@ -303,6 +303,18 @@ export function buildNotesCountQuery(userId, options = {}) {
   return { query, params };
 }
 
+/**
+ * Notes carrying at least one tag, for the drawer's "All Notes" row.
+ *
+ * Exported as SQL (rather than inlined in the client method) so a test can hold its
+ * properties without a database: it must count NOTES, not (note, tag) links.
+ */
+export const TAGGED_NOTES_COUNT_SQL = `
+            SELECT COUNT(DISTINCT n.id)::int AS tagged_notes
+            FROM notes n
+            JOIN note_tags nt ON nt.note_id = n.id
+            WHERE n.user_id = $1 AND NOT n.is_archived`;
+
 export class DatabaseClient {
   /**
    * @param {Object} config - Database configuration
@@ -712,6 +724,27 @@ export class DatabaseClient {
       [userId],
     );
     return result.rows;
+  }
+
+  /**
+   * How many notes carry at least one tag.
+   *
+   * The drawer's "All Notes" row showed this number by summing each tag's note_count,
+   * which counts (note, tag) LINKS: on production (2026-10-10) that read 74 while 63
+   * notes had at least one tag, because 11 notes carry a second tag. The error is not a
+   * constant offset - in the small local fixture the same sum reads 27 against 16 - so it
+   * cannot be corrected on the client, and the client holds one page of notes anyway.
+   *
+   * COUNT(DISTINCT n.id) through note_tags is the definition: a note with three tags is
+   * one note here and three links there. Archived notes are excluded, matching both the
+   * list it describes and the per-tag note_count it used to be confused with.
+   *
+   * @param {number} userId - Authenticated user id
+   * @returns {Promise<number>}
+   */
+  async countTaggedNotes(userId) {
+    const result = await this.query(TAGGED_NOTES_COUNT_SQL, [userId]);
+    return result.rows[0]?.tagged_notes ?? 0;
   }
 
   /**

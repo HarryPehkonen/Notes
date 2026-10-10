@@ -37,6 +37,15 @@ class NotesApp extends LitElement {
     userMenuOpen: { type: Boolean },
     hasMore: { type: Boolean },
     total: { type: Number }, // total notes matching, from the API meta
+    // The whole collection, not the page: set only from an unfiltered list fetch, so the
+    // drawer's Home row can count the collection while `total` describes the current
+    // filter. Without it the row showed the loaded page ("Home 20" beside a header reading
+    // "20 of 89 Notes").
+    allNotesTotal: { type: Number },
+    // Notes carrying at least one tag, from GET /api/tags meta: the drawer's "All Notes"
+    // row. Summing the tag rows' note_count gives (note, tag) links instead - 74 where the
+    // real number was 63.
+    taggedCount: { type: Number },
     loadingMore: { type: Boolean },
     pendingSyncCount: { type: Number },
     syncStatus: { type: String }, // 'idle', 'syncing', 'pending', 'offline', 'error'
@@ -892,6 +901,8 @@ class NotesApp extends LitElement {
     this.toasts = [];
     this.hasMore = false;
     this.total = null;
+    this.allNotesTotal = null;
+    this.taggedCount = null;
     this.loadingMore = false;
     this.pendingSyncCount = 0;
     this.syncStatus = "idle";
@@ -1138,6 +1149,10 @@ class NotesApp extends LitElement {
 
       this._applyNotesPage(notesResult);
       this.tags = tagsResult.data || [];
+      // This is the unfiltered fetch, so its total is the collection's size - what the
+      // drawer's Home row means. `total` itself follows the active filter.
+      this.allNotesTotal = this.total;
+      this.taggedCount = tagsResult.meta?.taggedCount ?? this.taggedCount;
     } catch (error) {
       console.error("Failed to load initial data:", error);
       this.showToast("Failed to load data. Please refresh the page.", "error");
@@ -1150,6 +1165,9 @@ class NotesApp extends LitElement {
     try {
       const result = await globalThis.NotesApp.getTags();
       this.tags = result.data || [];
+      // The same response carries how many notes have at least one tag, which the drawer's
+      // "All Notes" row reports: tag rows hold (note, tag) links, not notes.
+      this.taggedCount = result.meta?.taggedCount ?? this.taggedCount;
     } catch (error) {
       console.error("Failed to load tags:", error);
     }
@@ -1202,6 +1220,9 @@ class NotesApp extends LitElement {
 
     this.addEventListener("note-created", (event) => {
       this.notes = [event.detail.note, ...this.notes];
+      // The drawer's Home row counts the collection, which just grew by one. The next
+      // unfiltered fetch (a save, a filter change, Home itself) replaces these estimates.
+      if (this.allNotesTotal !== null) this.allNotesTotal += 1;
       this.currentNote = event.detail.note;
       this.viewMode = "edit";
     });
@@ -1224,6 +1245,8 @@ class NotesApp extends LitElement {
 
     this.addEventListener("note-deleted", (event) => {
       this.notes = this.notes.filter((n) => n.id !== event.detail.noteId);
+      // Archiving takes a note out of the collection the Home row counts.
+      if (this.allNotesTotal !== null) this.allNotesTotal -= 1;
       if (this.currentNote?.id === event.detail.noteId) {
         this.currentNote = null;
         this.viewMode = "list";
@@ -1268,8 +1291,12 @@ class NotesApp extends LitElement {
       }
     });
 
-    this.addEventListener("tag-deleted", (event) => {
+    this.addEventListener("tag-deleted", async (event) => {
       this.tags = this.tags.filter((t) => t.id !== event.detail.tagId);
+      // Deleting a tag can leave notes with no tags at all, so the drawer's tagged-note
+      // count is stale from here on: take it back from the server in the same request that
+      // refreshes the rows.
+      await this.loadTags();
     });
   }
 
@@ -1836,7 +1863,9 @@ class NotesApp extends LitElement {
                   : ""}"
                 @click="${this.showAllNotes}"
               >
-                ${icons.home}<span>Home</span><span class="cnt">${this.notes.length}</span>
+                ${icons.home}<span>Home</span><span class="cnt"
+                  >${this.allNotesTotal ?? this.notes.length}</span
+                >
               </button>
               <button
                 class="nav-row ${this.pinnedOnly ? "active" : ""}"
@@ -1857,6 +1886,7 @@ class NotesApp extends LitElement {
               .tags="${this.tags}"
               .selectedTags="${this.selectedTags}"
               .offline="${this.syncStatus === "offline"}"
+              .taggedCount="${this.taggedCount}"
             ></tag-manager>
 
             <div class="drawer-logout">
@@ -1947,6 +1977,7 @@ class NotesApp extends LitElement {
                 .tags="${this.tags}"
                 .selectedTags="${this.selectedTags}"
                 .offline="${this.syncStatus === "offline"}"
+                .taggedCount="${this.taggedCount}"
               ></tag-manager>
             </div>
           `

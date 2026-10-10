@@ -10,15 +10,25 @@ export function createTagsRouter() {
   const router = new Router();
 
   // GET /api/tags - Get all tags for the authenticated user
+  //
+  // `data` stays the tag array (every client already reads it as one) and the collection
+  // count rides in `meta`, the same place /api/notes reports its total. `meta.taggedCount`
+  // is how many notes carry at least one tag - the number behind the drawer's "All Notes"
+  // row, which cannot be derived from the tag rows: summing their note_count gives
+  // (note, tag) links (74 on production where the answer was 63).
   router.get("/", async (ctx) => {
     const { user, db } = ctx.state;
 
     try {
-      const tags = await db.getUserTags(user.id);
+      const [tags, taggedCount] = await Promise.all([
+        db.getUserTags(user.id),
+        db.countTaggedNotes(user.id),
+      ]);
 
       ctx.response.body = {
         success: true,
         data: tags,
+        meta: { taggedCount },
       };
     } catch (error) {
       console.error("Error fetching tags:", error);

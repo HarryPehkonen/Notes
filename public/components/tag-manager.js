@@ -11,6 +11,8 @@ import {
   tagSelectionDetail,
   tagStateMeta,
 } from "../utils/tag-filter.js";
+import { tagManagerSlots } from "../utils/tag-form-slot.js";
+import { formatTaggedCount } from "../utils/tagged-count.js";
 
 export class TagManager extends LitElement {
   static properties = {
@@ -19,6 +21,10 @@ export class TagManager extends LitElement {
     showCreateForm: { type: Boolean },
     editingTag: { type: Object },
     offline: { type: Boolean },
+    // Notes carrying at least one tag, from the server (GET /api/tags ->
+    // meta.taggedCount). The drawer cannot count them itself: it holds one page of notes,
+    // and the tag rows carry (note, tag) links, which is a different number.
+    taggedCount: { type: Number },
   };
 
   static styles = css`
@@ -268,13 +274,32 @@ export class TagManager extends LitElement {
       align-items: center;
     }
 
+    /*
+    * Square and 44px: the stylesheet's touch-target floor below 768px, applied at every
+    * width because this control is a colour well, not a field with text to fill.
+    * flex-shrink: 0 is load-bearing - .color-preview is flex: 1 beside it and took the
+    * free space, collapsing the declared width to 16px: a 16x44 vertical strip on a
+    * phone (measured 2026-10-10).
+    */
     .color-input {
-      width: 50px;
-      height: 36px;
-      padding: 0.25rem;
+      flex-shrink: 0;
+      width: 44px;
+      height: 44px;
+      padding: 0;
       border: 1px solid var(--gray-300);
       border-radius: 0.375rem;
       cursor: pointer;
+    }
+
+    /* Chrome pads the swatch inside the input, so a square input still showed the colour
+      as a sliver in a ring of padding. */
+    .color-input::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+
+    .color-input::-webkit-color-swatch {
+      border: none;
+      border-radius: 0.25rem;
     }
 
     .color-preview {
@@ -382,6 +407,7 @@ export class TagManager extends LitElement {
     this.showCreateForm = false;
     this.editingTag = null;
     this.offline = false;
+    this.taggedCount = null;
   }
 
   /**
@@ -577,10 +603,19 @@ export class TagManager extends LitElement {
   render() {
     const hasSelection = this.selectedTags.length > 0;
 
+    // Order comes from the slot model, not from template order: a form is rendered where
+    // its trigger was, so opening one never moves anything above the activation point
+    // (see utils/tag-form-slot.js for the bug that made this a rule).
+    const slots = tagManagerSlots({
+      tags: this.tags,
+      editingTagId: this.editingTag ? this.editingTag.id : null,
+      showCreateForm: this.showCreateForm,
+      offline: this.offline,
+    });
+    const tagsById = new Map(this.tags.map((tag) => [tag.id, tag]));
+
     return html`
       <div class="tags-container">
-        ${this.showCreateForm ? this.renderTagForm() : ""}
-
         <div class="all-tags-option">
           <div
             class="tag-item ${!hasSelection ? "active" : ""}"
@@ -589,10 +624,7 @@ export class TagManager extends LitElement {
             <div class="tag-marker" aria-hidden="true"></div>
             <div class="tag-color" style="background: var(--gray-400)"></div>
             <div class="tag-name">All Notes</div>
-            <div class="tag-count">${this.tags.reduce(
-              (sum, t) => sum + (t.note_count || 0),
-              0,
-            )}</div>
+            <div class="tag-count">${formatTaggedCount(this.taggedCount)}</div>
           </div>
         </div>
 
@@ -602,50 +634,58 @@ export class TagManager extends LitElement {
               No tags yet. Create your first tag!
             </div>
           `
-          : ""} ${this.tags.map((tag) => {
-            const state = tagFilterState(this.selectedTags, tag.id);
-            const meta = tagStateMeta(state);
-            const next = tagStateMeta(nextTagState(state));
+          : ""} ${slots.map((slot) => {
+            if (slot.kind === "edit-form" || slot.kind === "create-form") {
+              return this.renderTagForm();
+            }
+            if (slot.kind === "add-button") {
+              return html`
+                <button class="add-tag-btn" @click="${this.showCreateTagForm}">
+                  ${icons.plus} Add Tag
+                </button>
+              `;
+            }
+            return this.renderTagRow(tagsById.get(slot.tagId));
+          })}
+      </div>
+    `;
+  }
 
-            return html`
-              <div
-                class="tag-item ${meta.className}"
-                @click="${() => this.cycleTag(tag)}"
-                title="${meta.description} - click to make it ${next.label.toLowerCase()}"
-                aria-label="${tag.name}: ${meta.label}. ${meta.description}"
-              >
-                <div class="tag-marker" aria-hidden="true">${meta.marker}</div>
-                <div class="tag-color" style="background-color: ${tag.color}"></div>
-                <div class="tag-name">${tag.name}</div>
-                ${state === "any" ? "" : html`<div class="tag-state">${meta.label}</div>`}
-                <div class="tag-count">${tag.note_count || 0}</div>
-                ${!this.offline
-                  ? html`
-                    <div class="tag-actions">
-                      <button
-                        class="tag-action-btn"
-                        @click="${(e) => this.showEditTagForm(e, tag)}"
-                        title="Edit tag"
-                      >
-                        ${icons.edit}
-                      </button>
-                      <button
-                        class="tag-action-btn"
-                        @click="${(e) => this.deleteTag(e, tag)}"
-                        title="Delete tag"
-                      >
-                        ${icons.trash}
-                      </button>
-                    </div>
-                  `
-                  : ""}
-              </div>
-            `;
-          })} ${!this.showCreateForm && !this.offline
+  renderTagRow(tag) {
+    const state = tagFilterState(this.selectedTags, tag.id);
+    const meta = tagStateMeta(state);
+    const next = tagStateMeta(nextTagState(state));
+
+    return html`
+      <div
+        class="tag-item ${meta.className}"
+        @click="${() => this.cycleTag(tag)}"
+        title="${meta.description} - click to make it ${next.label.toLowerCase()}"
+        aria-label="${tag.name}: ${meta.label}. ${meta.description}"
+      >
+        <div class="tag-marker" aria-hidden="true">${meta.marker}</div>
+        <div class="tag-color" style="background-color: ${tag.color}"></div>
+        <div class="tag-name">${tag.name}</div>
+        ${state === "any" ? "" : html`<div class="tag-state">${meta.label}</div>`}
+        <div class="tag-count">${tag.note_count || 0}</div>
+        ${!this.offline
           ? html`
-            <button class="add-tag-btn" @click="${this.showCreateTagForm}">
-              ${icons.plus} Add Tag
-            </button>
+            <div class="tag-actions">
+              <button
+                class="tag-action-btn"
+                @click="${(e) => this.showEditTagForm(e, tag)}"
+                title="Edit tag"
+              >
+                ${icons.edit}
+              </button>
+              <button
+                class="tag-action-btn"
+                @click="${(e) => this.deleteTag(e, tag)}"
+                title="Delete tag"
+              >
+                ${icons.trash}
+              </button>
+            </div>
           `
           : ""}
       </div>
