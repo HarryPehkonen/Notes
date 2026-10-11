@@ -155,6 +155,17 @@ WAITING_ON_TIMEOUT_MS=2500
 WAITING_ON_STALE_MINUTES=90
 ```
 
+### Email Allowlist (Private Server)
+
+To restrict who can create new accounts, set `ALLOWED_EMAILS` in your `.env`:
+
+    ALLOWED_EMAILS=harry.pehkonen@gmail.com
+
+- Comma-separated, case-insensitive
+- Only listed emails can create NEW accounts via OAuth
+- Existing users are always grandfathered (can still log in even if not on the list)
+- Unset or empty = open signup (any Google account can register)
+
 ### The "Waiting on" page
 
 The `Waiting on` nav entry (drawer and desktop rail) shows what the home

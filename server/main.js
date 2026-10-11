@@ -28,6 +28,7 @@ import { createTagsRouter } from "./api/tags.js";
 import { createSearchRouter } from "./api/search.js";
 import { createImagesRouter } from "./api/images.js";
 import { createAuthRouter } from "./api/auth.js";
+import { checkAllowlist } from "./auth/allowlist.js";
 import { createWaitingRouter } from "./api/waiting.js";
 import { DEFAULT_STALE_MINUTES, DEFAULT_TIMEOUT_MS, DEFAULT_WAITING_ON_URL } from "./waiting-on.js";
 import {
@@ -307,6 +308,27 @@ router.get("/auth/callback", async (ctx) => {
     if (!isVerifiedOAuthUser(userInfo)) {
       ctx.response.status = 403;
       ctx.response.body = { error: "Google account email is missing or unverified" };
+      return;
+    }
+
+    // Private-server gate: ALLOWED_EMAILS limits who may create a NEW account;
+    // existing users are grandfathered so enabling it never locks anyone out
+    const gate = await checkAllowlist(
+      userInfo.email,
+      Deno.env.get("ALLOWED_EMAILS"),
+      async () => Boolean(await db.findUserByEmail(userInfo.email)),
+    );
+    if (!gate.allowed) {
+      ctx.response.status = 403;
+      ctx.response.type = "text/html";
+      ctx.response.body = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Access Denied</title>
+<style>body{font-family:system-ui;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f5f5f5}
+.box{background:white;padding:2rem;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);text-align:center;max-width:400px}
+h1{color:#e74c3c;margin-top:0}p{color:#666}</style></head>
+<body><div class="box"><h1>Access Denied</h1>
+<p>This server is private. Your account is not authorized to sign in.</p>
+</div></body></html>`;
       return;
     }
 

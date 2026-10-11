@@ -11,5 +11,6 @@ dependencies = [
 [tool.pytest.ini_options]
 markers = [
     "readonly: safe against production — no writes, no side effects",
+    "isolation: multi-user row-level-security checks; needs two scratch users/tokens, local server only",
 ]
 testpaths = ["."]
