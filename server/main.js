@@ -28,6 +28,7 @@ import { createTagsRouter } from "./api/tags.js";
 import { createSearchRouter } from "./api/search.js";
 import { createImagesRouter } from "./api/images.js";
 import { createAuthRouter } from "./api/auth.js";
+import { createTokensRouter } from "./api/tokens.js";
 import { checkAllowlist } from "./auth/allowlist.js";
 import { createWaitingRouter } from "./api/waiting.js";
 import { DEFAULT_STALE_MINUTES, DEFAULT_TIMEOUT_MS, DEFAULT_WAITING_ON_URL } from "./waiting-on.js";
@@ -404,6 +405,24 @@ router.get("/login", redirectIfAuthenticated, async (ctx) => {
   );
 });
 
+// Settings: API tokens. A page of its own rather than a pane in the SPA - it is
+// a rare, deliberate errand ("hand my agent a credential"), and it reads better
+// in a full page with the token shown once than behind a modal. Signed-in only;
+// without a session it is the same redirect the app uses.
+router.get("/settings/tokens", async (ctx) => {
+  const user = await ctx.state.session.get("user");
+  if (!user) {
+    ctx.response.redirect("/login");
+    return;
+  }
+
+  ctx.response.type = "text/html";
+  ctx.response.body = injectAppName(
+    injectNonce(await Deno.readTextFile("./public/tokens.html"), ctx.state.cspNonce),
+    appNames,
+  );
+});
+
 // Rate limiting for the API surface. Mounted before requireAuth so unauthenticated
 // floods are cheap to reject: 120/min per IP, plus 300/min per API token or
 // 120/min per session user.
@@ -419,6 +438,7 @@ const tagsRouter = createTagsRouter();
 const searchRouter = createSearchRouter();
 const imagesRouter = createImagesRouter();
 const apiAuthRouter = createAuthRouter({ sessionStore });
+const tokensRouter = createTokensRouter();
 const waitingRouter = createWaitingRouter({
   url: config.waitingOnUrl,
   timeoutMs: config.waitingOnTimeoutMs,
@@ -427,6 +447,7 @@ const waitingRouter = createWaitingRouter({
 router.use("/api/notes", requireAuth, notesRouter.routes(), notesRouter.allowedMethods());
 router.use("/api/auth", requireAuth, apiAuthRouter.routes(), apiAuthRouter.allowedMethods());
 router.use("/api/tags", requireAuth, tagsRouter.routes(), tagsRouter.allowedMethods());
+router.use("/api/tokens", requireAuth, tokensRouter.routes(), tokensRouter.allowedMethods());
 router.use("/api/search", requireAuth, searchRouter.routes(), searchRouter.allowedMethods());
 router.use("/api/images", requireAuth, imagesRouter.routes(), imagesRouter.allowedMethods());
 router.use("/api/waiting-on", requireAuth, waitingRouter.routes(), waitingRouter.allowedMethods());

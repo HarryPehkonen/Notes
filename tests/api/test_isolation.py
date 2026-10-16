@@ -11,11 +11,14 @@ import httpx
 import pytest
 
 from conftest import RateLimitedClient
+import scratch_tokens as scratch
 
 pytestmark = pytest.mark.isolation
 
-TOKEN_A = "nt_A_3twFHg_WeVaxsfmL-3tP3s8LIq6ddEYEQu7re__Ps"
-TOKEN_B = "nt_WYO4ztwiRIphj-RrSaVyd61RQcD1BTv7ROyuMVKOLms"
+# The credentials live in scratch_tokens.py, which seed_scratch.py also reads:
+# the literals and the seeded rows cannot drift apart if they have one source.
+TOKEN_A = scratch.TOKEN_A
+TOKEN_B = scratch.TOKEN_B
 
 
 def _client(base_url, token):

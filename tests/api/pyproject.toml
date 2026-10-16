@@ -12,5 +12,7 @@ dependencies = [
 markers = [
     "readonly: safe against production — no writes, no side effects",
     "isolation: multi-user row-level-security checks; needs two scratch users/tokens, local server only",
+    "scopes: what an API token may do (scopes, expiry, revocation); needs seeded scratch tokens, local server only",
+    "session: the endpoints a token may not touch; needs a session (DEV_USER_EMAIL), local server only",
 ]
 testpaths = ["."]

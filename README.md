@@ -262,6 +262,37 @@ involved, and nothing leaves the machine to make it work:
    "it passed on my machine because of a file I never committed", and it is
    silent unless something is wrong.
 
+### The boundary suites (isolation and API-token scopes)
+
+```bash
+scripts/api-suite.sh
+```
+
+Not a gate stage, deliberately: every stage in `gate.toml` runs on a clean
+checkout with no database and no server, which is what lets the pre-push hook
+run the whole gate. These suites need both — seeded scratch users with real
+tokens, and an HTTP server with the dev auth bypass **off** — so they live in
+their own runner, called by the nightly clean-checkout job (and by hand when you
+are working on auth).
+
+It creates a throwaway database (`notes_api_test`), starts a server against it,
+seeds `tests/api/scratch_tokens.py`'s users and tokens, and runs the suites in
+two passes, because the halves need opposite auth:
+
+1. **No session** — `test_isolation.py` (user B cannot read or touch user A's
+   notes, tags, search results or archived notes) and `test_token_scopes.py`
+   (a read-only token reads and is refused writes with `403
+   insufficient_scope`; an expired token is `401 token_expired`; a revoked one
+   is dead; no token can manage tokens).
+2. **A session** (`DEV_USER_EMAIL`) — `test_tokens.py`: creating, listing and
+   revoking tokens, the one-time plaintext, per-user name uniqueness, and that
+   revoking keeps the row.
+
+The pass the server is running in is asserted before each pass, because with the
+dev bypass on every request is a session and pass 1 would silently measure the
+wrong thing. `uv sync` provisions the suite's two dependencies (pytest, httpx),
+and the database is dropped afterwards unless you pass `--keep`.
+
 ### Database Management
 
 The server uses a single schema file (`schema.sql`) with `IF NOT EXISTS` for idempotent execution.
@@ -323,9 +354,10 @@ The application is built mobile-first with:
 ### API Security
 
 - Authentication required for all API endpoints
+- API tokens carry scopes (`read` / `write`), checked before any handler runs,
+  and can never manage tokens — see [API Tokens](#api-tokens-machine-access)
 - Input validation and sanitization (title 500 chars, content 1MB, image 5MB)
 - Rate limiting on auth endpoints (10 req/min per IP)
-- CORS configuration for browser safety
 
 ### File Upload Security
 
@@ -424,27 +456,58 @@ POST /auth/logout             # End session
 ### API Tokens (machine access)
 
 Scripts and agents can call `/api/*` without a browser session by sending a
-personal API token. Tokens are managed from the server host:
+personal API token. A signed-in person manages their own tokens on the settings
+page — **Settings → API tokens** (`/settings/tokens`, linked from the account
+menu on both the mobile drawer and the desktop popover):
 
-```bash
-# Create a token (the plaintext is printed once and never stored)
-deno task token:create --email you@example.com --name hermes
+- **Create** a token, name it for the thing that will use it, and choose what it
+  may do: **Read only** (`read`) or **Read and write** (`read`, `write`).
+  Prefer read-only unless a program genuinely writes.
+- **Copy it once.** Only the SHA-256 digest is stored, so the plaintext is shown
+  in the create response and can never be retrieved again.
+- **Revoke** it when the program stops using it. Revoking is immediate and
+  keeps the row (it is a revoke, not a delete), so the list still records it.
+- **Optionally expire it**: never (the default), or in 30 / 90 / 365 days.
 
-# List tokens (never shows token values)
-deno task token:list --email you@example.com
+Scopes are enforced in `requireAuth` before any handler runs: `read` covers
+`GET`/`HEAD`/`OPTIONS`, and everything else needs `write`. A read-only token
+that tries to write gets `403` with `code: "insufficient_scope"`; an expired one
+gets `401` with `code: "token_expired"`. The scope list is an array of names
+rather than a `read_only` flag so a future narrower scope (sharing one note with
+one person) is a new name, not a new column.
 
-# Revoke a token (idempotent)
-deno task token:revoke --name hermes
+**A token can never manage tokens.** `GET`/`POST`/`DELETE /api/tokens` are
+session-only, and a token that calls them gets `403 session_required`, whatever
+its scopes: a credential that can mint credentials can outlive its own
+revocation, and no agent needs that API.
+
+Endpoints:
+
+```http
+GET    /api/tokens        # this user's tokens: name, scopes, state, last used
+POST   /api/tokens        # create: {name, scopes?, expires_in_days?} -> the plaintext, once
+DELETE /api/tokens/:id    # revoke (idempotent for your own; 404 for anyone else's)
 ```
 
-Use the token as a bearer credential:
+Tokens can still be minted from a shell on the server host — that is what the
+CLI is for, and it takes no scopes (a CLI-made token gets the default
+`read, write`):
+
+```bash
+deno task token:create --email you@example.com --name hermes   # plaintext printed once
+deno task token:list --email you@example.com                   # never shows values
+deno task token:revoke --name hermes                           # idempotent
+```
+
+Use a token as a bearer credential:
 
 ```bash
 curl -H "Authorization: Bearer nt_..." https://notes.example.com/api/notes
 ```
 
-Only the SHA-256 digest of a token is stored, tokens are accepted from the
-`Authorization` header only, and a token grants exactly the access its owner has.
+Tokens are accepted from the `Authorization` header only (never a query
+parameter or body, where they would reach logs), and a token grants exactly the
+access its owner has - narrowed to its scopes.
 
 ### Notes Endpoints
 

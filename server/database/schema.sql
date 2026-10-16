@@ -119,6 +119,21 @@ CREATE TABLE IF NOT EXISTS api_tokens (
     UNIQUE(user_id, name)
 );
 
+-- Scopes and expiry for those tokens. Added after the table shipped, so these
+-- are ALTERs rather than columns in the CREATE above: `IF NOT EXISTS` on the
+-- table means an existing database never re-runs it. Both statements are
+-- idempotent, which is what the startup schema applier requires.
+--
+-- `scopes` is a name list, not a `read_only` boolean, on purpose: the next
+-- thing that needs a narrower token (sharing ONE note with ONE person) becomes
+-- a new name here rather than a new column and a new migration. `read` and
+-- `write` are the whole vocabulary today; a token with `write` implies `read`.
+--
+-- `expires_at` NULL means "no expiry" - the behaviour every token had before
+-- this column existed, so existing tokens keep working unchanged.
+ALTER TABLE api_tokens ADD COLUMN IF NOT EXISTS scopes TEXT[] NOT NULL DEFAULT '{read,write}';
+ALTER TABLE api_tokens ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
+
 -- BGE-M3 embeddings for semantic search (one vector per note, kept fresh on
 -- write and by scripts/embed-notes.ts)
 CREATE TABLE IF NOT EXISTS note_embeddings (

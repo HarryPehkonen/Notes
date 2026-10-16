@@ -109,17 +109,23 @@ Deno.test("extractBearerToken: tolerates extra whitespace around the token", () 
  * @param {Object} options
  */
 function fakeContext(
-  { sessionUser = null, authorization = null, db = null }: {
+  {
+    sessionUser = null,
+    authorization = null,
+    db = null,
+    method = "GET",
+  }: {
     sessionUser?: unknown;
     authorization?: string | null;
     db?: unknown;
+    method?: string;
   } = {},
 ) {
   const headers: Record<string, string> = {};
   if (authorization !== null) headers.authorization = authorization;
 
   return {
-    request: { headers: new Headers(headers) },
+    request: { headers: new Headers(headers), method },
     response: { status: 200, body: null as unknown },
     state: {
       db,
@@ -129,6 +135,7 @@ function fakeContext(
       },
       user: undefined as unknown,
       authMethod: undefined as unknown,
+      token: undefined as unknown,
     },
   };
 }
@@ -147,6 +154,26 @@ function fakeDb(results: Array<{ rows: unknown[] }> | Error) {
       if (results instanceof Error) throw results;
       return results.shift() ?? { rows: [] };
     },
+  };
+}
+
+/**
+ * A token row as `findUserByApiToken` returns it
+ *
+ * `scopes` and `expires_at` are part of the lookup now, so a fixture without
+ * them is not a valid token: it is a row the middleware has to refuse.
+ * @param {Object} overrides - Fields to replace
+ */
+function tokenRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 3,
+    user_id: 42,
+    email: "bot@example.com",
+    name: "Bot",
+    picture: null,
+    scopes: ["read", "write"],
+    expires_at: null,
+    ...overrides,
   };
 }
 
@@ -198,7 +225,7 @@ Deno.test("requireAuth: returns 401 with no session and no header", async () => 
 
 Deno.test("requireAuth: authenticates a valid API token", async () => {
   const db = fakeDb([
-    { rows: [{ id: 3, user_id: 42, email: "bot@example.com", name: "Bot", picture: null }] },
+    { rows: [tokenRow()] },
     { rows: [] },
   ]);
   const ctx = fakeContext({ authorization: "Bearer nt_valid", db });
@@ -222,7 +249,7 @@ Deno.test("requireAuth: authenticates a valid API token", async () => {
 
 Deno.test("requireAuth: hashes the token in SQL and never binds a plaintext hash", async () => {
   const db = fakeDb([
-    { rows: [{ id: 3, user_id: 42, email: "bot@example.com", name: "Bot", picture: null }] },
+    { rows: [tokenRow()] },
     { rows: [] },
   ]);
   const ctx = fakeContext({ authorization: "Bearer nt_valid", db });
@@ -237,7 +264,7 @@ Deno.test("requireAuth: hashes the token in SQL and never binds a plaintext hash
 
 Deno.test("requireAuth: updates last_used_at for a valid token", async () => {
   const db = fakeDb([
-    { rows: [{ id: 3, user_id: 42, email: "bot@example.com", name: "Bot", picture: null }] },
+    { rows: [tokenRow()] },
     { rows: [] },
   ]);
   const ctx = fakeContext({ authorization: "Bearer nt_valid", db });
@@ -295,6 +322,114 @@ Deno.test("requireAuth: returns 500 when the token lookup fails", async () => {
     success: false,
     error: "Authentication error",
   });
+});
+
+// requireAuth: scopes and expiry. A token is a narrower credential than a
+// session, and these are the tests that say so.
+
+Deno.test("requireAuth: a read-only token may read", async () => {
+  const db = fakeDb([{ rows: [tokenRow({ scopes: ["read"] })] }]);
+  const ctx = fakeContext({ authorization: "Bearer nt_readonly", db, method: "GET" });
+  let called = false;
+
+  await requireAuth(ctx, () => {
+    called = true;
+    return Promise.resolve();
+  });
+
+  assert(called);
+  assertEquals(ctx.response.status, 200);
+  assertEquals(ctx.state.token, { id: 3, scopes: ["read"] });
+});
+
+Deno.test("requireAuth: a read-only token may not write, and says which scope it has", async () => {
+  for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+    const db = fakeDb([{ rows: [tokenRow({ scopes: ["read"] })] }]);
+    const ctx = fakeContext({ authorization: "Bearer nt_readonly", db, method });
+    let called = false;
+
+    await requireAuth(ctx, () => {
+      called = true;
+      return Promise.resolve();
+    });
+
+    assertEquals(called, false, `${method} must not reach the handler`);
+    assertEquals(ctx.response.status, 403, `${method} must be refused`);
+    assertEquals(ctx.response.body.code, "insufficient_scope");
+    assertEquals(ctx.response.body.required, "write");
+    assertEquals(ctx.response.body.granted, ["read"]);
+    // Nothing was written: the only query was the token lookup.
+    assertEquals(db.calls.length, 1);
+  }
+});
+
+Deno.test("requireAuth: a token with no scopes at all can do nothing", async () => {
+  // Fails closed. An empty or missing scope list must never read as permissive.
+  for (const scopes of [[], null, undefined, "read"]) {
+    const db = fakeDb([{ rows: [tokenRow({ scopes })] }]);
+    const ctx = fakeContext({ authorization: "Bearer nt_odd", db, method: "GET" });
+    let called = false;
+
+    await requireAuth(ctx, () => {
+      called = true;
+      return Promise.resolve();
+    });
+
+    assertEquals(called, false, `scopes ${JSON.stringify(scopes)} must not be allowed`);
+    assertEquals(ctx.response.status, 403);
+  }
+});
+
+Deno.test("requireAuth: an expired token is refused as expired, not as unknown", async () => {
+  const db = fakeDb([
+    { rows: [tokenRow({ expires_at: new Date(Date.now() - 60_000) })] },
+  ]);
+  const ctx = fakeContext({ authorization: "Bearer nt_old", db, method: "GET" });
+  let called = false;
+
+  await requireAuth(ctx, () => {
+    called = true;
+    return Promise.resolve();
+  });
+
+  assertEquals(called, false);
+  assertEquals(ctx.response.status, 401);
+  assertEquals(ctx.response.body.code, "token_expired");
+  // The expiry is decided in the middleware, not by filtering the row out of
+  // the lookup: "expired" and "wrong token" are different answers.
+  assert(!/expires_at IS NULL/.test(db.calls[0].sql));
+});
+
+Deno.test("requireAuth: a future expiry is not expired", async () => {
+  const db = fakeDb([
+    { rows: [tokenRow({ expires_at: new Date(Date.now() + 86_400_000) })] },
+    { rows: [] },
+  ]);
+  const ctx = fakeContext({ authorization: "Bearer nt_new", db, method: "GET" });
+  let called = false;
+
+  await requireAuth(ctx, () => {
+    called = true;
+    return Promise.resolve();
+  });
+
+  assert(called);
+  assertEquals(ctx.response.status, 200);
+});
+
+Deno.test("requireAuth: the session is never scope-limited", async () => {
+  // The browser is the account owner sitting in front of the app: it writes.
+  const ctx = fakeContext({ sessionUser: { id: 7, email: "a@b.c" }, method: "DELETE" });
+  let called = false;
+
+  await requireAuth(ctx, () => {
+    called = true;
+    return Promise.resolve();
+  });
+
+  assert(called);
+  assertEquals(ctx.state.authMethod, "session");
+  assertEquals(ctx.state.token, undefined);
 });
 
 // parseTokenArgs tests

@@ -69,6 +69,9 @@ uv run pytest -v
 | File                 | Coverage                                                  |
 | -------------------- | --------------------------------------------------------- |
 | `test_auth.py`       | 401 on missing/bad token (readonly)                       |
+| `test_isolation.py`  | user B cannot read or touch user A's notes/tags/search     |
+| `test_token_scopes.py` | what a token may do: scopes, expiry, revocation, no token management |
+| `test_tokens.py`     | the session-only token API: create, list, revoke, one-time plaintext |
 | `test_notes.py`      | Notes CRUD, versions, restore, delete                     |
 | `test_tags.py`       | Tags CRUD, 409 duplicate, color update, attach/detach     |
 | `test_search.py`     | Full-text, advanced, semantic (skip), suggestions, recent |
@@ -77,10 +80,37 @@ uv run pytest -v
 | `test_pagination.py` | Meta envelope, boundaries, unicode, empty/oversized body  |
 | `test_delete_204.py` | DELETE 204 no-body regression (commit 5cb1910)            |
 
+## The boundary suites (isolation, token scopes, token management)
+
+These three need more than a server: scratch users with real tokens, and one
+pass with the dev auth bypass OFF (with `DEV_USER_EMAIL` set every request is a
+session, which would make the token suites measure the wrong thing entirely).
+
+```bash
+scripts/api-suite.sh            # creates the database, seeds, runs both passes, cleans up
+scripts/api-suite.sh --keep     # leave the database and the server log behind
+```
+
+The credentials are in `scratch_tokens.py` (one source of truth for the tests and
+for `seed_scratch.py`, which writes the matching rows). The runner creates a
+throwaway database — `notes_api_test` by default, and it refuses any name that
+does not end in `_test` or `_scratch`.
+
+To run one suite by hand against an already-seeded scratch database:
+
+```bash
+NOTES_BASE_URL=http://localhost:8011 uv run pytest -m isolation   # no session
+NOTES_BASE_URL=http://localhost:8011 uv run pytest -m scopes      # no session
+NOTES_BASE_URL=http://localhost:8011 uv run pytest -m session     # session (DEV_USER_EMAIL)
+```
+
 ## Custom Marks
 
 - `readonly` — safe against production; no writes, no side effects
 - (default) — includes writes; local scratch instance only
+- `isolation` — cross-user row-level security; needs the seeded scratch users
+- `scopes` — what an API token may do; needs the seeded token states, no session
+- `session` — the endpoints a token may not touch; needs a session server
 
 ## Characterization Honesty
 

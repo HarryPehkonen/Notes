@@ -117,8 +117,15 @@ export const icons = {
   `),
   printer: stroke(svg`
     <path d="M7 9V4.2h10V9" />
-    <path d="M7 17H5.2A1.2 1.2 0 0 1 4 15.8v-5.6A1.2 1.2 0 0 1 5.2 9h13.6A1.2 1.2 0 0 1 20 10.2v5.6a1.2 1.2 0 0 1-1.2 1.2H17" />
+    <path
+      d="M7 17H5.2A1.2 1.2 0 0 1 4 15.8v-5.6A1.2 1.2 0 0 1 5.2 9h13.6A1.2 1.2 0 0 1 20 10.2v5.6a1.2 1.2 0 0 1-1.2 1.2H17" />
     <path d="M7 14h10v5.8H7Z" />
+  `),
+  key: stroke(svg`
+    <circle cx="8" cy="15" r="3.5" />
+    <path d="M10.6 12.4 19 4" />
+    <path d="M17.5 5.5 19.5 7.5" />
+    <path d="M15 8l2 2" />
   `),
   logout: stroke(svg`
     <path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3" />

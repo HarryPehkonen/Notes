@@ -278,6 +278,10 @@ class NotesApp extends LitElement {
       color: var(--gray-700);
       cursor: pointer;
       text-align: left;
+      /* the API-tokens row is an <a>, not a <button>: links carry their own
+        underline and colour, and both have to match the buttons around it */
+      text-decoration: none;
+      font-family: inherit;
     }
 
     .user-popover-logout svg {
@@ -1824,6 +1828,9 @@ class NotesApp extends LitElement {
    */
   _renderDrawerLogout() {
     return html`
+      <a class="user-popover-logout" href="/settings/tokens">
+        ${icons.key} API tokens
+      </a>
       <button class="user-popover-logout" @click="${this.logout}">
         ${icons.logout} Log out
       </button>
@@ -1957,6 +1964,9 @@ class NotesApp extends LitElement {
                 <div class="user-popover-version" title="Client build - bumped with every UI change">
                   Version ${APP_VERSION}
                 </div>
+                <a class="user-popover-logout" href="/settings/tokens">
+                  ${icons.key} API tokens
+                </a>
                 <button class="user-popover-logout" @click="${this.logout}">
                   ${icons.logout} Log out
                 </button>

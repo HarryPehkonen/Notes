@@ -49,8 +49,15 @@ Deno.test("no public/**/*.js call site passes an already-prefixed /api path to r
   // path built in a component, util, or service is relative to
   // `NotesApp.apiUrl`. Comments are stripped first - prose is allowed to name
   // the wire path ("GET /api/notes/:id/versions") without tripping the guard.
+  //
+  // `tokens.js` is the one exception, and it is not a component: it is the
+  // standalone settings page (served at /settings/tokens, outside the SPA), so
+  // there is no `NotesApp.apiUrl` for it to compose with and the prefix has to
+  // be named somewhere. Its paths are checked against the server's routes by
+  // tests/deno/token_page_contract_test.ts instead.
   const mayNameThePrefix = (pathname) =>
-    pathname.endsWith("/public/app.js") || pathname.endsWith("/public/sw.js");
+    pathname.endsWith("/public/app.js") || pathname.endsWith("/public/sw.js") ||
+    pathname.endsWith("/public/tokens.js");
   const codeOnly = (source) =>
     source
       .split("\n")
