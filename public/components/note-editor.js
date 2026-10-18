@@ -15,6 +15,7 @@ import {
   tokenizeCheckboxes,
 } from "../utils/checkboxes.js";
 import { isSameNoteUpdate, resolveSaveContent } from "../utils/editor-state.js";
+import { advancePreviewSource, previewMarkup } from "../utils/preview-cache.js";
 import { buildVersionRows, stepVersionRow } from "../utils/version-list.js";
 import { describePin, withPinResult } from "../utils/pin-state.js";
 import { formatNoteRef } from "../utils/note-ref.js";
@@ -1058,6 +1059,7 @@ export class NoteEditor extends LitElement {
     this.previewRow = null;
     this.printing = false;
     this._editingContent = null; // Track textarea content across preview toggles
+    this._previewCache = null; // Markup last rendered into the preview (see preview-cache.js)
     this._isSaving = false; // Non-reactive guard against concurrent saves
     this._scrollTopBeforeUpdate = null; // Canvas position to restore after a re-render
 
@@ -1192,6 +1194,18 @@ export class NoteEditor extends LitElement {
    */
   willUpdate(changedProperties) {
     this._scrollTopBeforeUpdate = null;
+
+    // The preview element itself is rebuilt (or removed) when the view mode
+    // flips or a different note loads, so cached markup would put the old
+    // note's checked states on screen. Drop it before the render runs.
+    if (
+      changedProperties.has("previewMode") ||
+      (changedProperties.has("note") &&
+        !isSameNoteUpdate(changedProperties.get("note"), this.note))
+    ) {
+      this._previewCache = null;
+    }
+
     if (
       changedProperties.has("note") &&
       isSameNoteUpdate(changedProperties.get("note"), this.note)
@@ -2019,9 +2033,28 @@ export class NoteEditor extends LitElement {
   }
 
   /**
+   * Markup for the preview, from the cache when the content has not moved.
+   * Returning the same string leaves the preview DOM alone, which is what keeps
+   * the reader's scroll position (see public/utils/preview-cache.js).
+   * @returns {string}
+   */
+  _previewMarkup() {
+    this._previewCache = previewMarkup(
+      this._previewCache,
+      this.getMarkdownContent(),
+      (content) => this.renderMarkdown(content),
+    );
+    return this._previewCache.html;
+  }
+
+  /**
    * Toggle a checkbox tapped in the preview. The input's data-cb-index is the
    * marker's position in the markdown source, so the edit is a pure text swap;
    * markAsChanged() then hands persistence to the existing auto-save.
+   *
+   * The browser has already ticked the box, so the rendered markup is left on
+   * screen: re-rendering it replaced every node and threw the view back up the
+   * note (notes #123/#124). Only the cache's source content moves forward.
    * @param {MouseEvent} event
    */
   _handlePreviewClick(event) {
@@ -2040,6 +2073,7 @@ export class NoteEditor extends LitElement {
 
     // autoSave() reads _editingContent when the textarea is absent (preview mode).
     this._editingContent = updated;
+    this._previewCache = advancePreviewSource(this._previewCache, updated);
     this.markAsChanged();
   }
 
@@ -2246,7 +2280,7 @@ export class NoteEditor extends LitElement {
               ${this.previewMode
                 ? html`
                   <div class="markdown-preview" @click="${this._handlePreviewClick}">
-                    ${unsafeHTML(this.renderMarkdown(this.getMarkdownContent()))}
+                    ${unsafeHTML(this._previewMarkup())}
                   </div>
                 `
                 : html`
