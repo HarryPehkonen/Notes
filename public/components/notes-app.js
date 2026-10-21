@@ -10,6 +10,7 @@ import { readAppShortName } from "../utils/branding.js";
 import { readSessionUser } from "../utils/session-user.js";
 import { readNotesPage } from "../utils/notes-response.js";
 import { makeToastId } from "../utils/toast-queue.js";
+import { formatNoteRef, parseNoteHash } from "../utils/note-ref.js";
 import { APP_VERSION } from "../version.js";
 
 // Read once at module load: the server has already injected the meta tag by
@@ -928,6 +929,7 @@ class NotesApp extends LitElement {
     this._boundHandleSyncOffline = this._handleSyncOffline.bind(this);
     this._boundHandleSyncOnline = this._handleSyncOnline.bind(this);
     this._boundHandleRecoveryFound = this._handleRecoveryFound.bind(this);
+    this._boundHandleHashChange = this._handleHashChange.bind(this);
   }
 
   connectedCallback() {
@@ -937,6 +939,7 @@ class NotesApp extends LitElement {
     this._setupNavigationGuards();
     this._setupSyncListeners();
     this._setupLiveSyncListeners();
+    this._setupHashSync();
   }
 
   disconnectedCallback() {
@@ -944,6 +947,7 @@ class NotesApp extends LitElement {
     this._removeNavigationGuards();
     this._removeSyncListeners();
     this._removeLiveSyncListeners();
+    this._removeHashSync();
   }
 
   /**
@@ -978,6 +982,170 @@ class NotesApp extends LitElement {
       event.preventDefault();
       event.returnValue = "You have unsaved changes. Are you sure you want to leave?";
       return event.returnValue;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // The URL fragment names the open note, so a refresh keeps you where you were.
+  //
+  // The fragment is the id the UI already shows next to a note ("#18"), so the
+  // URL reads as the label: harrisnotes.ca/#18 is note 18. Two directions, one
+  // rule - the fragment is written whenever the open note changes (from here,
+  // in updated(), so every one of the dozen places that opens or closes a note
+  // is covered without each of them remembering to) and read when the fragment
+  // changes under us (a reload, a bookmark, a hand-edited URL, back/forward).
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Keep the fragment in step with what is on screen.
+   *
+   * Called on every render, but only writes when `currentNote`/`viewMode`
+   * changed - a render for any other reason leaves the URL alone.
+   */
+  updated(changedProperties) {
+    super.updated(changedProperties);
+    if (changedProperties.has("currentNote") || changedProperties.has("viewMode")) {
+      this._syncHash();
+    }
+  }
+
+  _setupHashSync() {
+    globalThis.addEventListener("hashchange", this._boundHandleHashChange);
+    this._openNoteFromHash();
+  }
+
+  _removeHashSync() {
+    globalThis.removeEventListener("hashchange", this._boundHandleHashChange);
+  }
+
+  /** The note id the URL asks for right now, or null. */
+  _hashNoteId() {
+    return parseNoteHash(globalThis.location?.hash ?? "");
+  }
+
+  /**
+   * Write the open note into the URL fragment - or clear the fragment when no
+   * note is open - so a reload lands on the same view.
+   *
+   * `replaceState`, not `pushState`: the fragment tracks the state, it does not
+   * add history entries. Browsing ten notes must not leave ten entries to back
+   * through, and "back" should keep meaning "leave the app" as it does today.
+   * It also cannot re-enter through the hashchange listener, because
+   * replaceState fires no hashchange event.
+   */
+  _syncHash() {
+    if (!globalThis.location || !globalThis.history) return;
+
+    // While the initial deep link is still being resolved, the fragment is the
+    // input being honoured, not output to be written. The list render that
+    // arrives in the meantime must not clear "#63" before we have tried to open
+    // what it names - _openNoteFromHash settles the URL once the outcome is
+    // known. Without this the fragment flickered away and back on every reload.
+    if (this._pendingHashOpen) return;
+
+    const id = this.viewMode === "edit" && this.currentNote ? this.currentNote.id : null;
+    const fragment = id === null ? "" : formatNoteRef({ id });
+
+    const { pathname, search, hash } = globalThis.location;
+    if (hash === fragment) return;
+
+    globalThis.history.replaceState(null, "", `${pathname}${search}${fragment}`);
+  }
+
+  /**
+   * Open the note the URL names, if it names one. Runs once on load.
+   *
+   * A fragment pointing at a note that cannot be opened (deleted, another
+   * account's, a typo) falls back to the list and clears the fragment, so a
+   * stale bookmark still leaves a usable page rather than a blank one.
+   *
+   * The wait is not decoration. index.html parses `<notes-app>` into the
+   * document and app.js imports this module at the top of its own - so the
+   * element upgrades (and this runs) while app.js's body is still pending, and
+   * `globalThis.NotesApp` is not published yet. Without the wait this threw
+   * "Cannot read properties of undefined (reading 'getNote')" on every reload
+   * of a deep link and then cleared the fragment, which is precisely the bug
+   * the fragment exists to fix. Reproduced in a browser (probe2), fixed here.
+   * `loadInitialData` waits for the same reason.
+   */
+  async _openNoteFromHash() {
+    const id = this._hashNoteId();
+    if (id === null) return;
+
+    this._pendingHashOpen = true;
+    try {
+      await this.waitForNotesApp();
+      await this._openNoteById(id);
+    } finally {
+      this._pendingHashOpen = false;
+    }
+
+    // The outcome is known now, so the URL can be settled in one write: "#id"
+    // when the note opened, no fragment when it fell back to the list. Both
+    // outcomes are correct URL states, and _syncHash derives which from the
+    // state we ended in.
+    this._syncHash();
+  }
+
+  /**
+   * The fragment changed while the page is open: a reload of a bookmark in a
+   * live tab, a hand-edited URL, or back/forward after a manual jump. Mirrors
+   * the note-selected flow, including saving a pending edit first.
+   */
+  async _handleHashChange() {
+    const id = this._hashNoteId();
+
+    if (id === null) {
+      if (this.viewMode !== "edit") return;
+      await this._savePendingEdit();
+      this.viewMode = "list";
+      this.currentNote = null;
+      return;
+    }
+
+    // Already showing this note - nothing to fetch (and nothing to save).
+    if (this.viewMode === "edit" && this.currentNote?.id === id) return;
+
+    const opened = await this._openNoteById(id);
+    // A fragment naming a note we could not open would otherwise sit in the URL
+    // claiming to show it; clear it so the URL matches the list on screen.
+    if (!opened) this._syncHash();
+  }
+
+  /**
+   * Fetch a note by id and open it in the editor. Reports whether it opened, so
+   * a caller that came from the URL knows whether the fragment still matches.
+   *
+   * @returns {Promise<boolean>}
+   */
+  async _openNoteById(id) {
+    await this._savePendingEdit();
+
+    try {
+      const result = await globalThis.NotesApp.getNote(id);
+      this.currentNote = result.data;
+      this.viewMode = "edit";
+      this.sidebarOpen = false; // Close the mobile drawer, as a tap in the list does
+      return true;
+    } catch (error) {
+      console.error(`Failed to open note #${id} from the URL:`, error);
+      this.viewMode = "list";
+      this.currentNote = null;
+      this.showToast(`Note #${id} could not be opened`, "error");
+      return false;
+    }
+  }
+
+  /**
+   * Save whatever the open editor still holds, so leaving a note never drops an
+   * edit. The same three lines the view-switching handlers each repeat; the URL
+   * is just one more thing that can move the user off a note.
+   */
+  async _savePendingEdit() {
+    if (this.viewMode !== "edit" || !this.currentNote) return;
+    const editor = this.shadowRoot?.querySelector("note-editor");
+    if (editor?.hasUnsavedChanges) {
+      await editor.autoSave();
     }
   }
 
