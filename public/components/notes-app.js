@@ -10,7 +10,13 @@ import { readAppShortName } from "../utils/branding.js";
 import { readSessionUser } from "../utils/session-user.js";
 import { readNotesPage } from "../utils/notes-response.js";
 import { makeToastId } from "../utils/toast-queue.js";
-import { formatNoteRef, parseNoteHash } from "../utils/note-ref.js";
+import {
+  formatNoteRef,
+  isNoteHistoryEntry,
+  NOTE_HISTORY_STATE,
+  parseNoteHash,
+  planHashNavigation,
+} from "../utils/note-ref.js";
 import { APP_VERSION } from "../version.js";
 
 // Read once at module load: the server has already injected the meta tag by
@@ -1024,14 +1030,14 @@ class NotesApp extends LitElement {
   }
 
   /**
-   * Write the open note into the URL fragment - or clear the fragment when no
-   * note is open - so a reload lands on the same view.
+   * Move the URL - and the history stack - in step with what is on screen.
    *
-   * `replaceState`, not `pushState`: the fragment tracks the state, it does not
-   * add history entries. Browsing ten notes must not leave ten entries to back
-   * through, and "back" should keep meaning "leave the app" as it does today.
-   * It also cannot re-enter through the hashchange listener, because
-   * replaceState fires no hashchange event.
+   * The rules are `planHashNavigation`'s (pure, unit-tested); this is only the
+   * part that touches `history`. Reading a note leaves one entry above the list,
+   * so Back returns to the list (Harri, 2026-10-21). Switching notes swaps that
+   * entry rather than adding one - browsing ten notes must not leave ten entries
+   * to back through - and closing the note consumes it, so Back from the list
+   * still leaves the app, exactly as it did before this feature.
    */
   _syncHash() {
     if (!globalThis.location || !globalThis.history) return;
@@ -1044,12 +1050,48 @@ class NotesApp extends LitElement {
     if (this._pendingHashOpen) return;
 
     const id = this.viewMode === "edit" && this.currentNote ? this.currentNote.id : null;
-    const fragment = id === null ? "" : formatNoteRef({ id });
-
+    const nextHash = id === null ? "" : formatNoteRef({ id });
     const { pathname, search, hash } = globalThis.location;
-    if (hash === fragment) return;
+    const listUrl = `${pathname}${search}`;
+    const noteUrl = `${listUrl}${nextHash}`;
 
-    globalThis.history.replaceState(null, "", `${pathname}${search}${fragment}`);
+    const action = planHashNavigation({
+      currentHash: hash,
+      nextHash,
+      currentEntryIsNote: isNoteHistoryEntry(globalThis.history.state),
+    });
+
+    switch (action) {
+      case "hold":
+        return;
+      case "seed":
+        // The browser made this entry - a bookmark, a shared link, a hand-typed
+        // URL - so there is no list beneath it to go back to. Rewrite it as the
+        // list, then push the note: Back lands on the list either way, whether
+        // the note was bookmarked or tapped from the list.
+        globalThis.history.replaceState(null, "", listUrl);
+        globalThis.history.pushState(NOTE_HISTORY_STATE, "", noteUrl);
+        return;
+      case "push":
+        globalThis.history.pushState(NOTE_HISTORY_STATE, "", noteUrl);
+        return;
+      case "swap":
+        // Another note while already reading one: rewrite our own entry, so the
+        // stack does not grow with every note browsed.
+        globalThis.history.replaceState(null, "", noteUrl);
+        return;
+      case "clear":
+        // An entry that was never ours (a stale bookmark that failed to open):
+        // clear the fragment where it stands, adding nothing to the stack.
+        globalThis.history.replaceState(null, "", listUrl);
+        return;
+      case "back":
+        // Closing a note we pushed: pop our own entry, so Back from the list
+        // still leaves the app instead of doing nothing. The hashchange this
+        // fires lands on an already-closed editor, which the handler ignores.
+        globalThis.history.back();
+        return;
+    }
   }
 
   /**

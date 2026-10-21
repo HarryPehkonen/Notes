@@ -10,7 +10,7 @@
  *   Bump CACHE_NAME with any public/ change.
  */
 
-const CACHE_NAME = "notes-app-v41";
+const CACHE_NAME = "notes-app-v42";
 
 self.addEventListener("install", (event) => {
   // Skip waiting so the new SW activates immediately

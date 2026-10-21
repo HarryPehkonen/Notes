@@ -11,6 +11,9 @@
  * while reading a note lands back in that note. `formatNoteRef` writes the
  * fragment and `parseNoteHash` reads it, both here, because what the UI shows
  * and what the URL accepts have to be one rule or they drift apart.
+ *
+ * How the fragment moves the history stack lives here too: `planHashNavigation`
+ * decides, and the component is the only part that touches `history`.
  */
 
 /**
@@ -61,4 +64,88 @@ export function parseNoteHash(hash) {
 
   const id = Number(match[1]);
   return Number.isSafeInteger(id) ? id : null;
+}
+
+/**
+ * The marker we write into `history.state` when we push an entry for a note.
+ *
+ * It is how the app tells its own entries apart from the ones the browser made -
+ * the list entry, or an entry from a bookmark, a shared link or a hand-typed
+ * URL. That distinction decides whether Back has a list entry to land on, so it
+ * cannot be inferred from the URL alone: `/#18` looks the same either way.
+ *
+ * Plain data on purpose. `pushState` clones its state argument with the
+ * structured clone algorithm, so a marker holding a function or a class instance
+ * would throw at runtime, on a phone, with no test to catch it.
+ *
+ * @type {{ noteHash: true }}
+ */
+export const NOTE_HISTORY_STATE = { noteHash: true };
+
+/**
+ * Was this history entry one we pushed for a note?
+ *
+ * `history.state` is `null` for entries the browser created, so the check is
+ * deliberately total: anything that is not exactly the marker is "not ours".
+ *
+ * @param {unknown} state e.g. globalThis.history.state
+ * @returns {boolean}
+ */
+export function isNoteHistoryEntry(state) {
+  return state?.noteHash === true;
+}
+
+/**
+ * How the fragment and the history stack should move when the view changes.
+ *
+ * Pure, so the shape of the stack is testable without a browser; the caller is
+ * the only part that touches `history`. Harri asked for Back from a note to
+ * return to the list (2026-10-21), and the stack is what makes that true: reading
+ * a note leaves ONE entry above the list, so Back pops it and lands on the list.
+ * Switching note while reading one replaces instead of pushing, so browsing ten
+ * notes still leaves one entry to walk back through rather than ten. And because
+ * the entry we pushed is consumed when the note closes, Back from the list itself
+ * still leaves the app, exactly as before.
+ *
+ * `currentEntryIsNote` is what keeps the two ways of arriving at a note honest. A
+ * note opened from the list already has the list beneath it; a note the browser
+ * landed on directly (a bookmark, a shared link) does not, and "seed" gives it
+ * one - otherwise Back would leave the app from a bookmarked note but return to
+ * the list from a tapped one.
+ *
+ * @param {object} state
+ * @param {string} state.currentHash `location.hash` right now - "#18", or ""
+ * @param {string} state.nextHash the fragment the app now wants - "#18", or ""
+ * @param {boolean} state.currentEntryIsNote true when the entry we are sitting on
+ *   is one we pushed for a note (see `isNoteHistoryEntry`)
+ * @returns {"hold"|"seed"|"push"|"swap"|"clear"|"back"} "hold" leaves the URL
+ *   alone; "seed" rewrites the current entry as the list and then pushes the note;
+ *   "push" adds the note entry above the list; "swap" rewrites our own note entry
+ *   in place, so switching notes cannot grow the stack; "clear" rewrites the
+ *   current entry as the list (an entry that was never ours); "back" pops the
+ *   entry we pushed
+ */
+export function planHashNavigation({ currentHash, nextHash, currentEntryIsNote }) {
+  if (currentHash === nextHash) {
+    if (nextHash === "") return "hold";
+
+    // The URL already names this note. If we put it there, the list is already
+    // beneath us. If the browser did, nothing is - so seed the list under it and
+    // push, and Back lands on the list either way. A reload of a note we pushed
+    // keeps the marker in history.state, so it takes the "hold" branch and no
+    // second entry is added.
+    return currentEntryIsNote ? "hold" : "seed";
+  }
+
+  if (nextHash !== "") {
+    // Opening a note. One entry above the list, always: from the list, push;
+    // switching note while already reading one, swap, so the stack cannot grow
+    // with every note browsed.
+    return currentEntryIsNote ? "swap" : "push";
+  }
+
+  // Closing a note. The entry we pushed is ours to consume, so Back from the list
+  // still leaves the app. An entry we did not push has nothing to consume: the
+  // fragment is simply cleared where it stands.
+  return currentEntryIsNote ? "back" : "clear";
 }

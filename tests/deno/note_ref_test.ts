@@ -5,7 +5,13 @@
  * both call sites (list has two - grid and list view) actually using it.
  */
 import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
-import { formatNoteRef, parseNoteHash } from "../../public/utils/note-ref.js";
+import {
+  formatNoteRef,
+  isNoteHistoryEntry,
+  NOTE_HISTORY_STATE,
+  parseNoteHash,
+  planHashNavigation,
+} from "../../public/utils/note-ref.js";
 
 Deno.test("formatNoteRef: a positive integer id becomes #id", () => {
   assertEquals(formatNoteRef({ id: 18 }), "#18");
@@ -150,14 +156,112 @@ Deno.test("round trip: every label formatNoteRef writes, parseNoteHash reads bac
   }
 });
 
+// -------------------------------------------------------------------- history plan
+// Harri, 2026-10-21: "Back should return to the list." So reading a note puts ONE
+// entry above the list and Back pops it. Browsing ten notes must still leave one
+// entry, not ten - which is why switching notes replaces rather than pushes. The
+// plan is pure, so the shape of the stack is testable without a browser;
+// _syncHash is the only part that touches history.
+
+Deno.test("planHashNavigation: opening a note from the list pushes one entry", () => {
+  assertEquals(
+    planHashNavigation({ currentHash: "", nextHash: "#18", currentEntryIsNote: false }),
+    "push",
+  );
+});
+
+Deno.test("planHashNavigation: a bookmarked note seeds the list beneath it", () => {
+  // The browser made this entry (a bookmark, a shared link, a hand-typed URL), so
+  // there is no list entry under it to go back to. Rewrite it as the list, then
+  // push the note - otherwise Back would leave the app instead of returning to
+  // the list, and the two ways of arriving at a note would behave differently.
+  assertEquals(
+    planHashNavigation({ currentHash: "#18", nextHash: "#18", currentEntryIsNote: false }),
+    "seed",
+  );
+});
+
+Deno.test("planHashNavigation: a note we already pushed holds the URL still", () => {
+  // Also the reload case: the pushed entry keeps its state, so a reload of a
+  // deep link must not seed or push a second time.
+  assertEquals(
+    planHashNavigation({ currentHash: "#18", nextHash: "#18", currentEntryIsNote: true }),
+    "hold",
+  );
+});
+
+Deno.test("planHashNavigation: switching notes swaps, so the stack cannot grow", () => {
+  assertEquals(
+    planHashNavigation({ currentHash: "#18", nextHash: "#63", currentEntryIsNote: true }),
+    "swap",
+  );
+});
+
+Deno.test("planHashNavigation: closing a note consumes the entry it pushed", () => {
+  assertEquals(
+    planHashNavigation({ currentHash: "#18", nextHash: "", currentEntryIsNote: true }),
+    "back",
+  );
+  // An entry we did not push has nothing to consume - clear the fragment in place.
+  assertEquals(
+    planHashNavigation({ currentHash: "#18", nextHash: "", currentEntryIsNote: false }),
+    "clear",
+  );
+});
+
+Deno.test("planHashNavigation: the list with no fragment holds the URL still", () => {
+  assertEquals(
+    planHashNavigation({ currentHash: "", nextHash: "", currentEntryIsNote: false }),
+    "hold",
+  );
+});
+
+Deno.test("planHashNavigation: at most one note entry above the list, ever", () => {
+  // Walk a browsing session - list, open a note, switch notes twice, close - and
+  // count the pushes. A second push means Back walks back through notes instead
+  // of returning to the list, which is the whole point of the plan.
+  //
+  // The bookkeeping here is the caller's, and it is not obvious: after opening or
+  // switching, the entry we sit on is OURS (that is what "swap" preserves); after
+  // closing, it is the list's again, whichever action got us there.
+  let currentHash = "";
+  let currentEntryIsNote = false;
+  const actions = [];
+  for (const nextHash of ["#18", "#63", "#92", ""]) {
+    const action = planHashNavigation({ currentHash, nextHash, currentEntryIsNote });
+    actions.push(action);
+    currentEntryIsNote = nextHash !== "";
+    currentHash = nextHash;
+  }
+  assertEquals(actions, ["push", "swap", "swap", "back"]);
+  assertEquals(actions.filter((a) => a === "push").length, 1);
+});
+
+Deno.test("the history marker survives the structured clone pushState performs", () => {
+  // pushState clones its state argument with the structured clone algorithm, so a
+  // marker holding a function or a class instance throws at runtime - in a
+  // browser, on a phone. Guard the shape here instead.
+  const cloned = JSON.parse(JSON.stringify(NOTE_HISTORY_STATE));
+  assertEquals(isNoteHistoryEntry(cloned), true);
+  assertEquals(isNoteHistoryEntry(null), false);
+  assertEquals(isNoteHistoryEntry(undefined), false);
+  assertEquals(isNoteHistoryEntry({}), false);
+  assertEquals(isNoteHistoryEntry({ noteHash: "yes" }), false);
+  assertEquals(isNoteHistoryEntry({ noteHash: true, other: 1 }), true);
+});
+
 Deno.test("wiring: notes-app.js keeps the URL fragment and the open note in step", async () => {
   const source = await Deno.readTextFile(
     new URL("../../public/components/notes-app.js", import.meta.url),
   );
 
   assert(
-    source.includes('import { formatNoteRef, parseNoteHash } from "../utils/note-ref.js";'),
-    "notes-app.js must import both halves of the id rule from note-ref.js",
+    source.includes('} from "../utils/note-ref.js";') &&
+      source.includes("formatNoteRef,") &&
+      source.includes("parseNoteHash,") &&
+      source.includes("planHashNavigation,") &&
+      source.includes("isNoteHistoryEntry,"),
+    "notes-app.js must import every half of the id rule from note-ref.js",
   );
 
   // The fragment is read when it changes under us...
@@ -216,16 +320,40 @@ Deno.test("wiring: notes-app.js keeps the URL fragment and the open note in step
     "updated() must sync on both the open note and the view mode",
   );
 
-  // replaceState, not pushState: the fragment tracks the state, it does not add
-  // a history entry per note browsed. A pushState here would also let the
-  // hashchange listener re-enter itself.
+  // The decision lives in planHashNavigation, which the tests above pin down one
+  // case at a time; _syncHash is only the part that touches history. Back from a
+  // note must land on the list (Harri, 2026-10-21), which is what the pushed
+  // entry is for - and "back" is how the entry we pushed gets consumed, so Back
+  // from the list itself still leaves the app.
+  //
+  // The end marker matters: `_openNoteFromHash` is declared `async`, so a slice
+  // bounded by the bare name finds nothing, indexOf returns -1, and the slice
+  // runs to the end of the file - where every OTHER switch in the app lives.
+  // Assertions that only check `includes` survive that silently; the table check
+  // below does not.
   const syncHash = source.slice(
     source.indexOf("  _syncHash()"),
-    source.indexOf("  _openNoteFromHash()"),
+    source.indexOf("  async _openNoteFromHash()"),
+  );
+  assert(
+    syncHash.includes("planHashNavigation({"),
+    "_syncHash must delegate the history decision to planHashNavigation",
+  );
+  assert(
+    syncHash.includes("isNoteHistoryEntry("),
+    "_syncHash must ask whether the current entry is one we pushed",
+  );
+  assert(
+    syncHash.includes("globalThis.history.pushState("),
+    "opening a note must push a history entry, so Back returns to the list",
   );
   assert(
     syncHash.includes("globalThis.history.replaceState(null,"),
-    "_syncHash must use replaceState",
+    "_syncHash must still be able to write without adding an entry",
+  );
+  assert(
+    syncHash.includes("globalThis.history.back()"),
+    "closing a note we pushed must consume that entry",
   );
   assert(
     syncHash.includes("formatNoteRef({ id })"),
@@ -235,8 +363,46 @@ Deno.test("wiring: notes-app.js keeps the URL fragment and the open note in step
     syncHash.includes("if (this._pendingHashOpen) return;"),
     "_syncHash must not clobber an incoming fragment while the deep link resolves",
   );
-  assert(
-    !source.includes("history.pushState"),
-    "nothing in notes-app.js may push history entries for a fragment change",
+  // One entry per note view, and only ever from _syncHash: a pushState anywhere
+  // else would grow the stack behind _syncHash's back, and Back would stop
+  // landing on the list. `history.back()` is the only other history call.
+  const pushes = source.match(/globalThis\.history\.pushState\(/g) || [];
+  assertEquals(pushes.length, 2, "pushState belongs in _syncHash's two open actions, nowhere else");
+  assertEquals(
+    source.match(/globalThis\.history\.back\(/g)?.length,
+    1,
+    "history.back() belongs in _syncHash's close action only",
   );
+});
+
+Deno.test("wiring: every action _syncHash's switch handles makes the right history call", async () => {
+  // The switch IS the wiring between the plan and the browser, and the first
+  // sabotage round walked straight through the string checks above: renaming the
+  // "back" label while leaving its body in place kept the old assertions green
+  // and the app broken. So read the switch as a table - label to history calls -
+  // and pin the whole table, so a renamed or reordered case fails by name.
+  const source = await Deno.readTextFile(
+    new URL("../../public/components/notes-app.js", import.meta.url),
+  );
+  const syncHash = source.slice(
+    source.indexOf("  _syncHash()"),
+    source.indexOf("  async _openNoteFromHash()"),
+  );
+  const switchBlock = syncHash.slice(syncHash.indexOf("switch (action) {"));
+
+  const parts = switchBlock.split(/case "([a-z]+)":/);
+  const calls = {};
+  for (let i = 1; i < parts.length; i += 2) {
+    calls[parts[i]] = (parts[i + 1].match(/globalThis\.history\.(\w+)\(/g) || [])
+      .map((call) => call.slice("globalThis.history.".length, -1));
+  }
+
+  assertEquals(calls, {
+    hold: [],
+    seed: ["replaceState", "pushState"],
+    push: ["pushState"],
+    swap: ["replaceState"],
+    clear: ["replaceState"],
+    back: ["back"],
+  });
 });
