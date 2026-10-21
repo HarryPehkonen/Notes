@@ -99,6 +99,15 @@ For developer setup, deployment instructions, and operational details see [READM
 - **Search highlighting** — search query terms highlighted in note titles and content in the list view
 - **Relative dates** — "Just now", "5 minutes ago", "3 days ago", then full date after 7 days
 
+### Note Deep Links (the URL fragment)
+
+- **The fragment names the open note** — `/` + `#<id>` opens that note in the editor, so a refresh, a bookmark or a hand-typed URL lands in the note rather than the list. The fragment is the same label the UI already renders next to a note (`#18`), so the URL reads as the label; the two are one rule in `public/utils/note-ref.js` (`formatNoteRef` writes it, `parseNoteHash` reads it) and a round-trip test keeps them from drifting apart.
+- **Strict format** — only a plain positive integer with no leading zeros is a note id. `#`, `#abc`, `#18x`, `#1.5`, `#-1`, `#018` are not ids; the page shows the list and leaves the fragment untouched.
+- **The fragment tracks state, it does not build history** — `history.replaceState`, never `pushState`: browsing ten notes leaves one history entry, and "back" keeps meaning "leave the app".
+- **It is written from one place** — `notes-app.js` `updated()`, which sees every path in or out of a note (open, close, filter change, delete), so the call sites need no per-site handling. Closing the editor, switching filters or deleting the open note clears the fragment.
+- **A fragment naming an unopenable note falls back to the list** and clears itself, so a stale bookmark leaves a usable page instead of a blank one. Note that `GET /api/notes/:id` deliberately returns archived notes (see Soft delete), so a bookmark to an archived note opens it.
+- **Unsaved edits are saved before the URL moves you** — a fragment change goes through the same `autoSave()` path as closing the editor.
+
 ### Version History
 
 - **Trigger-based** — PostgreSQL `BEFORE UPDATE` trigger captures old title + content into `note_versions` table whenever either changes
@@ -109,7 +118,7 @@ For developer setup, deployment instructions, and operational details see [READM
 ### Offline & PWA
 
 - **Service worker** — caches app shell (HTML, JS, CSS) for offline access
-- **Cache versioning** — `CACHE_NAME` constant (currently `notes-app-v24`) bumped on deployments; old caches cleaned on activate
+- **Cache versioning** — `CACHE_NAME` in `public/sw.js`, bumped with `APP_VERSION` on any `public/` change (`tests/deno/app_version_test.ts` fails if the two drift); old caches cleaned on activate
 - **Network-first for API** — API, auth, and health routes always bypass cache
 - **Cache-first for static** — static assets served from cache with network fallback
 - **`skipWaiting` + `clients.claim`** — new service worker activates immediately
