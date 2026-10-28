@@ -46,3 +46,16 @@ Deno.test("normalizeNoteFields: non-string values are ignored", () => {
   assertEquals("title" in out, false);
   assertEquals("content" in out, false);
 });
+
+Deno.test("normalizeNoteFields: a known format is passed through", () => {
+  assertEquals(normalizeNoteFields({ format: "groff" }).format, "groff");
+  assertEquals(normalizeNoteFields({ format: "markdown" }).format, "markdown");
+});
+
+Deno.test("normalizeNoteFields: an unknown format is dropped, so a typo cannot half-convert a note", () => {
+  // Dropped rather than guessed at: the note stays markdown, which is what it
+  // already was. The database CHECK constraint refuses a bad value outright.
+  assertEquals("format" in normalizeNoteFields({ format: "grof" }), false);
+  assertEquals("format" in normalizeNoteFields({ format: 42 }), false);
+  assertEquals("format" in normalizeNoteFields({ title: "x" }), false);
+});

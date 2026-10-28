@@ -26,6 +26,7 @@
     "token:list": "deno run --env --allow-net --allow-read --allow-env --allow-write server/cli/tokens.js list",
     "token:revoke": "deno run --env --allow-net --allow-read --allow-env --allow-write server/cli/tokens.js revoke",
     "groff:render": "deno run --allow-read --allow-env --allow-run=groff --allow-write server/cli/groff.js",
+    "notes:reproject": "deno run --env --allow-net --allow-read --allow-env scripts/reproject-notes.ts",
     "test": "deno test --no-check --allow-read --allow-env --allow-run=groff tests/deno/",
     "lint": "deno lint",
     "fmt": "deno fmt"

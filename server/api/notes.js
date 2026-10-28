@@ -216,7 +216,7 @@ export function createNotesRouter() {
 
     try {
       const body = await ctx.request.body({ type: "json" }).value;
-      const { title, content, tags = [] } = body;
+      const { title, content, tags = [], format } = body;
 
       // Both fields must be present, but may be empty: a note created from the
       // "new note" button starts blank so the editor shows its placeholders
@@ -273,12 +273,13 @@ export function createNotesRouter() {
         }
       }
 
-      const fields = normalizeNoteFields({ title, content });
+      const fields = normalizeNoteFields({ title, content, format });
 
       const note = await db.createNote({
         userId: user.id,
         title: fields.title,
         content: fields.content,
+        format: fields.format,
         tags: tagIds,
       });
 
@@ -330,7 +331,7 @@ export function createNotesRouter() {
 
     try {
       const body = await ctx.request.body({ type: "json" }).value;
-      const { title, content, tags, is_pinned, is_archived, updated_at } = body;
+      const { title, content, tags, is_pinned, is_archived, updated_at, format } = body;
 
       // Verify note exists and belongs to user, fetch old content for image cleanup
       const existingNote = await db.query(
@@ -365,9 +366,12 @@ export function createNotesRouter() {
       const oldContent = existingNote.rows[0].content;
 
       const updates = {};
-      const fields = normalizeNoteFields({ title, content });
+      const fields = normalizeNoteFields({ title, content, format });
       if (fields.title !== undefined) updates.title = fields.title;
       if (fields.content !== undefined) updates.content = fields.content;
+      // A format change on its own is a real update: it re-derives the note's
+      // projection without altering a character of the source.
+      if (fields.format !== undefined) updates.format = fields.format;
       // Tags are no longer accepted here at all. A note save carrying a whole
       // tag list is a read-modify-write - a client holding a list it read a
       // minute ago silently drops tags another device just added - so the field

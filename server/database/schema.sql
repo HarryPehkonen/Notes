@@ -51,6 +51,21 @@ CREATE TABLE IF NOT EXISTS notes (
     ) STORED
 );
 
+-- groff documents. A note may be written in groff instead of markdown: `format`
+-- says which, `content_markdown` holds the projection of a groff note (the copy
+-- the app reads and searches, derived on save, never written back over
+-- `content`), and `projection_version` records which projection built it, so a
+-- change to the projection refreshes exactly the notes that are behind.
+--
+-- ALTER rather than part of CREATE TABLE, because these columns arrive on a
+-- database that already holds notes. The schema pass collects ALTER statements
+-- and runs them last, after the tables they touch exist.
+ALTER TABLE notes ADD COLUMN IF NOT EXISTS format TEXT NOT NULL DEFAULT 'markdown';
+ALTER TABLE notes ADD COLUMN IF NOT EXISTS content_markdown TEXT;
+ALTER TABLE notes ADD COLUMN IF NOT EXISTS projection_version INTEGER;
+ALTER TABLE notes DROP CONSTRAINT IF EXISTS notes_format_check;
+ALTER TABLE notes ADD CONSTRAINT notes_format_check CHECK (format IN ('markdown', 'groff'));
+
 -- Tags table
 CREATE TABLE IF NOT EXISTS tags (
     id SERIAL PRIMARY KEY,

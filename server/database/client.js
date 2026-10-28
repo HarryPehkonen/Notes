@@ -5,6 +5,7 @@
 
 import { Pool } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 import { buildTagFilterClause } from "../api/tag-filter.js";
+import { derivedNoteFields, normalizeNoteFormat } from "../groff/note-format.js";
 
 /**
  * @typedef {Object} User
@@ -56,6 +57,24 @@ export function stripMarkdown(markdown) {
     .replace(/^\s*\d+\.\s/gm, "") // Numbered lists
     .replace(/\n{2,}/g, "\n") // Multiple newlines
     .trim();
+}
+
+/**
+ * Report what a projection could not carry over.
+ *
+ * A projection that silently drops a request the reader can see in the source is
+ * worse than one that says so, and the projection is what the app reads, so this
+ * is the only place it can be said.
+ *
+ * @param {string[]} warnings - Line-numbered warnings from the projection
+ * @param {number} [noteId] - The note, when it is known
+ */
+function logProjectionWarnings(warnings, noteId) {
+  if (!warnings || warnings.length === 0) return;
+  const where = noteId === undefined ? "new note" : `note #${noteId}`;
+  console.warn(
+    `groff projection (${where}) dropped ${warnings.length}: ${warnings.join("; ")}`,
+  );
 }
 
 /**
@@ -420,14 +439,30 @@ export class DatabaseClient {
    * @param {Object} noteData
    * @returns {Promise<Note>}
    */
-  async createNote({ userId, title, content, tags = [] }) {
+  async createNote({ userId, title, content, tags = [], format }) {
+    // A groff note's projection is derived before the insert, so the row and the
+    // copy the app reads are written by the same statement: a note is never
+    // briefly format-less or projection-less.
+    const noteFormat = normalizeNoteFormat(format);
+    const derived = derivedNoteFields({ format: noteFormat, content });
+    logProjectionWarnings(derived.warnings);
+
     return await this.transaction(async (tx) => {
       // Create note
       const noteResult = await tx.query(
-        `INSERT INTO notes (user_id, title, content, content_plain)
-                 VALUES ($1, $2, $3, $4)
+        `INSERT INTO notes
+           (user_id, title, content, content_plain, format, content_markdown, projection_version)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                  RETURNING *`,
-        [userId, title, content, this.stripMarkdown(content)],
+        [
+          userId,
+          derived.title ?? title,
+          content,
+          this.stripMarkdown(derived.plainSource),
+          noteFormat,
+          derived.content_markdown,
+          derived.projection_version,
+        ],
       );
       const note = noteResult.rows[0];
 
@@ -465,9 +500,32 @@ export class DatabaseClient {
    * @returns {Promise<Note>}
    */
   async updateNote(noteId, updates, userId) {
-    const { title, content, tags, is_pinned, is_archived } = updates;
+    const { title, content, tags, is_pinned, is_archived, format } = updates;
 
     return await this.transaction(async (tx) => {
+      // The derived fields follow the source, so a body edit re-derives them --
+      // and so does a change of format, which can leave the body alone and still
+      // change what the note means. When a body is saved without a format, the
+      // STORED format is the truth: a caller is never trusted to say what a note
+      // is, only what it should become.
+      let noteFormat = null;
+      let derived = null;
+      if (content !== undefined || format !== undefined) {
+        const current = await tx.query(
+          `SELECT format, content FROM notes WHERE id = $1`,
+          [noteId],
+        );
+        const stored = current.rows[0] ?? {};
+        noteFormat = format !== undefined
+          ? normalizeNoteFormat(format)
+          : normalizeNoteFormat(stored.format);
+        derived = derivedNoteFields({
+          format: noteFormat,
+          content: content !== undefined ? content : stored.content,
+        });
+        logProjectionWarnings(derived.warnings, noteId);
+      }
+
       // Build dynamic update query
       const updateFields = [];
       const params = [];
@@ -480,8 +538,23 @@ export class DatabaseClient {
       if (content !== undefined) {
         updateFields.push(`content = $${paramIndex++}`);
         params.push(content);
+      }
+      if (derived) {
+        // The document's own title wins when the caller did not set one: an
+        // edited .RECIPE has to move the title with it, since search weights the
+        // title above the body and the two disagreeing is worse than either.
+        if (title === undefined && derived.title !== null) {
+          updateFields.push(`title = $${paramIndex++}`);
+          params.push(derived.title);
+        }
+        updateFields.push(`format = $${paramIndex++}`);
+        params.push(noteFormat);
         updateFields.push(`content_plain = $${paramIndex++}`);
-        params.push(this.stripMarkdown(content));
+        params.push(this.stripMarkdown(derived.plainSource));
+        updateFields.push(`content_markdown = $${paramIndex++}`);
+        params.push(derived.content_markdown);
+        updateFields.push(`projection_version = $${paramIndex++}`);
+        params.push(derived.projection_version);
       }
       if (is_pinned !== undefined) {
         updateFields.push(`is_pinned = $${paramIndex++}`);
@@ -863,13 +936,31 @@ export class DatabaseClient {
         throw new Error("Version not found");
       }
 
+      // A restore is a body change, so the derived fields are re-derived from
+      // the restored text: it must not be read through the projection of the
+      // text it replaced.
+      const current = await tx.query(`SELECT format FROM notes WHERE id = $1`, [noteId]);
+      const derived = derivedNoteFields({
+        format: current.rows[0]?.format,
+        content: version.content,
+      });
+      logProjectionWarnings(derived.warnings, noteId);
+
       // Update the note with version content
       const noteResult = await tx.query(
         `UPDATE notes
-                 SET title = $1, content = $2, content_plain = $3
-                 WHERE id = $4
+                 SET title = $1, content = $2, content_plain = $3,
+                     content_markdown = $4, projection_version = $5
+                 WHERE id = $6
                  RETURNING *`,
-        [version.title, version.content, this.stripMarkdown(version.content), noteId],
+        [
+          derived.title ?? version.title,
+          version.content,
+          this.stripMarkdown(derived.plainSource),
+          derived.content_markdown,
+          derived.projection_version,
+          noteId,
+        ],
       );
       const note = noteResult.rows[0];
 
