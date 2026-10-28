@@ -27,17 +27,33 @@
 .\"
 .\" The document owns content; this file owns appearance. Retheme by editing here.
 .
+.\" ---------------------------------------------------------------- the faces
+.\" Every font decision in this file is these four strings. A caller can load
+.\" another macro file after this one to override them, which is how the
+.\" alternatives get measured without editing the style:
+.\"
+.\"   FONTBODY  DS  DejaVu Serif            T  Times (Nimbus Roman)
+.\"                                         P  Palatino (P052)
+.\"                                         N  Century Schoolbook (C059)
+.\"   FONTHEAD  DV  DejaVu Sans             H  Helvetica (Nimbus Sans)
+.\"   FONTMONO  DM  DejaVu Sans Mono        C  Courier (Nimbus Mono PS)
+.\"   SPECIAL   DVR DejaVu Sans             S  Symbol
+.\"
+.\" DS/DV/DM/DVR are built by scripts/groff-fonts.sh and need -F and -P-e.
+.\" T/P/N/H/C/S are the URW base-35 faces groff mounts by itself: nothing to
+.\" install, but no coverage beyond Latin-1, the usual typographic punctuation
+.\" and what Symbol carries -- and, without -P-e, they are not embedded.
+.ds FONTBODY DS
+.ds FONTHEAD DV
+.ds FONTMONO DM
+.ds SPECIAL DVR
+.
 .\" ------------------------------------------------------------- page and type
-.\" Measure and size re-derived after the move to DejaVu, because DejaVu Serif
-.\" is far wider than the Times it replaced: at 12pt it fitted only 49 characters
-.\" into the 4.7in measure that had held 66. Measured, 2026-10-28:
-.\"
-.\"   12pt / 4.7i -> 49 chars, 2 pages      (too narrow a measure)
-.\"   11pt / 5.8i -> 63-77 chars, 1 page
-.\"   11pt / 5.5i -> 58-71 chars, 1 page   <- chosen: evenest line lengths
-.\"
-.\" The extent ends at PO+LL (108+396 = 504pt on a 612pt page), so nothing
-.\" overflows the margin.
+.\" Measure and size set by measurement, not intuition: the text extent in the
+.\" PDF ends at exactly PO+LL, so nothing overflows the margin, and the filled
+.\" lines stay inside the comfortable 45-75 characters. Re-measure after ANY
+.\" font change -- DejaVu Serif is far wider than Times, and at 12pt it fitted
+.\" only 49 characters into the measure that had held 66.
 .nr PO 1.5i           \" left margin, symmetric with the right
 .nr LL 5.5i           \" line length
 .nr HM 0.9i           \" top margin
@@ -49,21 +65,17 @@
 .hy 1                 \" hyphenate (English patterns ship with groff)
 .
 .\" ------------------------------------------------------------------- fonts
-.\" This build of gropdf accepts PostScript Type 1 only, and Debian ships DejaVu
-.\" as TrueType, so scripts/groff-fonts.sh converts each face with fontforge and
-.\" adapts its metrics with afmtodit. Names follow groff's family + style-letter
-.\" convention:
+.\" Names follow groff's family + style-letter convention, so R/B/I/BI work:
 .\"
-.\"   DS = DejaVu Serif      (body text)          DSR DSB DSI DSBI
-.\"   DV = DejaVu Sans       (headings, fallback) DVR DVB DVI DVBI
-.\"   DM = DejaVu Sans Mono  (code blocks)        DMR DMB DMI DMBI
+.\"   DS = DejaVu Serif      (body)     DSR DSB DSI DSBI
+.\"   DV = DejaVu Sans       (headings) DVR DVB DVI DVBI
+.\"   DM = DejaVu Sans Mono  (code)     DMR DMB DMI DMBI
 .\"
-.\" .special DVR declares DejaVu Sans as the font searched for a character the
-.\" current one lacks, so \[u2460] (the circled digit one) renders even though
-.\" DejaVu Serif has no circled digits; without it, a missing character is a
-.\" warning and a blank. The whole DejaVu repertoire is reachable as \[uXXXX].
-.fam DS
-.special DVR
+.\" .special declares a font searched for a character the current one lacks, so
+.\" \[u2460] (the circled digit one) renders even though DejaVu Serif has no
+.\" circled digits; without it a missing character is a warning and a blank.
+.fam \*[FONTBODY]
+.special \*[SPECIAL]
 .
 .\" --------------------------------------------------------------- helpers
 .\" One-line .if forms and helper macros keep this file free of conditional
@@ -84,17 +96,17 @@
 .
 .\" ------------------------------------------------------- document vocabulary
 .\" The document's title.  .RECIPE "Lemon drizzle cake" "serves 8"
-.\" Headings are set in DejaVu Sans Bold against a serif body -- the contrast
-.\" does the work a second size would otherwise have to do.
+.\" Headings are set in the heading family against a body in another -- the
+.\" contrast does the work a second size would otherwise have to do.
 .de RECIPE
 .in 0
-.fam DV
+.fam \\*[FONTHEAD]
 .ps 16
 .ft B
 \\$1
 .ft R
 .ps
-.fam DS
+.fam \\*[FONTBODY]
 .if \\n[.$]>1 .sp 0.25v
 .if \\n[.$]>1 .@EM \\$2
 .@RULE
@@ -109,13 +121,13 @@
 .sp 1.0v
 .in 0
 .ne 3v
-.fam DV
+.fam \\*[FONTHEAD]
 .ps 12
 .ft B
 \\$*
 .ft R
 .ps
-.fam DS
+.fam \\*[FONTBODY]
 .sp 0.25v
 ..
 .
@@ -154,12 +166,12 @@
 .sp 0.35v
 .in 0
 .nf
-.fam DM
+.fam \\*[FONTMONO]
 .ft R
 .ps 10
 ..
 .de ENDCODE
-.fam DS
+.fam \\*[FONTBODY]
 .ft R
 .ps 11
 .fi
