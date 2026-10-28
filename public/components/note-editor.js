@@ -21,6 +21,7 @@ import { describePin, withPinResult } from "../utils/pin-state.js";
 import { formatNoteRef } from "../utils/note-ref.js";
 import { applyTagToggle } from "../utils/tag-endpoint.js";
 import { checkboxesToPrintGlyphs, printDocumentTitle } from "../utils/print.js";
+import { displayText, isGroffNote } from "../utils/note-text.js";
 import { createInertHtmlRenderer } from "../utils/inert-html.js";
 
 // Configure marked for safe rendering. Raw HTML typed into a note is shown
@@ -767,6 +768,16 @@ export class NoteEditor extends LitElement {
     .empty-preview {
       color: var(--gray-500);
       font-style: italic;
+    }
+
+    /* Tells the reader that what they see is a projection, not the source. */
+    .groff-note-badge {
+      margin: 0 0 0.75rem;
+      padding: 0.35rem 0.6rem;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.04);
+      color: var(--gray-500);
+      font-size: 0.8rem;
     }
 
     /* Only ever visible on paper - see the @media print block below. */
@@ -2011,7 +2022,10 @@ export class NoteEditor extends LitElement {
 
   getMarkdownContent() {
     const contentTextarea = this.shadowRoot?.querySelector(".content-textarea");
-    return contentTextarea?.value ?? this._editingContent ?? this.note?.content ?? "";
+    // The textarea (when present) holds the raw source, which is what gets
+    // edited and saved. With no textarea the reader is looking at the rendered
+    // preview, and a groff note is read through its markdown projection.
+    return contentTextarea?.value ?? this._editingContent ?? displayText(this.note);
   }
 
   renderMarkdown(content) {
@@ -2279,6 +2293,13 @@ export class NoteEditor extends LitElement {
             <div class="doc-body">
               ${this.previewMode
                 ? html`
+                  ${isGroffNote(this.note)
+                    ? html`
+                      <p class="groff-note-badge">
+                        Groff document — this is the markdown projection. Edit shows the raw source.
+                      </p>
+                    `
+                    : ""}
                   <div class="markdown-preview" @click="${this._handlePreviewClick}">
                     ${unsafeHTML(this._previewMarkup())}
                   </div>
