@@ -18,6 +18,7 @@ import {
   planHashNavigation,
 } from "../utils/note-ref.js";
 import { APP_VERSION } from "../version.js";
+import { NEW_NOTE_DIALOG, newNoteBody, NOTE_KINDS } from "../utils/new-note-format.js";
 
 // Read once at module load: the server has already injected the meta tag by
 // the time this module executes (module scripts run after the head parses).
@@ -42,6 +43,10 @@ class NotesApp extends LitElement {
     sidebarOpen: { type: Boolean }, // mobile nav drawer
     flyoutOpen: { type: Boolean }, // desktop tags flyout
     userMenuOpen: { type: Boolean },
+    // The plus button asks which kind of document to create. Declared
+    // because the template renders it: the chooser would never appear
+    // otherwise.
+    newNoteChooserOpen: { type: Boolean },
     hasMore: { type: Boolean },
     total: { type: Number }, // total notes matching, from the API meta
     // The whole collection, not the page: set only from an unfiltered list fetch, so the
@@ -807,6 +812,81 @@ class NotesApp extends LitElement {
     }
 
     /* Toast container */
+    /* The new-note chooser: which kind of document is this?
+      Two labelled buttons rather than a dropdown: the answer is permanent,
+      and an unlabelled control is an invisible one. */
+    .chooser-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-4, 1rem);
+      background: rgba(0, 0, 0, 0.5);
+      z-index: var(--z-modal, 1000);
+    }
+
+    .chooser {
+      width: 100%;
+      max-width: 30rem;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3, 0.75rem);
+      padding: var(--space-5, 1.25rem);
+      background: var(--white);
+      color: var(--gray-900);
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius-lg, 12px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .chooser h2 {
+      margin: 0 0 var(--space-2, 0.5rem);
+      font-size: 1.15rem;
+      font-weight: 600;
+    }
+
+    .kind-btn {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1, 0.25rem);
+      min-height: 56px;
+      padding: var(--space-3, 0.75rem) var(--space-4, 1rem);
+      text-align: left;
+      font-size: 1rem;
+      font-family: inherit;
+      color: inherit;
+      background: var(--gray-100);
+      border: 2px solid var(--gray-300);
+      border-radius: var(--radius-md, 8px);
+      cursor: pointer;
+    }
+
+    .kind-btn:hover,
+    .kind-btn:focus-visible {
+      border-color: var(--primary);
+    }
+
+    .kind-label {
+      font-weight: 600;
+    }
+
+    .kind-hint {
+      font-size: 0.875rem;
+      color: var(--gray-600);
+    }
+
+    .kind-cancel {
+      min-height: 44px;
+      padding: var(--space-3, 0.75rem);
+      font-size: 1rem;
+      font-family: inherit;
+      color: var(--gray-700);
+      background: none;
+      border: none;
+      cursor: pointer;
+    }
+
     .toast-container {
       position: fixed;
       top: 1rem;
@@ -1514,25 +1594,35 @@ class NotesApp extends LitElement {
     });
   }
 
+  /**
+   * The plus button: ask which kind of document this is, before writing
+   * anything.
+   *
+   * Nothing is created here. The kind is permanent - a groff document stays
+   * groff, a markdown note stays markdown - so the choice has to be made while
+   * the note does not exist yet. A dismissed chooser therefore leaves no empty
+   * note behind for anyone to clean up.
+   */
   async createNewNote() {
-    try {
-      // If we're currently editing a note, save any pending changes first
-      if (this.viewMode === "edit" && this.currentNote) {
-        const editor = this.shadowRoot.querySelector("note-editor");
-        if (editor && editor.hasUnsavedChanges) {
-          await editor.autoSave();
-        }
+    // If we're currently editing a note, save any pending changes first
+    if (this.viewMode === "edit" && this.currentNote) {
+      const editor = this.shadowRoot.querySelector("note-editor");
+      if (editor && editor.hasUnsavedChanges) {
+        await editor.autoSave();
       }
+    }
 
-      // Blank on purpose - the editor's placeholders prompt the user instead
-      // of real text they would have to select and delete first.
-      const newNote = {
-        title: "",
-        content: "",
-        tags: [],
-      };
+    this.newNoteChooserOpen = true;
+  }
 
-      const result = await globalThis.NotesApp.createNote(newNote);
+  /**
+   * The chooser's answer: create that kind of note and open it in the editor.
+   * @param {string} format - "markdown" or "groff"
+   */
+  async confirmNewNote(format) {
+    this.newNoteChooserOpen = false;
+    try {
+      const result = await globalThis.NotesApp.createNote(newNoteBody(format));
       this.dispatchEvent(
         new CustomEvent("note-created", {
           detail: { note: result.data },
@@ -1542,6 +1632,11 @@ class NotesApp extends LitElement {
       console.error("Failed to create note:", error);
       this.showToast("Failed to create note", "error");
     }
+  }
+
+  /** Dismissed: nothing was created, so there is nothing to undo. */
+  cancelNewNote() {
+    this.newNoteChooserOpen = false;
   }
 
   performSearch() {
@@ -2292,6 +2387,37 @@ class NotesApp extends LitElement {
           </div>
         </main>
       </div>
+
+      ${this.newNoteChooserOpen
+        ? html`
+          <div
+            class="chooser-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-note-chooser-title"
+            @click="${this.cancelNewNote}"
+          >
+            <div class="chooser" @click="${(event) => event.stopPropagation()}">
+              <h2 id="new-note-chooser-title">${NEW_NOTE_DIALOG.question}</h2>
+              ${NOTE_KINDS.map((kind) =>
+                html`
+                  <button
+                    class="kind-btn"
+                    data-format="${kind.format}"
+                    @click="${() => this.confirmNewNote(kind.format)}"
+                  >
+                    <span class="kind-label">${kind.label}</span>
+                    <span class="kind-hint">${kind.hint}</span>
+                  </button>
+                `
+              )}
+              <button class="kind-cancel" @click="${this.cancelNewNote}">
+                ${NEW_NOTE_DIALOG.cancel}
+              </button>
+            </div>
+          </div>
+        `
+        : ""}
 
       <div class="toast-container">
         ${this.toasts.map((toast) =>

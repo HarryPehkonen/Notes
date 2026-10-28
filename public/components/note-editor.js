@@ -2308,7 +2308,9 @@ export class NoteEditor extends LitElement {
                   <textarea
                     class="content-textarea"
                     .value="${this._editingContent ?? this.note.content ?? ""}"
-                    placeholder="Start writing your note (Markdown supported)..."
+                    placeholder="${isGroffNote(this.note)
+                      ? "Write groff source..."
+                      : "Start writing your note (Markdown supported)..."}"
                     ?disabled="${this.loading}"
                   ></textarea>
                 `}
