@@ -1,0 +1,131 @@
+.\" house.tmac -- the house style for groff documents in Notes.
+.\"
+.\" Loaded BY THE RENDERER, never by the document:
+.\"   groff -Kutf8 -ww -dpaper=letter -P-pletter -ms -M <styles> -m house -Tpdf - < doc > out.pdf
+.\"
+.\" Two things about that invocation are load-bearing:
+.\"
+.\" 1. -ms BEFORE -m house. The macro package sets LL, PO and friends when it
+.\"    initialises; loading our file first meant ms silently overwrote the page
+.\"    setup, and the measure came out at ms's default instead of ours. This cost
+.\"    two rounds of "why is the line still 90 characters long".
+.\" 2. The style is applied from the command line, so a document contains no
+.\"    includes (.so/.mso), no font names, no page geometry and no raw escapes --
+.\"    only the macros defined below. That is a security decision. Measured
+.\"    2026-10-28 on groff 1.23: safer mode (on by default) refuses .sy/.pso/.pi/
+.\"    .open/.opena with an explicit error, but it does NOT refuse .so, so
+.\"    ".so /etc/hostname" reads the file and prints it into the output
+.\"    (verified). Keeping includes out of documents removes that class, and the
+.\"    renderer's allowlist refuses everything else.
+.\"
+.\" The document owns content; this file owns appearance. Retheme by editing here.
+.
+.\" ------------------------------------------------------------- page and type
+.\" Measure set from measurement, not intuition: the text extent in the PDF ends
+.\" at exactly PO+LL (136.8+338.4 = 475.2pt on a 612pt page), so nothing overflows
+.\" the margin, and the filled lines average 66 characters -- inside the
+.\" comfortable 45-75. An earlier 5.8i measure averaged ~90 and read badly.
+.nr PO 1.9i           \" left margin, symmetric with the right
+.nr LL 4.7i           \" line length
+.nr HM 0.9i           \" top margin
+.nr FM 0.9i           \" bottom margin
+.nr PS 12             \" type size
+.nr VS 15.5           \" leading
+.nr PI 0              \" no first-line indent: block paragraphs, spaced not indented
+.nr PD 0.35v          \" paragraph and list-item spacing
+.hy 1                 \" hyphenate (English patterns ship with groff)
+.
+.\" --------------------------------------------------------------- helpers
+.\" One-line .if forms and helper macros keep this file free of conditional
+.\" blocks -- easier to read, easier to diff.
+.de @EM
+.ft I
+\\$*
+.ft R
+..
+.\" A hairline rule the width of the measure, closing the title block. The width
+.\" comes from \n[.l]u (the current line length in basic units) rather than a
+.\" hard-coded value: a fixed 6.0i rule silently ran past the right margin.
+.de @RULE
+.sp 0.55v
+\\l'\\n[.l]u'
+.sp 0.55v
+..
+.
+.\" ------------------------------------------------------- document vocabulary
+.\" The document's title.  .RECIPE "Lemon drizzle cake" "serves 8"
+.de RECIPE
+.in 0
+.ps 17
+.ft B
+\\$1
+.ft R
+.ps
+.if \\n[.$]>1 .sp 0.2v
+.if \\n[.$]>1 .@EM \\$2
+.@RULE
+..
+.
+.\" A section heading.
+.\" .in 0 matters: .IP leaves an indent active, so without it a heading that
+.\" follows a list is set one step in and the page reads as a staircase.
+.\" .ne 3v keeps a heading with at least three lines of what it introduces,
+.\" instead of stranding it at the foot of a page.
+.de SECTION
+.sp 1.0v
+.in 0
+.ne 3v
+.ps 12.5
+.ft B
+\\$*
+.ft R
+.ps
+.sp 0.2v
+..
+.
+.\" One ingredient line, hung as a bullet.  .ING "175 g unsalted butter"
+.de ING
+.IP \\(bu 3
+\\$*
+..
+.
+.\" One numbered step. Numbering is per document, counted in this register.
+.nr STEPN 0
+.de STEP
+.nr STEPN +1
+.IP "\\n[STEPN]." 4
+\\$*
+..
+.
+.\" A note, set off from the steps. The indent is absolute (4 ens, the same place
+.\" .IP puts the step text) rather than relative, so the note lines up with the
+.\" steps instead of stepping further in each time. Labelled and roman rather
+.\" than all-italic: a note carries an instruction worth reading.
+.de NOTE
+.sp 0.45v
+.in 4n
+.ll -4n
+\\fBNote.\\fR \\$*
+.ll +4n
+.in 0
+.sp 0.45v
+..
+.
+.\" Preformatted block: no filling, monospaced, aligned with the body text.
+.\" For genuine two-column data a tbl table is the better answer -- run groff
+.\" with -t and let the document carry .TS/.TE; this is for code-like blocks.
+.de CODE
+.sp 0.35v
+.in 0
+.nf
+.fam C
+.ft R
+.ps 10
+..
+.de ENDCODE
+.fam T
+.ft R
+.ps 12
+.fi
+.sp 0.35v
+..
