@@ -1,21 +1,21 @@
 # Brief: groff documents in Notes
 
 Where this stands, what was measured, and what is left. Updated 2026-10-28, after
-DejaVu was wired up. The web-app wiring at the end is still not built, and is the
-part that needs decisions.
+the appearance sets and the document-level `.STYLE`. The web-app wiring at the
+end is still not built, and is the part that needs decisions.
 
 ## What exists
 
 | file                                    | what it is                                                                 |
 | --------------------------------------- | -------------------------------------------------------------------------- |
-| `groff/house.tmac`                      | the house style: page setup, fonts, and the vocabulary a document may use  |
+| `groff/house.tmac`                      | the house style: the sets, the page setup, and the vocabulary a document may use |
 | `groff/examples/buttermilk-pancakes.ms` | the first recipe, written as a groff document                              |
 | `server/groff/sanitize.js`              | the allowlist guard between an untrusted document and the renderer         |
 | `server/groff/render.js`                | the renderer: stdin, argv, no shell, errors read from stderr               |
 | `server/cli/groff.js`                   | `deno task groff:render <doc.ms> [out.pdf]`, the same path the server uses |
-| `scripts/groff-fonts.sh`                | builds the DejaVu font descriptions groff needs (see below)                |
-| `tests/deno/groff_sanitize_test.ts`     | 15 tests, the guard                                                        |
-| `tests/deno/groff_render_test.ts`       | 7 tests, spawning the real groff                                           |
+| `scripts/groff-fonts.sh`                | builds the DejaVu font descriptions the optional set needs (see below)     |
+| `tests/deno/groff_sanitize_test.ts`     | 16 tests, the guard                                                        |
+| `tests/deno/groff_render_test.ts`       | 8 tests, spawning the real groff                                           |
 
 ## Rendering: what a document is and is not
 
@@ -34,42 +34,68 @@ everything else:
 Three parts are load-bearing. **`-ms` before `-m house`** — loaded the other way
 round, the macro package initialises after us and silently overwrites the page
 setup. The **style comes from the command line**, which is why a document needs
-no include. And **`-F`** is what makes `.fam DS` resolve at all, since the DejaVu
-faces are not in groff's default font path.
+no include — with the one deliberate exception below. And **`-F`** is what makes
+`.fam DS` resolve at all, since the DejaVu faces are not in groff's default font
+path; only the `dejavu` set needs it.
 
-## Fonts: DejaVu, converted, embedded
+A document may also choose its *appearance set*, and only that:
 
+    .STYLE palatino          (or)          .STYLE dejavu
+
+This is a lookup, not an escape hatch. The name is resolved inside `house.tmac`
+against a fixed list, so a document still names no font, no size, no measure and
+no margin, and the allowlist keeps refusing `.ds`, `.nr`, `.fam`, `.ft`, `.ps`,
+`.ll` and `.po` — there is a test for each of those refusals. A name that is not
+in the list **aborts the render** (`error: unknown style 'x'` on stderr, no PDF),
+because a document that asked for one appearance and quietly got another would be
+worse than a failure.
+
+A measured trap for anyone editing `house.tmac`: **a macro call as the body of an
+`.ie` cannot then be paired with an `.el`.** That arrangement warns `unbalanced
+'el' request` on every render, and groff reports the warning at the *call site*
+rather than the offending line, so it reads like the caller's fault. The `.STYLE`
+dispatch is plain `.if` lines plus a flag register for that reason.
+
+## Fonts: two appearance sets, and who chooses
+
+A set bundles the whole appearance decision — faces, type size, leading, measure,
+margins — because the measure depends on the faces: Palatino at the same measure
+holds 76 characters where DejaVu Serif holds 62. Measured on the pancake recipe,
+letter, one page either way:
+
+| set        | size | measure | mean | PDF    | faces                                     |
+| ---------- | ---- | ------- | ---- | ------ | ----------------------------------------- |
+| `palatino` | 12pt | 5.2in   | 67ch | 731 KB | P052 / Nimbus Sans / Nimbus Mono, embedded |
+| `dejavu`   | 11pt | 5.5in   | 62ch | 2.4 MB | DejaVu Serif / Sans / Sans Mono, embedded  |
+
+**`palatino` is the default.** It is the URW base-35 family groff mounts itself,
+so nothing has to be installed, and gropdf embeds P052 anyway because it is not
+one of the PDF base-14 fonts — the same embedding `-P-e` forces. Nimbus Roman
+(Times) and C059 (Century Schoolbook) are available the same way.
+
+**`dejavu` is the opt-in set** for a document that needs the wide repertoire.
 `gropdf` in this build accepts **PostScript Type 1 only** — "this implementation
 only accepts the Type 1 PostScript font" (gropdf(1)) — while Debian ships DejaVu
 as TrueType. So `scripts/groff-fonts.sh` converts each face with `fontforge`,
 adapts its metrics with `afmtodit` against the same 8-bit encoding gropdf uses,
 and installs the result into a font directory the renderer prepends with `-F`.
 Twelve faces are built: DejaVu Serif (body), DejaVu Sans (headings, and the
-fallback), DejaVu Sans Mono (code), each in R/B/I/BI.
+fallback), DejaVu Sans Mono (code), each in R/B/I/BI. On a new machine:
+`sudo scripts/groff-fonts.sh`; it needs `fontforge`, full `groff` (not
+`groff-base`) and `fonts-dejavu-core` + `fonts-dejavu-extra` (the italics live in
+`-extra`). The description files are text; the PFB binaries are not, which is why
+this is a script and not a checked-in blob.
 
-On a new machine: `sudo scripts/groff-fonts.sh`. Needs `fontforge`, full `groff`
-(not `groff-base`), and `fonts-dejavu-core` + `fonts-dejavu-extra` (the italics
-live in `-extra`). The generated font description files are text; the PFB
-binaries are not, which is why this is a script and not a checked-in blob.
+Coverage, measured. The `palatino` set reaches Latin-1, the typographic
+punctuation, the named specials (`\(bu` `\(em` `\(de` `\(12`) and what Symbol
+carries (`≈ ≠ ≤ ≥ → ← ∞ α β Ω`). It **cannot** set `⅓`, `①` or `☺` — "special
+character not defined", dropped — so a recipe writes `1/3`, not a third-glyph.
+The `dejavu` set's descriptions expose 3499 `uXXXX` names, so `\[uXXXX]` reaches
+DejaVu's whole repertoire; `①` is missing from DejaVu Serif itself and
+`.special DVR` renders it anyway.
 
-Measured, 2026-10-28, on the pancake recipe:
-
-- **Fonts are embedded** (`pdffonts`: `emb yes` for all five faces used). The
-  stock Times/Symbol setup was `emb no`, so a printer or reader was substituting
-  its own faces.
-- **Coverage**: the generated descriptions expose 3499 `uXXXX` names, so `\[uXXXX]`
-  reaches DejaVu's whole repertoire — `⅓` and `☺` included. `①` is absent from
-  DejaVu Serif, and `.special DVR` (DejaVu Sans declared as the fallback font)
-  renders it anyway. Latin-1, typographic punctuation and the named specials
-  (`\(bu` `\(em` `\(de` `\(12`) all work as before.
-- **Measure re-derived**, because DejaVu Serif is far wider than the Times it
-  replaced: at 12pt it fitted only 49 characters into the measure that had held
-  66. Chosen: 11pt / 14.5pt leading / 5.5in measure / 1.5in margins, giving
-  58–71 characters and **one page** for the recipe, which was two pages before.
-- **Cost: the PDF is 2.4 MB.** gropdf does not subset embedded fonts, so every
-  face goes in whole. That matters on a phone more than on the server. A
-  Ghostscript post-pass (`-dSubsetFonts=true`, and `gs` is already installed) is
-  the obvious fix and has not been tried yet.
+Cost of the opt-in: **2.4 MB**, because gropdf does not subset embedded fonts and
+all twelve faces go in whole. The default set avoids that entirely.
 
 ## Security: measured against groff 1.23.0, 2026-10-28
 
@@ -90,7 +116,8 @@ Three consequences, and they are the whole design:
    conditional trying to smuggle a request inside itself.
 3. **groff's exit code is not the verdict** — it reports errors and exits 0. The
    renderer reads stderr, fails on `error:`, and returns `warning:` lines to the
-   caller instead of swallowing them.
+   caller instead of swallowing them. `.ab`'s message carries `error:` too, which
+   is how an unknown `.STYLE` is caught by the same rule.
 
 `\X` and `\!` are escapes rather than requests, so they are refused by scanning.
 
@@ -107,7 +134,7 @@ the lock; the unit file is the walls.
 ## What is left, and the decisions in it
 
 The rendering path works from the shell, with the typography and coverage
-intended. What is missing is the app:
+intended, in either set. What is missing is the app:
 
 1. **Where does the source live?** A text column on the note (with a flag saying
    it is groff) keeps one site and one search, as you wanted. Files in git with
@@ -118,7 +145,8 @@ intended. What is missing is the app:
    be amazing), or store an authored markdown summary alongside.
 3. **The PDF cache.** Rendered on save and cached, keyed by the source hash, so
    print-to-PDF and print-to-printer serve the cached bytes and the renderer runs
-   only when the source changes. The 2.4 MB size belongs in this decision.
+   only when the source changes. Size belongs in this decision: 731 KB for a
+   `palatino` document, 2.4 MB for a `dejavu` one.
 4. **Print.** How the PWA hands the cached PDF to the phone's print sheet.
 5. **Tables.** `.CODE` covers code-like blocks; real two-column data wants `tbl`
    (`groff -t` plus `.TS`/`.TE` in the document, which the allowlist would need

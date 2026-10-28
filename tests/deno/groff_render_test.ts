@@ -89,3 +89,16 @@ Deno.test("render: the house style file is pure ASCII", async () => {
   const bad = [...style].filter((c) => c.charCodeAt(0) > 127);
   assertEquals(bad, [], `non-ASCII characters in groff/house.tmac: ${JSON.stringify(bad)}`);
 });
+
+Deno.test("render: an unknown .STYLE aborts instead of styling the document another way", async () => {
+  // A document may choose a named set. A name that is not one must stop the
+  // render -- a document that asked for one appearance and silently got another
+  // would be worse than a failure. .ab in house.tmac carries "error:" so the
+  // renderer's stderr check catches it, not just the exit code.
+  const err = await assertRejects(
+    () => renderPdf(".STYLE nosuchset\n.PP\nText.\n"),
+    GroffDocumentError,
+  );
+  assertEquals(err.kind, "failed");
+  assertStringIncludes(err.message, "unknown style");
+});

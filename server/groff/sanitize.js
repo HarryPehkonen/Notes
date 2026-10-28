@@ -33,8 +33,12 @@
  *  `.SH` and friends are deliberately absent: sectioning goes through SECTION so
  *  a document cannot set its own typography and escape the house look. */
 const ALLOWED_REQUESTS = new Set([
-  // house style (see groff/house.tmac)
+  // house style (see groff/house.tmac). STYLE selects an appearance SET by name
+  // -- palatino or dejavu -- and the name is looked up in house.tmac, so a
+  // document still cannot name a font, a size, a measure or a margin. An unknown
+  // name aborts the render (.ab: "error:" on stderr, no PDF), which is the point.
   "RECIPE",
+  "STYLE",
   "SECTION",
   "ING",
   "STEP",

@@ -106,12 +106,36 @@ Deno.test("sanitizeGroff: comments are inert and allowed", () => {
   assertEquals(result.ok, true);
 });
 
-Deno.test("sanitizeGroff: ms styling macros are allowed, sectioing shortcuts are not", () => {
+Deno.test("sanitizeGroff: ms styling macros are allowed, sectioning shortcuts are not", () => {
   // .PP/.B/.I are fine; .SH and .NH would let a document set its own typography
   // and step outside the house style.
   assertEquals(sanitizeGroff(".PP\n.B bold\n.I italic\n").ok, true);
   assertEquals(sanitizeGroff('.SH "Does it myself"\n').ok, false);
   assertEquals(sanitizeGroff(".NH 1\n").ok, false);
+});
+
+Deno.test("sanitizeGroff: STYLE is allowed, but a document still cannot set raw typography", () => {
+  // A document may name an appearance SET; it may not name a font, a size, a
+  // measure or a margin. house.tmac looks the name up in a fixed list, so this
+  // is a lookup rather than a hole in the style-comes-from-the-command-line rule,
+  // and an unknown name aborts the render rather than being ignored.
+  assertEquals(sanitizeGroff(".STYLE palatino\n").ok, true);
+  assertEquals(sanitizeGroff(".STYLE dejavu\n").ok, true);
+  const raw = [
+    ".ds FONTBODY T",
+    ".nr PS 30",
+    ".nr LL 9i",
+    ".nr PO 0",
+    ".fam H",
+    ".ft B",
+    ".ps 30",
+    ".ll 9i",
+    ".po 0",
+    ".vs 40",
+  ];
+  for (const line of raw) {
+    assertEquals(sanitizeGroff(line + "\n").ok, false, `${line} should be refused`);
+  }
 });
 
 Deno.test("sanitizeGroff: a runaway document is refused on size", () => {
