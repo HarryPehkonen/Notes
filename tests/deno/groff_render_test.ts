@@ -67,3 +67,25 @@ Deno.test("render: warnings are returned, not swallowed, and do not fail the ren
   assert(warnings.length > 0, "expected the numeric-expression warning to come back");
   assertStringIncludes(warnings.join("\n"), "expected numeric expression");
 });
+
+Deno.test("render: the rendered PDF embeds its fonts", async () => {
+  // The stock Times/Symbol setup produced UNembedded fonts (pdffonts showed
+  // emb no), so a reader or printer substituted its own faces. The DejaVu faces
+  // built by scripts/groff-fonts.sh are embedded, and /FontFile in the bytes is
+  // what says so. If this fails, the fonts were not installed (-F) or the
+  // embedding flag was dropped, and the typography quietly depends on the
+  // reader again.
+  const { pdf } = await renderPdf(GOOD);
+  const raw = new TextDecoder("latin1").decode(pdf);
+  assertStringIncludes(raw, "/FontFile");
+});
+
+Deno.test("render: the house style file is pure ASCII", async () => {
+  // groff reads a macro file with the default input encoding rather than -Kutf8,
+  // so a single literal non-ASCII character in a COMMENT produces
+  // "warning: invalid input character code" on every render. A stray circled
+  // digit in house.tmac did exactly that.
+  const style = await Deno.readTextFile("groff/house.tmac");
+  const bad = [...style].filter((c) => c.charCodeAt(0) > 127);
+  assertEquals(bad, [], `non-ASCII characters in groff/house.tmac: ${JSON.stringify(bad)}`);
+});

@@ -1,14 +1,14 @@
 .\" house.tmac -- the house style for groff documents in Notes.
 .\"
 .\" Loaded BY THE RENDERER, never by the document:
-.\"   groff -Kutf8 -ww -dpaper=letter -P-pletter -ms -M <styles> -m house -Tpdf - < doc > out.pdf
+.\"   groff -Kutf8 -ww -dpaper=letter -P-pletter -F <font-dir> -P-e -ms \
+.\"         -M <styles-dir> -m house -Tpdf - < doc > out.pdf
 .\"
-.\" Two things about that invocation are load-bearing:
+.\" Three things about that invocation are load-bearing:
 .\"
 .\" 1. -ms BEFORE -m house. The macro package sets LL, PO and friends when it
 .\"    initialises; loading our file first meant ms silently overwrote the page
-.\"    setup, and the measure came out at ms's default instead of ours. This cost
-.\"    two rounds of "why is the line still 90 characters long".
+.\"    setup, and the measure came out at ms's default instead of ours.
 .\" 2. The style is applied from the command line, so a document contains no
 .\"    includes (.so/.mso), no font names, no page geometry and no raw escapes --
 .\"    only the macros defined below. That is a security decision. Measured
@@ -17,23 +17,53 @@
 .\"    ".so /etc/hostname" reads the file and prints it into the output
 .\"    (verified). Keeping includes out of documents removes that class, and the
 .\"    renderer's allowlist refuses everything else.
+.\" 3. -F points at the directory scripts/groff-fonts.sh installs into, and -P-e
+.\"    forces every font to be embedded in the PDF.
+.\"
+.\" Keep this file pure ASCII. groff reads a macro file with the default input
+.\" encoding, not -Kutf8, so a literal non-ASCII character in a COMMENT is an
+.\" "invalid input character code" warning on every render. Use \[uXXXX] in the
+.\" text and spell the character out in the prose.
 .\"
 .\" The document owns content; this file owns appearance. Retheme by editing here.
 .
 .\" ------------------------------------------------------------- page and type
-.\" Measure set from measurement, not intuition: the text extent in the PDF ends
-.\" at exactly PO+LL (136.8+338.4 = 475.2pt on a 612pt page), so nothing overflows
-.\" the margin, and the filled lines average 66 characters -- inside the
-.\" comfortable 45-75. An earlier 5.8i measure averaged ~90 and read badly.
-.nr PO 1.9i           \" left margin, symmetric with the right
-.nr LL 4.7i           \" line length
+.\" Measure and size re-derived after the move to DejaVu, because DejaVu Serif
+.\" is far wider than the Times it replaced: at 12pt it fitted only 49 characters
+.\" into the 4.7in measure that had held 66. Measured, 2026-10-28:
+.\"
+.\"   12pt / 4.7i -> 49 chars, 2 pages      (too narrow a measure)
+.\"   11pt / 5.8i -> 63-77 chars, 1 page
+.\"   11pt / 5.5i -> 58-71 chars, 1 page   <- chosen: evenest line lengths
+.\"
+.\" The extent ends at PO+LL (108+396 = 504pt on a 612pt page), so nothing
+.\" overflows the margin.
+.nr PO 1.5i           \" left margin, symmetric with the right
+.nr LL 5.5i           \" line length
 .nr HM 0.9i           \" top margin
 .nr FM 0.9i           \" bottom margin
-.nr PS 12             \" type size
-.nr VS 15.5           \" leading
+.nr PS 11             \" type size (DejaVu at 11pt is as large as 12pt Times)
+.nr VS 14.5           \" leading
 .nr PI 0              \" no first-line indent: block paragraphs, spaced not indented
 .nr PD 0.35v          \" paragraph and list-item spacing
 .hy 1                 \" hyphenate (English patterns ship with groff)
+.
+.\" ------------------------------------------------------------------- fonts
+.\" This build of gropdf accepts PostScript Type 1 only, and Debian ships DejaVu
+.\" as TrueType, so scripts/groff-fonts.sh converts each face with fontforge and
+.\" adapts its metrics with afmtodit. Names follow groff's family + style-letter
+.\" convention:
+.\"
+.\"   DS = DejaVu Serif      (body text)          DSR DSB DSI DSBI
+.\"   DV = DejaVu Sans       (headings, fallback) DVR DVB DVI DVBI
+.\"   DM = DejaVu Sans Mono  (code blocks)        DMR DMB DMI DMBI
+.\"
+.\" .special DVR declares DejaVu Sans as the font searched for a character the
+.\" current one lacks, so \[u2460] (the circled digit one) renders even though
+.\" DejaVu Serif has no circled digits; without it, a missing character is a
+.\" warning and a blank. The whole DejaVu repertoire is reachable as \[uXXXX].
+.fam DS
+.special DVR
 .
 .\" --------------------------------------------------------------- helpers
 .\" One-line .if forms and helper macros keep this file free of conditional
@@ -54,14 +84,18 @@
 .
 .\" ------------------------------------------------------- document vocabulary
 .\" The document's title.  .RECIPE "Lemon drizzle cake" "serves 8"
+.\" Headings are set in DejaVu Sans Bold against a serif body -- the contrast
+.\" does the work a second size would otherwise have to do.
 .de RECIPE
 .in 0
-.ps 17
+.fam DV
+.ps 16
 .ft B
 \\$1
 .ft R
 .ps
-.if \\n[.$]>1 .sp 0.2v
+.fam DS
+.if \\n[.$]>1 .sp 0.25v
 .if \\n[.$]>1 .@EM \\$2
 .@RULE
 ..
@@ -75,12 +109,14 @@
 .sp 1.0v
 .in 0
 .ne 3v
-.ps 12.5
+.fam DV
+.ps 12
 .ft B
 \\$*
 .ft R
 .ps
-.sp 0.2v
+.fam DS
+.sp 0.25v
 ..
 .
 .\" One ingredient line, hung as a bullet.  .ING "175 g unsalted butter"
@@ -118,14 +154,14 @@
 .sp 0.35v
 .in 0
 .nf
-.fam C
+.fam DM
 .ft R
 .ps 10
 ..
 .de ENDCODE
-.fam T
+.fam DS
 .ft R
-.ps 12
+.ps 11
 .fi
 .sp 0.35v
 ..

@@ -59,6 +59,14 @@ export async function renderPdf(source, opts = {}) {
     "-ww", // report every warning: the caller decides what matters
     "-dpaper=letter",
     "-P-pletter",
+    // The DejaVu faces built by scripts/groff-fonts.sh, and embedding forced so
+    // the PDF carries its typefaces instead of relying on the reader's. Neither
+    // is in groff's default font path, so -F is what makes the house style's
+    // .fam DS resolve at all. Overridable for a server where they live
+    // elsewhere.
+    "-F",
+    Deno.env.get("GROFF_FONT_DIR") ?? "/usr/local/share/groff/site-font",
+    "-P-e",
     "-ms", // macro package FIRST ...
     "-M",
     STYLE_DIR,
