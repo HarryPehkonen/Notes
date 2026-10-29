@@ -208,25 +208,6 @@ comparison against NaN is false. That leaves the policy to you: call two NaNs
 equal by testing isnan on both sides, or call the pair an error, but decide it
 rather than discover it.
 
-.SECTION "Which form to reach for"
-.PP
-\fB"These two must be the same length."\fR Check the sizes, refuse or throw,
-then an index loop. std::equal with four iterators if the answer is only yes
-or no.
-.PP
-\fB"Compare as far as they overlap."\fR std::min with an index loop; zip on
-C++23; the two-iterator loop when an index means nothing.
-.PP
-\fB"Where do they first differ?"\fR std::mismatch, which hands back the index.
-.PP
-\fB"Are they identical, or which is smaller?"\fR a == b, a < b. No loop, no
-policy chosen, and unequal lengths answered instead of punished.
-.PP
-\fB"One operation per pair."\fR std::transform with a binary operation, or
-zip_transform on C++23 -- equal lengths assumed.
-.PP
-\fB"Doubles."\fR A tolerance predicate, and a decision about NaN.
-
 .SECTION "Why the index is signed"
 .PP
 Both loops above count with \fBstd::ptrdiff_t\fR and take their bound from
@@ -251,6 +232,25 @@ Bounds-checked access (Bounds.4) is the other half of the profiles' advice. A
 loop whose condition is i < std::ssize(v) has already proven the bound, so the
 code here uses plain []. Where an index arrives from outside the loop, reach
 for .at() or a span instead.
+
+.SECTION "Which form to reach for"
+.PP
+\fB"These two must be the same length."\fR Check the sizes, refuse or throw,
+then an index loop. std::equal with four iterators if the answer is only yes
+or no.
+.PP
+\fB"Compare as far as they overlap."\fR std::min with an index loop; zip on
+C++23; the two-iterator loop when an index means nothing.
+.PP
+\fB"Where do they first differ?"\fR std::mismatch, which hands back the index.
+.PP
+\fB"Are they identical, or which is smaller?"\fR a == b, a < b. No loop, no
+policy chosen, and unequal lengths answered instead of punished.
+.PP
+\fB"One operation per pair."\fR std::transform with a binary operation, or
+zip_transform on C++23 -- equal lengths assumed.
+.PP
+\fB"Doubles."\fR A tolerance predicate, and a decision about NaN.
 
 .PP
 .NOTE "Every snippet here was compiled and run at C++23 (g++ 14.2) before it was set in type, and the stand-in for zip builds at -std=c++20 too. The two measurements quoted -- equal(3) calling [1, 2, 3] equal to a prefix of [1, 2, 3, 4], and zip stopping at the shorter range -- are its output, not a recollection. The recommended code also compiles clean under -Wall -Wextra -Wpedantic -Werror and under clang-tidy's cppcoreguidelines, bugprone and performance checks. Where an example is wrong on purpose -- the three-iterator equal, the unchecked prefix loop -- it is labelled as wrong, because the counter-examples are the point of those sections."
