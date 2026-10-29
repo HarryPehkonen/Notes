@@ -86,7 +86,10 @@
 .nr FM 0.9i           \" bottom margin
 .nr PI 0              \" no first-line indent: block paragraphs, spaced not indented
 .nr PD 0.35v          \" paragraph and list-item spacing
-.hy 1                 \" hyphenate (English patterns ship with groff)
+.hy 0                 \" no hyphenation: the patterns happily split an
+.\"                     identifier across a line break, so "std::remove" came out
+.\"                     as "std::re-" / "move" the first time a technical note
+.\"                     was rendered. A loose line is cheaper than a broken name.
 .\" The default set; a document may override it with .STYLE <name>.
 .STYLE palatino
 .
