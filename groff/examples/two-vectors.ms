@@ -188,8 +188,10 @@ nothing to think about; with unequal lengths, the index loop says so out loud.
 
 .SECTION "Comparing doubles is not comparison"
 .CODE
+constexpr double tolerance = 1e-9;   // named, not sprinkled
+
 auto near = [](double x, double y) {
-    return std::fabs(x - y) <= 1e-9;
+    return std::fabs(x - y) <= tolerance;
 };
 bool same = std::equal(a.begin(), a.end(),
                        b.begin(), b.end(), near);
@@ -226,4 +228,4 @@ zip_transform on C++23 -- equal lengths assumed.
 \fB"Doubles."\fR A tolerance predicate, and a decision about NaN.
 
 .PP
-.NOTE "Every snippet here was compiled and run at C++23 (g++ 14.2) before it was set in type, and the stand-in for zip builds at -std=c++20 too. The two measurements quoted -- equal(3) calling [1, 2, 3] equal to a prefix of [1, 2, 3, 4], and zip stopping at the shorter range -- are its output, not a recollection."
+.NOTE "Every snippet here was compiled and run at C++23 (g++ 14.2) before it was set in type, and the stand-in for zip builds at -std=c++20 too. The two measurements quoted -- equal(3) calling [1, 2, 3] equal to a prefix of [1, 2, 3, 4], and zip stopping at the shorter range -- are its output, not a recollection. The recommended code also compiles clean under -Wall -Wextra -Wpedantic -Werror and under clang-tidy's cppcoreguidelines, bugprone and performance checks. Where an example is wrong on purpose -- the three-iterator equal, the unchecked prefix loop -- it is labelled as wrong, because the counter-examples are the point of those sections."
