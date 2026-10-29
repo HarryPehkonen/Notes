@@ -48,7 +48,14 @@ export function stripMarkdown(markdown) {
   if (!markdown) return "";
   return markdown
     .replace(/#{1,6}\s/g, "") // Headers
-    .replace(/[*_~`]/g, "") // Formatting
+    // Emphasis markers, but only where they really delimit emphasis. The
+    // blanket [*_~`] strip this replaces also ate the underscore inside
+    // identifiers: "std::size_t" was indexed as "std::sizet", so a search for
+    // size_t could not find a C++ note. CommonMark agrees -- a marker inside a
+    // word is literal text.
+    .replace(/(?<![A-Za-z0-9_])(\*{1,3}|_{1,3})(?=\S)([\s\S]*?\S)\1(?![A-Za-z0-9_])/g, "$2")
+    .replace(/(?<![A-Za-z0-9])(~{1,2})(?=\S)([\s\S]*?\S)\1(?![A-Za-z0-9])/g, "$2") // Strikethrough
+    .replace(/`/g, "") // Backticks
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Links
     .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1") // Images
     .replace(/```[\s\S]*?```/g, "") // Code blocks

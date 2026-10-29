@@ -195,7 +195,7 @@ template <std::size_t N>
 void g(const int (&a)[N]) { for (int x : a) use(x); }
 .ENDCODE
 .PP
-Two containers carry a surprise. .BR "std::vector<bool>" does not store bools:
+Two containers carry a surprise. \fBstd::vector<bool>\fR does not store bools:
 it packs bits, and its element access returns a proxy object rather than a
 reference, so
 \fBfor (bool b : bits)\fR copies the proxy and
