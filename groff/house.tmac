@@ -86,10 +86,16 @@
 .nr FM 0.9i           \" bottom margin
 .nr PI 0              \" no first-line indent: block paragraphs, spaced not indented
 .nr PD 0.35v          \" paragraph and list-item spacing
-.hy 0                 \" no hyphenation: the patterns happily split an
-.\"                     identifier across a line break, so "std::remove" came out
-.\"                     as "std::re-" / "move" the first time a technical note
-.\"                     was rendered. A loose line is cheaper than a broken name.
+.\" No hyphenation: the patterns happily split an identifier across a line
+.\" break, so "std::remove" came out as "std::re-" / "move" the first time a
+.\" technical note was rendered. A loose line is cheaper than a broken name.
+.\" BOTH lines below are needed. ms's paragraph macros re-apply hyphenation from
+.\" the HY register at every .PP/.LP/.SH (s.tmac does ".hy \n[HY]"), so the
+.\" request alone is overwritten the moment a paragraph starts -- measured: a
+.\" paragraph still hyphenated with ".hy 0" set here, and with a second .hy 0
+.\" loaded after this file. The register is what ms reads.
+.nr HY 0
+.hy 0
 .\" The default set; a document may override it with .STYLE <name>.
 .STYLE palatino
 .

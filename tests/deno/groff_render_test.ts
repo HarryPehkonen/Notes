@@ -41,6 +41,27 @@ Deno.test("render: the first real recipe renders", async () => {
   assertEquals(new TextDecoder().decode(pdf.slice(0, 5)), "%PDF-");
 });
 
+Deno.test("render: the house style turns hyphenation off through ms's register", async () => {
+  // ms's paragraph macros re-apply hyphenation from the HY register at every
+  // .PP/.LP (s.tmac: ".hy \n[HY]"), so a bare ".hy 0" is overwritten the moment
+  // a paragraph starts. Measured: the first two technical notes came out with 22
+  // and 15 hyphen-broken lines -- "std::re-" / "move" -- while ".hy 0" sat in the
+  // style, and a second ".hy 0" loaded after this file did not help either.
+  // Reading the hyphen out of a PDF needs pdftotext, which this suite deliberately
+  // does not allow, so the guard is that both lines are present: the register is
+  // what ms reads, the request covers text before any paragraph macro runs.
+  const tmac = await Deno.readTextFile("groff/house.tmac");
+  assertStringIncludes(tmac, ".nr HY 0");
+  assertStringIncludes(tmac, ".hy 0");
+});
+
+Deno.test("render: the two-vector example renders warning-free", async () => {
+  const source = await Deno.readTextFile("groff/examples/two-vectors.ms");
+  const { pdf, warnings } = await renderPdf(source);
+  assertEquals(new TextDecoder().decode(pdf.slice(0, 5)), "%PDF-");
+  assertEquals(warnings, []);
+});
+
 Deno.test("render: the vector-iteration example renders warning-free", async () => {
   // The first non-recipe document, and the one that keeps .DOC honest: a title
   // that loses words or a .B/.I line carrying extra arguments shows up here as
