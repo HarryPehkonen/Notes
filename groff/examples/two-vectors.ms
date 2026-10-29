@@ -30,7 +30,7 @@ std::optional<int> countDiffs(const std::vector<int>& a,
                               const std::vector<int>& b) {
     if (a.size() != b.size()) return std::nullopt;
     int diffs = 0;
-    for (std::size_t i = 0; i < a.size(); ++i) {
+    for (std::ptrdiff_t i = 0; i < std::ssize(a); ++i) {
         if (a[i] != b[i]) ++diffs;
     }
     return diffs;
@@ -48,8 +48,8 @@ defined, and the release build then walks whatever it was handed.
 
 .SECTION "Policy 2: only as far as the shorter one"
 .CODE
-const std::size_t n = std::min(a.size(), b.size());
-for (std::size_t i = 0; i < n; ++i) {
+const auto n = std::min(std::ssize(a), std::ssize(b));
+for (std::ptrdiff_t i = 0; i < n; ++i) {
     compare(a[i], b[i]);
 }
 .ENDCODE
@@ -159,15 +159,15 @@ for (auto [i, x] : std::views::enumerate(a)) {
 }
 .ENDCODE
 .PP
-The index from enumerate is the range's difference type, so it is signed,
-unlike the std::size_t an index loop carries.
+The index from enumerate is the range's difference type, so it is signed --
+the same choice a hand-written index loop should make, below.
 .PP
 On C++20 there is no zip, and the honest stand-in is the index loop. std::views::iota
 gives a lazy index range if you would rather stay in pipeline style -- both
 build and run at -std=c++20:
 .CODE
-const std::size_t n = std::min(a.size(), b.size());
-for (auto i : std::views::iota(std::size_t{0}, n)) {
+const auto n = std::min(std::ssize(a), std::ssize(b));
+for (auto i : std::views::iota(std::ptrdiff_t{0}, n)) {
     compare(a[i], b[i]);
 }
 .ENDCODE
@@ -226,6 +226,31 @@ policy chosen, and unequal lengths answered instead of punished.
 zip_transform on C++23 -- equal lengths assumed.
 .PP
 \fB"Doubles."\fR A tolerance predicate, and a decision about NaN.
+
+.SECTION "Why the index is signed"
+.PP
+Both loops above count with \fBstd::ptrdiff_t\fR and take their bound from
+\fBstd::ssize\fR. That is the Core Guidelines' rule -- ES.107, "don't use
+unsigned for subscripts, prefer gsl::index", and gsl::index is only another
+name for std::ptrdiff_t -- but the reason is measurable, not stylistic. An
+unsigned index wraps: on an empty vector, size() - 1 is 18446744073709551615,
+and a loop counting down to zero with an unsigned counter never reaches zero.
+\fB-Wall -Wextra -Wpedantic does not catch that.\fR What it does catch is
+mixing the two types, which is the other half of the same problem.
+.PP
+The standard library draws the same line. operator[] takes std::size_t because
+its parameter is size-like, while every offset the library hands back is
+signed: std::distance returns std::ptrdiff_t, and std::ssize exists so that a
+size can be signed as well. So keep std::size_t for what it means -- a size, a
+count, a capacity, a hash input -- and use a signed type for a position. Where
+the two are compared by hand, a negative index quietly changes the answer:
+\fB-1 < v.size()\fR is false, because the -1 is converted first, while
+\fBstd::cmp_less(-1, v.size())\fR is true, which is what was meant.
+.PP
+Bounds-checked access (Bounds.4) is the other half of the profiles' advice. A
+loop whose condition is i < std::ssize(v) has already proven the bound, so the
+code here uses plain []. Where an index arrives from outside the loop, reach
+for .at() or a span instead.
 
 .PP
 .NOTE "Every snippet here was compiled and run at C++23 (g++ 14.2) before it was set in type, and the stand-in for zip builds at -std=c++20 too. The two measurements quoted -- equal(3) calling [1, 2, 3] equal to a prefix of [1, 2, 3, 4], and zip stopping at the shorter range -- are its output, not a recollection. The recommended code also compiles clean under -Wall -Wextra -Wpedantic -Werror and under clang-tidy's cppcoreguidelines, bugprone and performance checks. Where an example is wrong on purpose -- the three-iterator equal, the unchecked prefix loop -- it is labelled as wrong, because the counter-examples are the point of those sections."

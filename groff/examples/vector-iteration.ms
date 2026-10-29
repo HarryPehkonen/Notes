@@ -46,15 +46,22 @@ container, below.
 A range-based for hides the index, so ask for it when you need it: to compare
 against a previous element, to report where a problem is, or to skip elements.
 .CODE
-for (std::size_t i = 0; i < v.size(); ++i) {
+for (std::ptrdiff_t i = 0; i < std::ssize(v); ++i) {
     if (i > 0 && v[i] == v[i - 1]) continue;
     use(v[i], i);
 }
 .ENDCODE
 .PP
-Use std::size_t, not int. Comparing a signed index against the unsigned
-size() is a warning on a good day and a wrong answer on a bad one. Where the
-type is awkward, std::ssize(v) gives a signed size.
+Use a signed index, std::ptrdiff_t, and take the bound from std::ssize(v).
+The reason is not taste: size() is unsigned and an index is an offset, which is
+the type the standard library uses for one itself. std::distance returns
+std::ptrdiff_t, every iterator's difference_type is signed, and std::ssize
+exists so that a size can be signed too. An unsigned index wraps: on an empty
+vector, size() - 1 is 18446744073709551615, and a counter that counts down to
+zero with it never reaches zero. \fB-Wall -Wextra -Wpedantic does not catch
+that\fR; what it does catch is mixing the two types, which is the other half
+of the same problem. std::size_t is right for a size, a count or a capacity. It
+is the wrong type for a position.
 .PP
 Indexing has two flavours and they are not the same: v[i] is unchecked and
 v[i] on an out-of-range index is undefined behaviour, while v.at(i) throws
@@ -209,14 +216,14 @@ remove_if erase in place, in one pass.
 Two lines that are always safe, and the arithmetic that is not:
 .CODE
 if (v.empty()) return;        // not v.size() == 0
-auto n = v.size();            // n is unsigned
+auto n = v.size();       // a size: unsigned is right here
 
-if (v.size() - 1 > 0) { }   // WRONG when v is empty
-for (std::size_t i = 0; i + 1 < v.size(); ++i) {}
+if (v.size() - 1 > 0) { }   // WRONG: true when v is empty
+for (std::ptrdiff_t i = 0; i + 1 < std::ssize(v); ++i) {}
 .ENDCODE
 .PP
 .CODE
-for (std::size_t i = 0; i + 1 < v.size(); ++i)
+for (std::ptrdiff_t i = 0; i + 1 < std::ssize(v); ++i)
     if (v[i] == v[i + 1]) return true;   // adjacent dupes
 .ENDCODE
 
@@ -226,7 +233,8 @@ for (std::size_t i = 0; i + 1 < v.size(); ++i)
 .PP
 \fBChange every element in place.\fR Use for (auto& x : v).
 .PP
-\fBNeed the index, or the neighbours.\fR Use an index loop with std::size_t.
+\fBNeed the index, or the neighbours.\fR A signed index, std::ptrdiff_t,
+with std::ssize(v) as the bound.
 .PP
 \fBMust remove while walking.\fR Use std::erase_if, or the erase-returning
 iterator form.
