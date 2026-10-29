@@ -41,6 +41,17 @@ Deno.test("render: the first real recipe renders", async () => {
   assertEquals(new TextDecoder().decode(pdf.slice(0, 5)), "%PDF-");
 });
 
+Deno.test("render: the vector-iteration example renders warning-free", async () => {
+  // The first non-recipe document, and the one that keeps .DOC honest: a title
+  // that loses words or a .B/.I line carrying extra arguments shows up here as
+  // a groff warning ("excess arguments to .B ignored") rather than as a document
+  // that quietly prints half a sentence.
+  const source = await Deno.readTextFile("groff/examples/vector-iteration.ms");
+  const { pdf, warnings } = await renderPdf(source);
+  assertEquals(new TextDecoder().decode(pdf.slice(0, 5)), "%PDF-");
+  assertEquals(warnings, []);
+});
+
 Deno.test("render: a document with .so is refused and groff is never run", async () => {
   const err = await assertRejects(
     () => renderPdf('.SECTION "x"\n.so /etc/hostname\n'),
