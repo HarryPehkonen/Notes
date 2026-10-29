@@ -121,10 +121,11 @@
 ..
 .
 .\" ------------------------------------------------------- document vocabulary
-.\" The document's title.  .RECIPE "Lemon drizzle cake" "serves 8"
+.\" The document's title, set once at the top. The body lives in @TITLE so the
+.\" two openers below cannot drift apart.
 .\" Headings are set in the heading family against a body in another -- the
 .\" contrast does the work a second size would otherwise have to do.
-.de RECIPE
+.de @TITLE
 .in 0
 .fam \\*[FONTHEAD]
 .ps 16
@@ -136,6 +137,16 @@
 .if \\n[.$]>1 .sp 0.25v
 .if \\n[.$]>1 .@EM \\$2
 .@RULE
+..
+.\" Two names, one title block, because a document's KIND is worth seeing in its
+.\" own source: .RECIPE "Lemon drizzle cake" "serves 8" reads as a recipe,
+.\" .DOC "Iterating over a vector" reads as everything else. Rendering is
+.\" identical, so neither is a lesser choice and no document has to be re-typed.
+.de DOC
+.@TITLE \\$*
+..
+.de RECIPE
+.@TITLE \\$*
 ..
 .
 .\" A section heading.

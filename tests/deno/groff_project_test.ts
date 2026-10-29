@@ -10,6 +10,14 @@ Deno.test("projectGroff: the title and subtitle come from .RECIPE", () => {
   assertEquals(out.warnings, []);
 });
 
+Deno.test("projectGroff: .DOC opens a document the same way .RECIPE does", () => {
+  const out = projectGroff('.DOC "Iterating over a vector" "the forms worth using"\n');
+  assertEquals(out.title, "Iterating over a vector");
+  assertEquals(out.subtitle, "the forms worth using");
+  assertEquals(out.markdown, "_the forms worth using_");
+  assertEquals(out.warnings, []);
+});
+
 Deno.test("projectGroff: a document with no .RECIPE leaves the title empty", () => {
   const out = projectGroff('.SECTION "Ingredients"\n');
   assertEquals(out.title, "");

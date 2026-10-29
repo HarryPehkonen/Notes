@@ -27,6 +27,14 @@ Then fry them.
   assertEquals(result.violations, []);
 });
 
+Deno.test("sanitizeGroff: .DOC is allowed -- the generic document opener", () => {
+  const result = sanitizeGroff(
+    '.DOC "Iterating over a vector" "the forms worth using"\n.SECTION "Range-based for"\n',
+  );
+  assertEquals(result.ok, true);
+  assertEquals(result.violations, []);
+});
+
 Deno.test("sanitizeGroff: .so is refused (groff safer mode does NOT stop it)", () => {
   // Verified: groff 1.23.0 rendered ".so /etc/hostname" without complaint and
   // printed the contents into the PDF.

@@ -37,6 +37,7 @@ const ALLOWED_REQUESTS = new Set([
   // -- palatino or dejavu -- and the name is looked up in house.tmac, so a
   // document still cannot name a font, a size, a measure or a margin. An unknown
   // name aborts the render (.ab: "error:" on stderr, no PDF), which is the point.
+  "DOC", // the generic document opener; .RECIPE is the recipe-flavoured name
   "RECIPE",
   "STYLE",
   "SECTION",

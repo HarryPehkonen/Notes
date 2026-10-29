@@ -8,7 +8,7 @@
  * groff source.
  *
  * Deliberately approximate, and honest about where: the house vocabulary
- * (.RECIPE .SECTION .ING .STEP .NOTE .CODE) is projected exactly, ms's own
+ * (.DOC/.RECIPE .SECTION .ING .STEP .NOTE .CODE) is projected exactly, ms's own
  * requests are projected where a plain reading exists and otherwise dropped with
  * a warning, so a lossy rendering is visible rather than silent. groff is never
  * invoked here -- this is a text transform, which is why it can run server-side
@@ -169,6 +169,7 @@ export function projectGroff(source) {
     const first = decodeGroffEscapes(args[0] ?? "");
 
     switch (name) {
+      case "DOC":
       case "RECIPE": {
         title = first;
         subtitle = decodeGroffEscapes(args[1] ?? "");

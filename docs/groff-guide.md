@@ -65,10 +65,11 @@ letter page.
 
 ## The vocabulary — all of it
 
-Eight house macros (`groff/house.tmac`), plus the ms primitives a document may
+Nine house macros (`groff/house.tmac`), plus the ms primitives a document may
 use directly. Anything else is refused before rendering.
 
-- `.RECIPE "Title"` or `.RECIPE "Title" "subtitle"` — the document's title, once, at the top. The reading view shows the title as a heading and the subtitle in italics.
+- `.DOC "Title"` or `.DOC "Title" "subtitle"` — the document's title, once, at the top. The reading view shows the title as a heading and the subtitle in italics.
+- `.RECIPE "Title" "subtitle"` — the same title block under the recipe-flavoured name. Use whichever word matches what you are writing; both render identically.
 - `.SECTION "Heading"` — a section heading. Quote multi-word headings.
 - `.ING "175 g unsalted butter"` — one ingredient line, hung as a bullet. Becomes `-` in the reading view.
 - `.STEP "Whisk the flour."` — one numbered step. Numbering is per document and automatic. Becomes `1.` in the reading view.
