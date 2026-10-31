@@ -77,7 +77,8 @@ use directly. Anything else is refused before rendering.
 - `.CODE` … `.ENDCODE` — a preformatted, monospaced block for code-like text or plain columns. Becomes a fenced code block.
 - `.STYLE palatino` or `.STYLE dejavu` — choose the appearance set (below). Optional; palatino is the default.
 - `.PP`, `.P`, `.LP` — a normal paragraph. `.PP` before body text after a list, so the indent resets.
-- `.B`, `.I`, `.R`, `.BR` — bold, italic, roman, bold-roman on the rest of the line.
+- `.B`, `.I`, `.R` — bold, italic, roman. Each takes **one argument**; the rest of the line is silently dropped.
+- `.BR` is **not** one of them: it is on the allowlist but ms never defines it, and calling it warns `macro 'BR' not defined` — which fails the render.
 - `.nf`, `.fi` — turn filling off and on (`.nf` opens the same monospaced block as `.CODE`).
 - `.br`, `.sp` — break the line, insert space.
 

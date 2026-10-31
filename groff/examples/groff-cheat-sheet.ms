@@ -32,7 +32,7 @@ A line break inside a paragraph is \fB.br\fR; a deliberate blank line is
 needs no attention to line length.
 .SECTION "Emphasis: the one-argument rule"
 .PP
-\fB.B\fR, \fB.I\fR, \fB.R\fR and \fB.BR\fR each take ONE argument. Give one of
+\fB.B\fR, \fB.I\fR and \fB.R\fR each take ONE argument. Give one of
 them a whole sentence and groff warns "excess arguments to .B ignored" and sets
 the rest of the line as ordinary text -- quietly, unless you read the warnings.
 .NOTE

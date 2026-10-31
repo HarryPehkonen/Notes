@@ -44,9 +44,13 @@ Deno.test("render: the first real recipe renders", async () => {
 // The two cheat sheets are regression tests as much as documents: between them
 // they exercise every macro in the house vocabulary, so a warning here means the
 // vocabulary itself changed shape.
-for (
-  const sheet of ["groff/examples/groff-cheat-sheet.ms", "groff/examples/recipe-cheat-sheet.ms"]
-) {
+const HOUSE_DOCS = [
+  "groff/examples/groff-cheat-sheet.ms",
+  "groff/examples/recipe-cheat-sheet.ms",
+  "groff/examples/groff-worked-examples.ms",
+  "groff/examples/recipe-worked-examples.ms",
+];
+for (const sheet of HOUSE_DOCS) {
   Deno.test(`render: ${sheet} renders warning-free`, async () => {
     const source = await Deno.readTextFile(sheet);
     const { pdf, warnings } = await renderPdf(source);
