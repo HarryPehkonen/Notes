@@ -140,6 +140,35 @@ change them:
 - `-ww` shows all warnings. Read stderr: **groff exits 0 even when it
   errors**, so a successful exit is not a successful render.
 
+## Contents pages, outlines and indexes
+
+groff can do all of this, and Notes uses none of it yet. Measured on groff 1.23.
+
+The machinery is the pdfmark macros that ship with groff. `.TC` marks where a table
+of contents belongs. With the ms binding package loaded (`-m spdf`), `.NH` and `.XN`
+together produce a contents entry *and* a live cross-reference from a heading --
+plain ms has no way to do either. Reference marks come from the `.pdfhref` macro.
+
+Resolving them takes more than one pass, exactly as it does in LaTeX. The wrapper
+`pdfroff` drives that: it "performs as many pre-formatting groff passes as required,
+up to a maximum limit of four" (pdfroff(1)), merges the contents into the front, and
+publishes one PDF.
+
+- Same source, one groff pass: the body renders, the contents section comes out empty,
+  and stderr carries an unresolved-reference complaint.
+- Same source through `pdfroff`: a full contents page, with dotted leaders and correct
+  page numbers.
+
+Two reasons it is out of reach here today: this renderer makes a single pass and fails
+on warnings, so an unresolved reference refuses rather than ships; and `pdfroff`
+publishes through Ghostscript rather than the PDF device the house style is built on.
+It belongs to the print path, which is not built yet.
+
+There is no equivalent of LaTeX's index command. groff has no built-in index generator:
+an index is built from the same marks -- a reference whose text is the target's page
+number, or a data file written in one pass and read in the next. The pdfmark manual
+(`/usr/share/doc/groff-base/pdf/pdfmark.pdf.gz`) is the reference for that.
+
 ## What the app does with a groff note today
 
 - **Reading**: the reading view shows the markdown projection, with a caption
@@ -173,6 +202,10 @@ can change a document's meaning.
 Source is capped at 200 KB so a runaway document cannot tie up the renderer.
 
 ## Learning groff itself
+
+Start with `groff/examples/groff-cheat-sheet.ms` and
+`groff/examples/recipe-cheat-sheet.ms`: one per house document type, every macro shown,
+and both double as render tests.
 
 The house macros are the top layer; beneath them it is ordinary groff and `ms`.
 The real manuals, in the order they are useful:

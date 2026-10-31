@@ -41,6 +41,21 @@ Deno.test("render: the first real recipe renders", async () => {
   assertEquals(new TextDecoder().decode(pdf.slice(0, 5)), "%PDF-");
 });
 
+// The two cheat sheets are regression tests as much as documents: between them
+// they exercise every macro in the house vocabulary, so a warning here means the
+// vocabulary itself changed shape.
+for (
+  const sheet of ["groff/examples/groff-cheat-sheet.ms", "groff/examples/recipe-cheat-sheet.ms"]
+) {
+  Deno.test(`render: ${sheet} renders warning-free`, async () => {
+    const source = await Deno.readTextFile(sheet);
+    const { pdf, warnings } = await renderPdf(source);
+    assert(pdf.length > 1000, `expected a real PDF, got ${pdf.length} bytes`);
+    assertEquals(new TextDecoder().decode(pdf.slice(0, 5)), "%PDF-");
+    assertEquals(warnings, [], `${sheet} warned: ${JSON.stringify(warnings)}`);
+  });
+}
+
 Deno.test("render: the house style turns hyphenation off through ms's register", async () => {
   // ms's paragraph macros re-apply hyphenation from the HY register at every
   // .PP/.LP (s.tmac: ".hy \n[HY]"), so a bare ".hy 0" is overwritten the moment
