@@ -2021,10 +2021,14 @@ export class NoteEditor extends LitElement {
   }
 
   getMarkdownContent() {
+    // A groff note is read through its markdown projection, and that has to be
+    // decided from the mode rather than from the DOM: the render that switches
+    // INTO preview still has the edit-mode textarea in place, so querying for
+    // it returns the raw source and the preview renders groff.
+    if (this.previewMode && isGroffNote(this.note)) return displayText(this.note);
     const contentTextarea = this.shadowRoot?.querySelector(".content-textarea");
     // The textarea (when present) holds the raw source, which is what gets
-    // edited and saved. With no textarea the reader is looking at the rendered
-    // preview, and a groff note is read through its markdown projection.
+    // edited and saved.
     return contentTextarea?.value ?? this._editingContent ?? displayText(this.note);
   }
 
