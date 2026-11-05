@@ -7,6 +7,8 @@
  * can be unit tested without a DOM.
  */
 
+import { displayText, isGroffNote } from "./note-text.js";
+
 /** Shown when a note has no usable title, on paper and as the PDF filename. */
 const UNTITLED = "Untitled note";
 
@@ -40,6 +42,26 @@ export function printDocumentTitle(note) {
   const title = note?.title;
   if (typeof title !== "string") return UNTITLED;
   return title.trim() || UNTITLED;
+}
+
+/**
+ * The text a print job renders.
+ *
+ * Paper is a reading surface, so it follows the rule the preview already
+ * follows: a groff note is read through its markdown projection and never
+ * through its raw source. A note opens in edit mode, so taking the source
+ * straight from the editor put `.RECIPE`, `.ING "2 tsp ground cumin"` and
+ * `[u00B0]C` on the page - raw groff on paper, one page taller than the recipe
+ * (2026-11-05). Every other note prints the editor's own text, so unsaved
+ * edits still reach the paper.
+ *
+ * @param {{format?: unknown, content?: unknown, content_markdown?: unknown}|null|undefined} note
+ * @param {unknown} [editorText] - What the editor currently holds, if anything
+ * @returns {string}
+ */
+export function printSource(note, editorText) {
+  if (isGroffNote(note)) return displayText(note);
+  return typeof editorText === "string" ? editorText : displayText(note);
 }
 
 /**

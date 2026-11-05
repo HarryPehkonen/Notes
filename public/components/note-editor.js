@@ -20,7 +20,7 @@ import { buildVersionRows, stepVersionRow } from "../utils/version-list.js";
 import { describePin, withPinResult } from "../utils/pin-state.js";
 import { formatNoteRef } from "../utils/note-ref.js";
 import { applyTagToggle } from "../utils/tag-endpoint.js";
-import { checkboxesToPrintGlyphs, printDocumentTitle } from "../utils/print.js";
+import { checkboxesToPrintGlyphs, printDocumentTitle, printSource } from "../utils/print.js";
 import { displayText, isGroffNote } from "../utils/note-text.js";
 import { createInertHtmlRenderer } from "../utils/inert-html.js";
 
@@ -2335,7 +2335,9 @@ export class NoteEditor extends LitElement {
    * @media print styles.
    */
   _renderPrintDoc() {
-    const rendered = this.renderMarkdown(this.getMarkdownContent());
+    const rendered = this.renderMarkdown(
+      printSource(this.note, this.getMarkdownContent()),
+    );
     return html`
       <div class="print-doc">
         <h1 class="print-title">${this._printTitle()}</h1>
