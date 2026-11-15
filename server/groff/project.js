@@ -80,6 +80,29 @@ export function quotedArguments(rest) {
   return args;
 }
 
+/**
+ * The arguments of a request line: the quoted ones when the line has any, and
+ * otherwise the whole rest of the line as a single argument.
+ *
+ * This is groff's own rule - a macro receives `$*`, everything after its name,
+ * quoted or not - and the house vocabulary is written both ways:
+ * `.NOTE "Rest it."` and `.NOTE Rest it.`. Reading only the quoted arguments
+ * matched the first and dropped the second, leaving an empty `> ` where a
+ * sentence had been, with nothing on stderr to say so.
+ *
+ * @param {string} rest - Everything after the request name
+ * @returns {string[]} The arguments, unescaped
+ */
+function requestArguments(rest) {
+  const quoted = quotedArguments(rest);
+  if (quoted.length > 0) return quoted;
+  const trimmed = (rest ?? "").trim();
+  return trimmed === "" ? [] : [trimmed];
+}
+
+/** Macros whose first argument is text a reader must see - an empty one is a loss. */
+const TEXT_REQUESTS = new Set(["DOC", "RECIPE", "SECTION", "ING", "STEP", "NOTE"]);
+
 /** Requests that carry no text of their own and project to a paragraph break. */
 const BREAKS = new Set(["PP", "P", "LP", "br", "sp"]);
 
@@ -165,8 +188,11 @@ export function projectGroff(source) {
     }
 
     const name = request[1];
-    const args = quotedArguments(request[2]);
+    const args = requestArguments(request[2]);
     const first = decodeGroffEscapes(args[0] ?? "");
+    if (TEXT_REQUESTS.has(name) && first === "") {
+      warn(lineNumber, `.${name} carries no text to project`);
+    }
 
     switch (name) {
       case "DOC":

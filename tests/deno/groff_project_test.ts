@@ -1,4 +1,8 @@
-import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import {
+  assert,
+  assertEquals,
+  assertStringIncludes,
+} from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { decodeGroffEscapes, projectGroff, quotedArguments } from "../../server/groff/project.js";
 import { stripMarkdown } from "../../server/database/client.js";
 
@@ -139,4 +143,26 @@ Deno.test("stripMarkdown leaves the blockquote marker in the plain text", () => 
   // search index is built from. It costs nothing at search time and the marker
   // is visible in a snippet, so it is recorded rather than papered over.
   assertStringIncludes(stripMarkdown("> Rest it."), ">");
+});
+
+Deno.test("projectGroff: an unquoted argument is still the macro's text", () => {
+  // groff gives a macro everything after its name ($*), quoted or not, and the
+  // notes people actually write use the unquoted form.
+  const out = projectGroff(".NOTE Detaching is not quitting.\n");
+  assertEquals(out.markdown, "> Detaching is not quitting.");
+  assertEquals(out.warnings, []);
+});
+
+Deno.test("projectGroff: unquoted text reaches sections, bullets and steps too", () => {
+  const out = projectGroff(".SECTION Where this came from\n.ING 190 g flour\n.STEP Mix it.\n");
+  assertEquals(out.markdown, "## Where this came from\n\n- 190 g flour\n\n1. Mix it.");
+  assertEquals(out.warnings, []);
+});
+
+Deno.test("projectGroff: a text macro with nothing to say is a warning, not a blank line", () => {
+  const out = projectGroff(".NOTE\n");
+  assert(
+    out.warnings.some((w) => w.includes("NOTE") && w.includes("no text")),
+    `expected a warning about the empty note, got ${JSON.stringify(out.warnings)}`,
+  );
 });

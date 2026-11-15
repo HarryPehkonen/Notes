@@ -14,7 +14,7 @@
 import { projectGroff } from "./project.js";
 
 /** Bump when a change to the projection should re-render existing notes. */
-export const PROJECTION_VERSION = 1;
+export const PROJECTION_VERSION = 2;
 
 /**
  * @param {unknown} value - A format from a request
