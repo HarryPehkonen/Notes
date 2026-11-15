@@ -5,10 +5,7 @@ Each pair below is the raw groff source in a code block, followed immediately by
 what that source actually produces. Nothing here is a picture of output: the
 results \fIare\fR output, set by the same macros any document uses, so this file
 is its own proof.
-.NOTE
-This is the working companion to "Groff documents: the cheat sheet", which lists
-the vocabulary in one place. A line inside a code block is shown, never run: the
-zero-width \\& at the start is what stops it, and a doubled backslash prints one.
+.NOTE This is the working companion to "Groff documents: the cheat sheet", which lists the vocabulary in one place. A line inside a code block is shown, never run: the zero-width \\& at the start is what stops it, and a doubled backslash prints one.
 .SECTION "A section heading"
 .CODE
 \&.SECTION "A section heading"
@@ -97,8 +94,7 @@ half is the same method continued under a heading of its own.
 \&Resting is not optional: the flour hydrates
 \&and the batter thickens.
 .ENDCODE
-.NOTE
-Resting is not optional: the flour hydrates and the batter thickens.
+.NOTE Resting is not optional: the flour hydrates and the batter thickens.
 .PP
 A note is labelled, roman rather than italic, and indented to where the text of
 a list item starts. It also narrows the measure by 4 ens while it lasts.

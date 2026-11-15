@@ -4,9 +4,7 @@
 Each pair below is the raw groff source, followed by what it produces. This is
 the recipe-shaped companion to "Recipe documents: the cheat sheet"; for the full
 tour of the vocabulary, see "Groff documents: worked examples".
-.NOTE
-A line inside a code block is shown, never run: the zero-width \\& stops it, and
-a doubled backslash prints a single one.
+.NOTE A line inside a code block is shown, never run: the zero-width \\& stops it, and a doubled backslash prints a single one.
 .SECTION "The title block and the yield"
 .CODE
 \&.RECIPE "Buttermilk pancakes" "serves 4"
@@ -55,8 +53,7 @@ a method split across headings stays one sequence.
 \&Resting is not optional: the flour hydrates
 \&and the powder starts.
 .ENDCODE
-.NOTE
-Resting is not optional: the flour hydrates and the powder starts.
+.NOTE Resting is not optional: the flour hydrates and the powder starts.
 .PP
 Notes are for the things that ruin a dish if missed. A note narrows the measure
 by 4 ens while it lasts, so keep them short.

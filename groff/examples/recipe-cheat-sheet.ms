@@ -5,9 +5,7 @@ A recipe note is opened by \fB.RECIPE\fR. That is the only thing that makes it a
 recipe: \fB.RECIPE\fR and \fB.DOC\fR are one title block under two names, so
 they render identically. What follows is the whole vocabulary, with the recipe
 conventions called out where they apply.
-.NOTE
-A note\'s kind is fixed when it is created and cannot be changed afterwards.
-A recipe that was created as markdown stays markdown: make a new note instead.
+.NOTE A note\'s kind is fixed when it is created and cannot be changed afterwards. A recipe that was created as markdown stays markdown: make a new note instead.
 .SECTION "The title block, and the yield"
 .PP
 The first line carries the dish and its yield. The second argument is set in

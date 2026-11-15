@@ -203,6 +203,10 @@ export function projectGroff(source) {
         if (subtitle !== "") lines.push(`_${subtitle}_`);
         return;
       }
+      case "STYLE":
+        // Appearance belongs to the house style and has no markdown equivalent:
+        // a known no-op here rather than a loss, so it does not warn.
+        return;
       case "SECTION":
         pushBlock(`## ${first}`);
         return;

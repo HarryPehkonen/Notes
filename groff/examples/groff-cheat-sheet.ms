@@ -6,9 +6,7 @@ A groff note is opened by exactly one macro, and there are two of them:
 render identically. The name is there so that the kind of document is visible in
 its own source -- \fB.RECIPE "Lemon drizzle cake" "serves 8"\fR reads as a
 recipe, \fB.DOC "Iterating over a vector"\fR reads as everything else.
-.NOTE
-A note\'s kind is fixed when it is created and cannot be changed afterwards.
-Converting one kind into the other is not a thing: create a new note instead.
+.NOTE A note\'s kind is fixed when it is created and cannot be changed afterwards. Converting one kind into the other is not a thing: create a new note instead.
 .SECTION "The title block"
 .PP
 The first line is the opener with the title, and an optional second argument
@@ -35,10 +33,7 @@ needs no attention to line length.
 \fB.B\fR, \fB.I\fR and \fB.R\fR each take ONE argument. Give one of
 them a whole sentence and groff warns "excess arguments to .B ignored" and sets
 the rest of the line as ordinary text -- quietly, unless you read the warnings.
-.NOTE
-This renderer fails on any warning at all, so that mistake is caught rather than
-shipped. The habit is still worth having: for an emphasised phrase inside a
-sentence, use the inline escape, which takes anything.
+.NOTE This renderer fails on any warning at all, so that mistake is caught rather than shipped. The habit is still worth having: for an emphasised phrase inside a sentence, use the inline escape, which takes anything.
 .CODE
 \&.B Entropy
 \&.B Only this word is bold - all of this is dropped
@@ -149,11 +144,7 @@ plain ms has no way to do. Reference marks are set with the \fB.pdfhref\fR
 macro, and the wrapper \fBpdfroff\fR then runs as many pre-formatting passes as
 needed to resolve them -- up to four -- merges the contents into the front and
 publishes one PDF.
-.NOTE
-Measured on groff 1.23: a single groff pass renders the body and leaves the
-contents section empty, reporting an unresolved reference; the same source
-through pdfroff comes out with a full contents page, dotted leaders and correct
-page numbers. Two ways to see it with the same source: groff once, then pdfroff.
+.NOTE Measured on groff 1.23: a single groff pass renders the body and leaves the contents section empty, reporting an unresolved reference; the same source through pdfroff comes out with a full contents page, dotted leaders and correct page numbers. Two ways to see it with the same source: groff once, then pdfroff.
 .PP
 There is no equivalent of a LaTeX index command, though: groff has no built-in
 index generator. An index is built from the same marks -- a reference whose
