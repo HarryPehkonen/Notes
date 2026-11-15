@@ -21,7 +21,12 @@ import { describePin, withPinResult } from "../utils/pin-state.js";
 import { formatNoteRef } from "../utils/note-ref.js";
 import { applyTagToggle } from "../utils/tag-endpoint.js";
 import { checkboxesToPrintGlyphs, printDocumentTitle, printSource } from "../utils/print.js";
-import { displayText, isGroffNote } from "../utils/note-text.js";
+import {
+  displayText,
+  isGroffNote,
+  prefersPreview,
+  previewPreferenceKey,
+} from "../utils/note-text.js";
 import { createInertHtmlRenderer } from "../utils/inert-html.js";
 
 // Configure marked for safe rendering. Raw HTML typed into a note is shown
@@ -1237,6 +1242,19 @@ export class NoteEditor extends LitElement {
       const prevNote = changedProperties.get("note");
       const isSameNote = isSameNoteUpdate(prevNote, this.note);
 
+      // A newly opened note starts in the mode its format calls for: a groff
+      // document opens as its markdown projection, because its source is raw
+      // groff; a markdown note opens in the editor as it always has. Opening a
+      // note is the only thing this decides - inside a note the toggle rules,
+      // and it remembers the choice per format.
+      if (!isSameNote && prevNote?.id !== this.note.id) {
+        this.previewMode = prefersPreview(this.note, {
+          groff: localStorage.getItem("notes-groffPreview"),
+          markdown: localStorage.getItem("notes-previewMode"),
+        });
+        this._previewCache = null;
+      }
+
       if (isSameNote) {
         // Same note updated (e.g. after auto-save) — update tracking
         // without resetting editor state or disrupting focus
@@ -1633,7 +1651,7 @@ export class NoteEditor extends LitElement {
       }
     }
     this.previewMode = toPreview;
-    localStorage.setItem("notes-previewMode", this.previewMode);
+    localStorage.setItem(previewPreferenceKey(this.note), this.previewMode);
   }
 
   /**

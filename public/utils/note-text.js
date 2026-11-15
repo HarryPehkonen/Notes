@@ -32,3 +32,33 @@ export function displayText(note) {
   const projected = typeof note.content_markdown === "string" ? note.content_markdown : "";
   return projected.trim() ? projected : source;
 }
+
+/**
+ * Whether the editor should open showing the rendered preview rather than the
+ * source.
+ *
+ * A groff note is a document: its source is raw groff, so it opens as the
+ * projection unless the writer has said otherwise for groff notes. Markdown
+ * notes keep the single global preference they have always had, which defaults
+ * to the editor.
+ *
+ * @param {{format?: unknown}|null|undefined} note
+ * @param {{groff?: string|null, markdown?: string|null}} stored - localStorage values
+ * @returns {boolean}
+ */
+export function prefersPreview(note, stored) {
+  if (isGroffNote(note)) return stored?.groff !== "false";
+  return stored?.markdown === "true";
+}
+
+/**
+ * The localStorage key a format's preview preference lives under. Groff notes
+ * get their own, so choosing to read documents cannot change how markdown notes
+ * are edited - and the other way round.
+ *
+ * @param {{format?: unknown}|null|undefined} note
+ * @returns {string}
+ */
+export function previewPreferenceKey(note) {
+  return isGroffNote(note) ? "notes-groffPreview" : "notes-previewMode";
+}
